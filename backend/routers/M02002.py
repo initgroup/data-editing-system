@@ -13,7 +13,7 @@
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import Literal, Optional
 import logging
 import re
 import time
@@ -47,6 +47,7 @@ class ScenarioDefaultDesignRequest(BaseModel):
     projectId: int
     scenarioId: int
     scenarioTableId: int
+    processType: Literal["LEGACY", "MIXED_XAI"] = "LEGACY"
     model_config = ConfigDict(extra="forbid")
 
 
@@ -67,6 +68,7 @@ class ScenarioTableRequest(BaseModel):
     useYn: Optional[str] = "Y"
     sortOrder: Optional[int] = None
     autoDesignYn: Optional[str] = "N"
+    processType: Literal["LEGACY", "MIXED_XAI"] = "LEGACY"
     model_config = ConfigDict(extra="allow")
 
 
@@ -483,13 +485,14 @@ def save_scenario_table(req: ScenarioTableRequest, request: Request):
                         project_id=project_id,
                         scenario_id=scenario_id,
                         scenario_table_id=int(scenario_table_id),
+                        process_type=req.processType,
                     ),
                 }
                 conn.commit()
             except Exception as automation_error:
                 conn.rollback()
                 logger.exception(
-                    "M02002 default four-stage job and flow provisioning failed. "
+                    "M02002 default scenario job and flow provisioning failed. "
                     "project_id=%s scenario_id=%s scenario_table_id=%s",
                     project_id,
                     scenario_id,
@@ -576,6 +579,7 @@ def provision_scenario_default_design(req: ScenarioDefaultDesignRequest, request
             project_id=project_id,
             scenario_id=scenario_id,
             scenario_table_id=scenario_table_id,
+            process_type=req.processType,
         )
         conn.commit()
         logger.info(
@@ -587,7 +591,7 @@ def provision_scenario_default_design(req: ScenarioDefaultDesignRequest, request
         )
         return {
             "status": "success",
-            "message": "Default four-stage jobs and flow design saved.",
+            "message": "Selected scenario jobs and flow design saved.",
             "automation": automation,
             "timings": {
                 **(automation.get("timings") or {}),

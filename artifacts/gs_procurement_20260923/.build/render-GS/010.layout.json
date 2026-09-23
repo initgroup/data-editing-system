@@ -1,0 +1,1048 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/vk32us",
+    "id": "vk32us",
+    "slide": 10,
+    "layoutId": "000c11cc-c89f-4572-9bfa-4e8722d3c609",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "e8524a4c-1164-40a4-8241-8d496cd2be96",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1600,
+      "height": 900
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Malgun Gothic"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "000c11cc-c89f-4572-9bfa-4e8722d3c609",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "e8524a4c-1164-40a4-8241-8d496cd2be96",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "e8524a4c-1164-40a4-8241-8d496cd2be96",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8natkni9",
+      "id": "1",
+      "bbox": [
+        70,
+        44,
+        1460,
+        75
+      ],
+      "geometry": "rect",
+      "text": "인증기관 선택과 상담",
+      "textPreview": "인증기관 선택과 상담",
+      "resolvedFontSize": 42,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 42,
+        "typeface": "Malgun Gothic",
+        "color": "#152F43",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "인증기관 선택과 상담"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "인증기관 선택과 상담",
+          "resolvedTextStyle": {
+            "fontSize": 42,
+            "typeface": "Malgun Gothic",
+            "color": "#152F43",
+            "bold": true
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "인증기관 선택과 상담",
+              "fontSize": 42,
+              "typeface": "Malgun Gothic",
+              "color": "#152F43",
+              "bold": true
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7m1cri14",
+      "id": "2",
+      "bbox": [
+        73,
+        130,
+        1450,
+        55
+      ],
+      "geometry": "rect",
+      "text": "GS-03 / 동일 범위로 비교하고 한 기관을 확정",
+      "textPreview": "GS-03 / 동일 범위로 비교하고 한 기관을 확정",
+      "resolvedFontSize": 25,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 25,
+        "typeface": "Malgun Gothic",
+        "color": "#526676",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "GS-03 / 동일 범위로 비교하고 한 기관을 확정"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "GS-03 / 동일 범위로 비교하고 한 기관을 확정",
+          "resolvedTextStyle": {
+            "fontSize": 25,
+            "typeface": "Malgun Gothic",
+            "color": "#526676"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "GS-03 / 동일 범위로 비교하고 한 기관을 확정",
+              "fontSize": 25,
+              "typeface": "Malgun Gothic",
+              "color": "#526676"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "table",
+      "scope": "slide",
+      "aid": "tb/bq9szutc",
+      "id": "3",
+      "bbox": [
+        70,
+        205,
+        1460,
+        578
+      ],
+      "text": "업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준\n비교 기준 | 해당 SW 유형의 지정 범위, 가장 빠른 시험 착수일, 환경 제공 방식, 문서 피드백, 총비용. | PM / 기관 비교표\n우선 상담 | TTA GS 1등급 포털과 KTC GS 안내를 활용. 다른 지정기관도 해당 분야·일정 확인 후 비교. | 자료 출처 G2·G3\n보낼 자료 | 제품 소개 2~3쪽, 기능 목록, 설명서 초안, 환경·연동 구조, 목표 출시일, 문의 목록. | 상담자료 ZIP\n받을 답변 | 시험범위, 등급, 적용 기준판, 시작 가능일, 추가 자료, 수정·회귀 조건과 비용. | 기관 회신 원문 보관\n기관 확정 | 가격만 비교하지 말고 준비 완료일과 시험 착수일을 맞춤. 계약 조건을 대표 승인. | 상담결과·견적·선정기록",
+      "textPreview": "업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준 | 비교 기준 | 해당 SW 유형의 지정 범위, 가장 빠른 시험 착수일, 환경 제공 방식, 문서 피드백, 총비용. | PM / 기관 비교표 | 우선 상담 | TTA GS 1등급 포털과 KT...",
+      "rows": 6,
+      "cols": 3,
+      "cells": [
+        {
+          "index": 1,
+          "row": 1,
+          "column": 1,
+          "bbox": [
+            70,
+            205,
+            280,
+            58
+          ],
+          "text": "업무·확인 항목",
+          "textPreview": "업무·확인 항목",
+          "fillColor": "#152F43",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "업무·확인 항목",
+              "resolvedTextStyle": {
+                "fontSize": 23,
+                "typeface": "Malgun Gothic",
+                "color": "#FFFFFF",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "업무·확인 항목",
+                  "fontSize": 23,
+                  "typeface": "Malgun Gothic",
+                  "color": "#FFFFFF",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "row": 1,
+          "column": 2,
+          "bbox": [
+            350,
+            205,
+            810,
+            58
+          ],
+          "text": "실행 내용",
+          "textPreview": "실행 내용",
+          "fillColor": "#152F43",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "실행 내용",
+              "resolvedTextStyle": {
+                "fontSize": 23,
+                "typeface": "Malgun Gothic",
+                "color": "#FFFFFF",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "실행 내용",
+                  "fontSize": 23,
+                  "typeface": "Malgun Gothic",
+                  "color": "#FFFFFF",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "row": 1,
+          "column": 3,
+          "bbox": [
+            1160,
+            205,
+            370,
+            58
+          ],
+          "text": "담당·산출물·완료 기준",
+          "textPreview": "담당·산출물·완료 기준",
+          "fillColor": "#152F43",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "담당·산출물·완료 기준",
+              "resolvedTextStyle": {
+                "fontSize": 23,
+                "typeface": "Malgun Gothic",
+                "color": "#FFFFFF",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "담당·산출물·완료 기준",
+                  "fontSize": 23,
+                  "typeface": "Malgun Gothic",
+                  "color": "#FFFFFF",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 4,
+          "row": 2,
+          "column": 1,
+          "bbox": [
+            70,
+            263,
+            280,
+            104
+          ],
+          "text": "비교 기준",
+          "textPreview": "비교 기준",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "비교 기준",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "비교 기준",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 5,
+          "row": 2,
+          "column": 2,
+          "bbox": [
+            350,
+            263,
+            810,
+            104
+          ],
+          "text": "해당 SW 유형의 지정 범위, 가장 빠른 시험 착수일, 환경 제공 방식, 문서 피드백, 총비용.",
+          "textPreview": "해당 SW 유형의 지정 범위, 가장 빠른 시험 착수일, 환경 제공 방식, 문서 피드백, 총비용.",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "해당 SW 유형의 지정 범위, 가장 빠른 시험 착수일, 환경 제공 방식, 문서 피드백, 총비용.",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "해당 SW 유형의 지정 범위, 가장 빠른 시험 착수일, 환경 제공 방식, 문서 피드백, 총비용.",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 6,
+          "row": 2,
+          "column": 3,
+          "bbox": [
+            1160,
+            263,
+            370,
+            104
+          ],
+          "text": "PM / 기관 비교표",
+          "textPreview": "PM / 기관 비교표",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "PM / 기관 비교표",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "PM / 기관 비교표",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 7,
+          "row": 3,
+          "column": 1,
+          "bbox": [
+            70,
+            367,
+            280,
+            104
+          ],
+          "text": "우선 상담",
+          "textPreview": "우선 상담",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "우선 상담",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "우선 상담",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 8,
+          "row": 3,
+          "column": 2,
+          "bbox": [
+            350,
+            367,
+            810,
+            104
+          ],
+          "text": "TTA GS 1등급 포털과 KTC GS 안내를 활용. 다른 지정기관도 해당 분야·일정 확인 후 비교.",
+          "textPreview": "TTA GS 1등급 포털과 KTC GS 안내를 활용. 다른 지정기관도 해당 분야·일정 확인 후 비교.",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "TTA GS 1등급 포털과 KTC GS 안내를 활용. 다른 지정기관도 해당 분야·일정 확인 후 비교.",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "TTA GS 1등급 포털과 KTC GS 안내를 활용. 다른 지정기관도 해당 분야·일정 확인 후 비교.",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 9,
+          "row": 3,
+          "column": 3,
+          "bbox": [
+            1160,
+            367,
+            370,
+            104
+          ],
+          "text": "자료 출처 G2·G3",
+          "textPreview": "자료 출처 G2·G3",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "자료 출처 G2·G3",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "자료 출처 G2·G3",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 10,
+          "row": 4,
+          "column": 1,
+          "bbox": [
+            70,
+            471,
+            280,
+            104
+          ],
+          "text": "보낼 자료",
+          "textPreview": "보낼 자료",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "보낼 자료",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "보낼 자료",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 11,
+          "row": 4,
+          "column": 2,
+          "bbox": [
+            350,
+            471,
+            810,
+            104
+          ],
+          "text": "제품 소개 2~3쪽, 기능 목록, 설명서 초안, 환경·연동 구조, 목표 출시일, 문의 목록.",
+          "textPreview": "제품 소개 2~3쪽, 기능 목록, 설명서 초안, 환경·연동 구조, 목표 출시일, 문의 목록.",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "제품 소개 2~3쪽, 기능 목록, 설명서 초안, 환경·연동 구조, 목표 출시일, 문의 목록.",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "제품 소개 2~3쪽, 기능 목록, 설명서 초안, 환경·연동 구조, 목표 출시일, 문의 목록.",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 12,
+          "row": 4,
+          "column": 3,
+          "bbox": [
+            1160,
+            471,
+            370,
+            104
+          ],
+          "text": "상담자료 ZIP",
+          "textPreview": "상담자료 ZIP",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "상담자료 ZIP",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "상담자료 ZIP",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 13,
+          "row": 5,
+          "column": 1,
+          "bbox": [
+            70,
+            575,
+            280,
+            104
+          ],
+          "text": "받을 답변",
+          "textPreview": "받을 답변",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "받을 답변",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "받을 답변",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 14,
+          "row": 5,
+          "column": 2,
+          "bbox": [
+            350,
+            575,
+            810,
+            104
+          ],
+          "text": "시험범위, 등급, 적용 기준판, 시작 가능일, 추가 자료, 수정·회귀 조건과 비용.",
+          "textPreview": "시험범위, 등급, 적용 기준판, 시작 가능일, 추가 자료, 수정·회귀 조건과 비용.",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "시험범위, 등급, 적용 기준판, 시작 가능일, 추가 자료, 수정·회귀 조건과 비용.",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "시험범위, 등급, 적용 기준판, 시작 가능일, 추가 자료, 수정·회귀 조건과 비용.",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 15,
+          "row": 5,
+          "column": 3,
+          "bbox": [
+            1160,
+            575,
+            370,
+            104
+          ],
+          "text": "기관 회신 원문 보관",
+          "textPreview": "기관 회신 원문 보관",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "기관 회신 원문 보관",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "기관 회신 원문 보관",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 16,
+          "row": 6,
+          "column": 1,
+          "bbox": [
+            70,
+            679,
+            280,
+            104
+          ],
+          "text": "기관 확정",
+          "textPreview": "기관 확정",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "기관 확정",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "기관 확정",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 17,
+          "row": 6,
+          "column": 2,
+          "bbox": [
+            350,
+            679,
+            810,
+            104
+          ],
+          "text": "가격만 비교하지 말고 준비 완료일과 시험 착수일을 맞춤. 계약 조건을 대표 승인.",
+          "textPreview": "가격만 비교하지 말고 준비 완료일과 시험 착수일을 맞춤. 계약 조건을 대표 승인.",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "가격만 비교하지 말고 준비 완료일과 시험 착수일을 맞춤. 계약 조건을 대표 승인.",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "가격만 비교하지 말고 준비 완료일과 시험 착수일을 맞춤. 계약 조건을 대표 승인.",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 18,
+          "row": 6,
+          "column": 3,
+          "bbox": [
+            1160,
+            679,
+            370,
+            104
+          ],
+          "text": "상담결과·견적·선정기록",
+          "textPreview": "상담결과·견적·선정기록",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "상담결과·견적·선정기록",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "상담결과·견적·선정기록",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/hc3uxsj6",
+      "id": "4",
+      "bbox": [
+        74,
+        808,
+        1380,
+        30
+      ],
+      "geometry": "rect",
+      "text": "근거 G2 · G3  / 공식 URL은 부록·슬라이드 노트",
+      "textPreview": "근거 G2 · G3  / 공식 URL은 부록·슬라이드 노트",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 17,
+        "typeface": "Malgun Gothic",
+        "color": "#526676",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "근거 G2 · G3  / 공식 URL은 부록·슬라이드 노트"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "근거 G2 · G3  / 공식 URL은 부록·슬라이드 노트",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#526676"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "근거 G2 · G3  / 공식 URL은 부록·슬라이드 노트",
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#526676"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wrudonil",
+      "id": "5",
+      "bbox": [
+        74,
+        852,
+        1260,
+        27
+      ],
+      "geometry": "rect",
+      "text": "인뎁스  GS  ·  2026.09.23",
+      "textPreview": "인뎁스  GS  ·  2026.09.23",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 17,
+        "typeface": "Malgun Gothic",
+        "color": "#526676",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "인뎁스  GS  ·  2026.09.23"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "인뎁스  GS  ·  2026.09.23",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#526676"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "인뎁스  GS  ·  2026.09.23",
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#526676"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vqlcvi10",
+      "id": "6",
+      "bbox": [
+        1410,
+        847,
+        120,
+        33
+      ],
+      "geometry": "rect",
+      "text": "10 / 47",
+      "textPreview": "10 / 47",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 19,
+        "typeface": "Malgun Gothic",
+        "color": "#526676",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "10 / 47"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "10 / 47",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Malgun Gothic",
+            "color": "#526676"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "10 / 47",
+              "fontSize": 19,
+              "typeface": "Malgun Gothic",
+              "color": "#526676"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

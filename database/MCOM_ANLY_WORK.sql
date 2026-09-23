@@ -336,6 +336,9 @@ DECLARE
         END IF;
     END;
 BEGIN
+    delete_run_result_table('INIT$_TB_RULEVIOL_XAI');
+    delete_run_result_table('INIT$_TB_RULEDISC_XAI');
+    delete_run_result_table('INIT$_TB_XAI_RUN');
     delete_run_result_table('INIT$_TB_RULEVIOL_SYMBOLIC');
     delete_run_result_table('INIT$_TB_RULEVIOL_ASSOC');
     delete_run_result_table('INIT$_TB_RULEDISC_SYMBOLIC');

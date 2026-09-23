@@ -1,0 +1,1048 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/iwo4ol",
+    "id": "iwo4ol",
+    "slide": 23,
+    "layoutId": "000c11cc-c89f-4572-9bfa-4e8722d3c609",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "e8524a4c-1164-40a4-8241-8d496cd2be96",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1600,
+      "height": 900
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Malgun Gothic"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "000c11cc-c89f-4572-9bfa-4e8722d3c609",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "e8524a4c-1164-40a4-8241-8d496cd2be96",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "e8524a4c-1164-40a4-8241-8d496cd2be96",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ut07qtgz",
+      "id": "1",
+      "bbox": [
+        70,
+        44,
+        1460,
+        75
+      ],
+      "geometry": "rect",
+      "text": "시험 데이터와 증빙 규칙",
+      "textPreview": "시험 데이터와 증빙 규칙",
+      "resolvedFontSize": 42,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 42,
+        "typeface": "Malgun Gothic",
+        "color": "#152F43",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "시험 데이터와 증빙 규칙"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "시험 데이터와 증빙 규칙",
+          "resolvedTextStyle": {
+            "fontSize": 42,
+            "typeface": "Malgun Gothic",
+            "color": "#152F43",
+            "bold": true
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "시험 데이터와 증빙 규칙",
+              "fontSize": 42,
+              "typeface": "Malgun Gothic",
+              "color": "#152F43",
+              "bold": true
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/hwbq18za",
+      "id": "2",
+      "bbox": [
+        73,
+        130,
+        1450,
+        55
+      ],
+      "geometry": "rect",
+      "text": "GS-11 / 고객 원본 데이터 대신 재현 가능한 합성 데이터",
+      "textPreview": "GS-11 / 고객 원본 데이터 대신 재현 가능한 합성 데이터",
+      "resolvedFontSize": 25,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 25,
+        "typeface": "Malgun Gothic",
+        "color": "#526676",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "GS-11 / 고객 원본 데이터 대신 재현 가능한 합성 데이터"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "GS-11 / 고객 원본 데이터 대신 재현 가능한 합성 데이터",
+          "resolvedTextStyle": {
+            "fontSize": 25,
+            "typeface": "Malgun Gothic",
+            "color": "#526676"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "GS-11 / 고객 원본 데이터 대신 재현 가능한 합성 데이터",
+              "fontSize": 25,
+              "typeface": "Malgun Gothic",
+              "color": "#526676"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "table",
+      "scope": "slide",
+      "aid": "tb/5of6t0vu",
+      "id": "3",
+      "bbox": [
+        70,
+        205,
+        1460,
+        578
+      ],
+      "text": "업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준\n기본 세트 | 정상값·결측·중복·극값·한글·특수문자·날짜·잘못된 형식을 가진 작은 정답 세트 준비. | 데이터사전 + 기대결과\n용량 세트 | 소·중·대 규모별 행수·컬럼수·분포·파일 크기 기록. 주장할 최대 범위까지 준비. | 생성 스크립트·seed\n격리 조건 | 사용자 A/B, 프로젝트 A/B, Target DB A/B의 권한 분리와 데이터 교차 접근 시험. | 계정·권한 매트릭스\n증빙 단위 | TC ID, 앱 빌드·DB 스키마 버전, 환경, 시간, 입력, 결과, 로그·화면을 묶어 저장. | evidence/TC-ID/\n정보 보호 | 화면·로그의 키·비밀번호·지갑·개인정보 제거. 기관 제공 데이터와 보관·삭제 범위 협의. | 반입·반출 목록 승인",
+      "textPreview": "업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준 | 기본 세트 | 정상값·결측·중복·극값·한글·특수문자·날짜·잘못된 형식을 가진 작은 정답 세트 준비. | 데이터사전 + 기대결과 | 용량 세트 | 소·중·대 규모별 행수·컬럼수·분포·파일...",
+      "rows": 6,
+      "cols": 3,
+      "cells": [
+        {
+          "index": 1,
+          "row": 1,
+          "column": 1,
+          "bbox": [
+            70,
+            205,
+            280,
+            58
+          ],
+          "text": "업무·확인 항목",
+          "textPreview": "업무·확인 항목",
+          "fillColor": "#152F43",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "업무·확인 항목",
+              "resolvedTextStyle": {
+                "fontSize": 23,
+                "typeface": "Malgun Gothic",
+                "color": "#FFFFFF",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "업무·확인 항목",
+                  "fontSize": 23,
+                  "typeface": "Malgun Gothic",
+                  "color": "#FFFFFF",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "row": 1,
+          "column": 2,
+          "bbox": [
+            350,
+            205,
+            810,
+            58
+          ],
+          "text": "실행 내용",
+          "textPreview": "실행 내용",
+          "fillColor": "#152F43",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "실행 내용",
+              "resolvedTextStyle": {
+                "fontSize": 23,
+                "typeface": "Malgun Gothic",
+                "color": "#FFFFFF",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "실행 내용",
+                  "fontSize": 23,
+                  "typeface": "Malgun Gothic",
+                  "color": "#FFFFFF",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "row": 1,
+          "column": 3,
+          "bbox": [
+            1160,
+            205,
+            370,
+            58
+          ],
+          "text": "담당·산출물·완료 기준",
+          "textPreview": "담당·산출물·완료 기준",
+          "fillColor": "#152F43",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "담당·산출물·완료 기준",
+              "resolvedTextStyle": {
+                "fontSize": 23,
+                "typeface": "Malgun Gothic",
+                "color": "#FFFFFF",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "담당·산출물·완료 기준",
+                  "fontSize": 23,
+                  "typeface": "Malgun Gothic",
+                  "color": "#FFFFFF",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 4,
+          "row": 2,
+          "column": 1,
+          "bbox": [
+            70,
+            263,
+            280,
+            104
+          ],
+          "text": "기본 세트",
+          "textPreview": "기본 세트",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "기본 세트",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "기본 세트",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 5,
+          "row": 2,
+          "column": 2,
+          "bbox": [
+            350,
+            263,
+            810,
+            104
+          ],
+          "text": "정상값·결측·중복·극값·한글·특수문자·날짜·잘못된 형식을 가진 작은 정답 세트 준비.",
+          "textPreview": "정상값·결측·중복·극값·한글·특수문자·날짜·잘못된 형식을 가진 작은 정답 세트 준비.",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "정상값·결측·중복·극값·한글·특수문자·날짜·잘못된 형식을 가진 작은 정답 세트 준비.",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "정상값·결측·중복·극값·한글·특수문자·날짜·잘못된 형식을 가진 작은 정답 세트 준비.",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 6,
+          "row": 2,
+          "column": 3,
+          "bbox": [
+            1160,
+            263,
+            370,
+            104
+          ],
+          "text": "데이터사전 + 기대결과",
+          "textPreview": "데이터사전 + 기대결과",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "데이터사전 + 기대결과",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "데이터사전 + 기대결과",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 7,
+          "row": 3,
+          "column": 1,
+          "bbox": [
+            70,
+            367,
+            280,
+            104
+          ],
+          "text": "용량 세트",
+          "textPreview": "용량 세트",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "용량 세트",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "용량 세트",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 8,
+          "row": 3,
+          "column": 2,
+          "bbox": [
+            350,
+            367,
+            810,
+            104
+          ],
+          "text": "소·중·대 규모별 행수·컬럼수·분포·파일 크기 기록. 주장할 최대 범위까지 준비.",
+          "textPreview": "소·중·대 규모별 행수·컬럼수·분포·파일 크기 기록. 주장할 최대 범위까지 준비.",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "소·중·대 규모별 행수·컬럼수·분포·파일 크기 기록. 주장할 최대 범위까지 준비.",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "소·중·대 규모별 행수·컬럼수·분포·파일 크기 기록. 주장할 최대 범위까지 준비.",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 9,
+          "row": 3,
+          "column": 3,
+          "bbox": [
+            1160,
+            367,
+            370,
+            104
+          ],
+          "text": "생성 스크립트·seed",
+          "textPreview": "생성 스크립트·seed",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "생성 스크립트·seed",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "생성 스크립트·seed",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 10,
+          "row": 4,
+          "column": 1,
+          "bbox": [
+            70,
+            471,
+            280,
+            104
+          ],
+          "text": "격리 조건",
+          "textPreview": "격리 조건",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "격리 조건",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "격리 조건",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 11,
+          "row": 4,
+          "column": 2,
+          "bbox": [
+            350,
+            471,
+            810,
+            104
+          ],
+          "text": "사용자 A/B, 프로젝트 A/B, Target DB A/B의 권한 분리와 데이터 교차 접근 시험.",
+          "textPreview": "사용자 A/B, 프로젝트 A/B, Target DB A/B의 권한 분리와 데이터 교차 접근 시험.",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "사용자 A/B, 프로젝트 A/B, Target DB A/B의 권한 분리와 데이터 교차 접근 시험.",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "사용자 A/B, 프로젝트 A/B, Target DB A/B의 권한 분리와 데이터 교차 접근 시험.",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 12,
+          "row": 4,
+          "column": 3,
+          "bbox": [
+            1160,
+            471,
+            370,
+            104
+          ],
+          "text": "계정·권한 매트릭스",
+          "textPreview": "계정·권한 매트릭스",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "계정·권한 매트릭스",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "계정·권한 매트릭스",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 13,
+          "row": 5,
+          "column": 1,
+          "bbox": [
+            70,
+            575,
+            280,
+            104
+          ],
+          "text": "증빙 단위",
+          "textPreview": "증빙 단위",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "증빙 단위",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "증빙 단위",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 14,
+          "row": 5,
+          "column": 2,
+          "bbox": [
+            350,
+            575,
+            810,
+            104
+          ],
+          "text": "TC ID, 앱 빌드·DB 스키마 버전, 환경, 시간, 입력, 결과, 로그·화면을 묶어 저장.",
+          "textPreview": "TC ID, 앱 빌드·DB 스키마 버전, 환경, 시간, 입력, 결과, 로그·화면을 묶어 저장.",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "TC ID, 앱 빌드·DB 스키마 버전, 환경, 시간, 입력, 결과, 로그·화면을 묶어 저장.",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "TC ID, 앱 빌드·DB 스키마 버전, 환경, 시간, 입력, 결과, 로그·화면을 묶어 저장.",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 15,
+          "row": 5,
+          "column": 3,
+          "bbox": [
+            1160,
+            575,
+            370,
+            104
+          ],
+          "text": "evidence/TC-ID/",
+          "textPreview": "evidence/TC-ID/",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "evidence/TC-ID/",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "evidence/TC-ID/",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 16,
+          "row": 6,
+          "column": 1,
+          "bbox": [
+            70,
+            679,
+            280,
+            104
+          ],
+          "text": "정보 보호",
+          "textPreview": "정보 보호",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "정보 보호",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "정보 보호",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 17,
+          "row": 6,
+          "column": 2,
+          "bbox": [
+            350,
+            679,
+            810,
+            104
+          ],
+          "text": "화면·로그의 키·비밀번호·지갑·개인정보 제거. 기관 제공 데이터와 보관·삭제 범위 협의.",
+          "textPreview": "화면·로그의 키·비밀번호·지갑·개인정보 제거. 기관 제공 데이터와 보관·삭제 범위 협의.",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "화면·로그의 키·비밀번호·지갑·개인정보 제거. 기관 제공 데이터와 보관·삭제 범위 협의.",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "화면·로그의 키·비밀번호·지갑·개인정보 제거. 기관 제공 데이터와 보관·삭제 범위 협의.",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 18,
+          "row": 6,
+          "column": 3,
+          "bbox": [
+            1160,
+            679,
+            370,
+            104
+          ],
+          "text": "반입·반출 목록 승인",
+          "textPreview": "반입·반출 목록 승인",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "반입·반출 목록 승인",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "반입·반출 목록 승인",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7q98vyh8",
+      "id": "4",
+      "bbox": [
+        74,
+        808,
+        1380,
+        30
+      ],
+      "geometry": "rect",
+      "text": "근거 R1  / 공식 URL은 부록·슬라이드 노트",
+      "textPreview": "근거 R1  / 공식 URL은 부록·슬라이드 노트",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 17,
+        "typeface": "Malgun Gothic",
+        "color": "#526676",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "근거 R1  / 공식 URL은 부록·슬라이드 노트"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "근거 R1  / 공식 URL은 부록·슬라이드 노트",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#526676"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "근거 R1  / 공식 URL은 부록·슬라이드 노트",
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#526676"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/6p07mtgn",
+      "id": "5",
+      "bbox": [
+        74,
+        852,
+        1260,
+        27
+      ],
+      "geometry": "rect",
+      "text": "인뎁스  GS  ·  2026.09.23",
+      "textPreview": "인뎁스  GS  ·  2026.09.23",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 17,
+        "typeface": "Malgun Gothic",
+        "color": "#526676",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "인뎁스  GS  ·  2026.09.23"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "인뎁스  GS  ·  2026.09.23",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#526676"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "인뎁스  GS  ·  2026.09.23",
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#526676"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tsrqx8ze",
+      "id": "6",
+      "bbox": [
+        1410,
+        847,
+        120,
+        33
+      ],
+      "geometry": "rect",
+      "text": "23 / 47",
+      "textPreview": "23 / 47",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 19,
+        "typeface": "Malgun Gothic",
+        "color": "#526676",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "23 / 47"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "23 / 47",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Malgun Gothic",
+            "color": "#526676"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "23 / 47",
+              "fontSize": 19,
+              "typeface": "Malgun Gothic",
+              "color": "#526676"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

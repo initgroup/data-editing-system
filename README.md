@@ -215,6 +215,8 @@ SELECT ...
 
 ## 4단계 통합 FLOW
 
+기존 4단계와 별도로, 사전 컬럼 유형 판정이 필요 없는 **혼합형 XAI FLOW**를 제공합니다. 실제 컬럼별 예측 트리로 `IF 조건 THEN 실제 값·범위`를 발굴하고, 별도 표본 검증을 통과한 규칙을 원본 전체에 적용해 위반을 찾습니다. 기존 규칙·위반 테이블과 최종 분석·에디팅 화면을 재사용합니다. FLOW 기본 템플릿과 퀵 에디팅에서 방식을 선택할 수 있습니다. 새 Target DB 오브젝트는 자동 생성하지 않습니다. 혼합형 내장 API는 미등록 시 배포 프리셋으로 JOB을 준비하며, SQL 수동 설치와 선택적인 M90002 등록은 [MIXED_XAI_GUIDE.md](MIXED_XAI_GUIDE.md)를 참고하세요. 반복 오류의 원인과 재발 방지 검증은 [QUICK_EDIT_RELIABILITY.md](QUICK_EDIT_RELIABILITY.md)에 기록합니다.
+
 기본 FLOW 템플릿은 다음 통합 모델을 우선 선택합니다. 개별 프로파일링·상관·군집·LASSO·Apriori·Symbolic 모델도 별도 JOB으로 계속 사용할 수 있습니다.
 
 1. `INIT$_SP_PREDICTED_TYPE`: 범주형/연속형 프로파일링

@@ -1,0 +1,1048 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/hvjykt",
+    "id": "hvjykt",
+    "slide": 12,
+    "layoutId": "6cba7aae-3bac-442d-849e-d1b490cfac31",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "65fd5194-cb02-440c-9a6f-5baf223783c9",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1600,
+      "height": 900
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Malgun Gothic"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "6cba7aae-3bac-442d-849e-d1b490cfac31",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "65fd5194-cb02-440c-9a6f-5baf223783c9",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "65fd5194-cb02-440c-9a6f-5baf223783c9",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ixcf25kz",
+      "id": "1",
+      "bbox": [
+        70,
+        44,
+        1460,
+        75
+      ],
+      "geometry": "rect",
+      "text": "EULA에 필요한 계약 조항",
+      "textPreview": "EULA에 필요한 계약 조항",
+      "resolvedFontSize": 42,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 42,
+        "typeface": "Malgun Gothic",
+        "color": "#152F43",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "EULA에 필요한 계약 조항"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "EULA에 필요한 계약 조항",
+          "resolvedTextStyle": {
+            "fontSize": 42,
+            "typeface": "Malgun Gothic",
+            "color": "#152F43",
+            "bold": true
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "EULA에 필요한 계약 조항",
+              "fontSize": 42,
+              "typeface": "Malgun Gothic",
+              "color": "#152F43",
+              "bold": true
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/50nydk3a",
+      "id": "2",
+      "bbox": [
+        73,
+        130,
+        1450,
+        55
+      ],
+      "geometry": "rect",
+      "text": "G2B-03 / 법무 검토 후 계약 규격에 맞춰 확정",
+      "textPreview": "G2B-03 / 법무 검토 후 계약 규격에 맞춰 확정",
+      "resolvedFontSize": 25,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 25,
+        "typeface": "Malgun Gothic",
+        "color": "#526676",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "G2B-03 / 법무 검토 후 계약 규격에 맞춰 확정"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "G2B-03 / 법무 검토 후 계약 규격에 맞춰 확정",
+          "resolvedTextStyle": {
+            "fontSize": 25,
+            "typeface": "Malgun Gothic",
+            "color": "#526676"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "G2B-03 / 법무 검토 후 계약 규격에 맞춰 확정",
+              "fontSize": 25,
+              "typeface": "Malgun Gothic",
+              "color": "#526676"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "table",
+      "scope": "slide",
+      "aid": "tb/l8z2pszu",
+      "id": "3",
+      "bbox": [
+        70,
+        205,
+        1460,
+        578
+      ],
+      "text": "업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준\n권리 부여 | 기관·설치환경·사용자·연결 수, 사용기간, 복제·백업·이전·가상화·DR 허용 범위. | 별지 라이선스 정의표\n권리 귀속 | 제품 저작권은 회사, 고객 데이터·고객 제공 자료 권리는 고객. 제3자 OSS 권리는 해당 조건 준수. | OSS 고지와 대조\n제한·검증 | 재판매·불법 복제 제한, 수량 확인 방법과 최소 수집 정보. 폐쇄망 고객 데이터 자동 전송 조건 금지. | 기관 보안정책과 합의\n지원·종료 | 하자·유지관리·업그레이드·EOL·계약위반 처리, 통지·시정기간·사용권 범위를 명시. | 지원 종료와 사용권 분리\n계약 우선순위 | 공공 계약서·특수조건과 EULA가 충돌하는지 검토. 임의 면책·자동중단·일방 변경을 넣지 않음. | 법무·조달 검토",
+      "textPreview": "업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준 | 권리 부여 | 기관·설치환경·사용자·연결 수, 사용기간, 복제·백업·이전·가상화·DR 허용 범위. | 별지 라이선스 정의표 | 권리 귀속 | 제품 저작권은 회사, 고객 데이터·고객 제공...",
+      "rows": 6,
+      "cols": 3,
+      "cells": [
+        {
+          "index": 1,
+          "row": 1,
+          "column": 1,
+          "bbox": [
+            70,
+            205,
+            280,
+            58
+          ],
+          "text": "업무·확인 항목",
+          "textPreview": "업무·확인 항목",
+          "fillColor": "#152F43",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "업무·확인 항목",
+              "resolvedTextStyle": {
+                "fontSize": 23,
+                "typeface": "Malgun Gothic",
+                "color": "#FFFFFF",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "업무·확인 항목",
+                  "fontSize": 23,
+                  "typeface": "Malgun Gothic",
+                  "color": "#FFFFFF",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "row": 1,
+          "column": 2,
+          "bbox": [
+            350,
+            205,
+            810,
+            58
+          ],
+          "text": "실행 내용",
+          "textPreview": "실행 내용",
+          "fillColor": "#152F43",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "실행 내용",
+              "resolvedTextStyle": {
+                "fontSize": 23,
+                "typeface": "Malgun Gothic",
+                "color": "#FFFFFF",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "실행 내용",
+                  "fontSize": 23,
+                  "typeface": "Malgun Gothic",
+                  "color": "#FFFFFF",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "row": 1,
+          "column": 3,
+          "bbox": [
+            1160,
+            205,
+            370,
+            58
+          ],
+          "text": "담당·산출물·완료 기준",
+          "textPreview": "담당·산출물·완료 기준",
+          "fillColor": "#152F43",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "담당·산출물·완료 기준",
+              "resolvedTextStyle": {
+                "fontSize": 23,
+                "typeface": "Malgun Gothic",
+                "color": "#FFFFFF",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "담당·산출물·완료 기준",
+                  "fontSize": 23,
+                  "typeface": "Malgun Gothic",
+                  "color": "#FFFFFF",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 4,
+          "row": 2,
+          "column": 1,
+          "bbox": [
+            70,
+            263,
+            280,
+            104
+          ],
+          "text": "권리 부여",
+          "textPreview": "권리 부여",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "권리 부여",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "권리 부여",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 5,
+          "row": 2,
+          "column": 2,
+          "bbox": [
+            350,
+            263,
+            810,
+            104
+          ],
+          "text": "기관·설치환경·사용자·연결 수, 사용기간, 복제·백업·이전·가상화·DR 허용 범위.",
+          "textPreview": "기관·설치환경·사용자·연결 수, 사용기간, 복제·백업·이전·가상화·DR 허용 범위.",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "기관·설치환경·사용자·연결 수, 사용기간, 복제·백업·이전·가상화·DR 허용 범위.",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "기관·설치환경·사용자·연결 수, 사용기간, 복제·백업·이전·가상화·DR 허용 범위.",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 6,
+          "row": 2,
+          "column": 3,
+          "bbox": [
+            1160,
+            263,
+            370,
+            104
+          ],
+          "text": "별지 라이선스 정의표",
+          "textPreview": "별지 라이선스 정의표",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "별지 라이선스 정의표",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "별지 라이선스 정의표",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 7,
+          "row": 3,
+          "column": 1,
+          "bbox": [
+            70,
+            367,
+            280,
+            104
+          ],
+          "text": "권리 귀속",
+          "textPreview": "권리 귀속",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "권리 귀속",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "권리 귀속",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 8,
+          "row": 3,
+          "column": 2,
+          "bbox": [
+            350,
+            367,
+            810,
+            104
+          ],
+          "text": "제품 저작권은 회사, 고객 데이터·고객 제공 자료 권리는 고객. 제3자 OSS 권리는 해당 조건 준수.",
+          "textPreview": "제품 저작권은 회사, 고객 데이터·고객 제공 자료 권리는 고객. 제3자 OSS 권리는 해당 조건 준수.",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "제품 저작권은 회사, 고객 데이터·고객 제공 자료 권리는 고객. 제3자 OSS 권리는 해당 조건 준수.",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "제품 저작권은 회사, 고객 데이터·고객 제공 자료 권리는 고객. 제3자 OSS 권리는 해당 조건 준수.",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 9,
+          "row": 3,
+          "column": 3,
+          "bbox": [
+            1160,
+            367,
+            370,
+            104
+          ],
+          "text": "OSS 고지와 대조",
+          "textPreview": "OSS 고지와 대조",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "OSS 고지와 대조",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "OSS 고지와 대조",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 10,
+          "row": 4,
+          "column": 1,
+          "bbox": [
+            70,
+            471,
+            280,
+            104
+          ],
+          "text": "제한·검증",
+          "textPreview": "제한·검증",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "제한·검증",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "제한·검증",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 11,
+          "row": 4,
+          "column": 2,
+          "bbox": [
+            350,
+            471,
+            810,
+            104
+          ],
+          "text": "재판매·불법 복제 제한, 수량 확인 방법과 최소 수집 정보. 폐쇄망 고객 데이터 자동 전송 조건 금지.",
+          "textPreview": "재판매·불법 복제 제한, 수량 확인 방법과 최소 수집 정보. 폐쇄망 고객 데이터 자동 전송 조건 금지.",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "재판매·불법 복제 제한, 수량 확인 방법과 최소 수집 정보. 폐쇄망 고객 데이터 자동 전송 조건 금지.",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "재판매·불법 복제 제한, 수량 확인 방법과 최소 수집 정보. 폐쇄망 고객 데이터 자동 전송 조건 금지.",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 12,
+          "row": 4,
+          "column": 3,
+          "bbox": [
+            1160,
+            471,
+            370,
+            104
+          ],
+          "text": "기관 보안정책과 합의",
+          "textPreview": "기관 보안정책과 합의",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "기관 보안정책과 합의",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "기관 보안정책과 합의",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 13,
+          "row": 5,
+          "column": 1,
+          "bbox": [
+            70,
+            575,
+            280,
+            104
+          ],
+          "text": "지원·종료",
+          "textPreview": "지원·종료",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "지원·종료",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "지원·종료",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 14,
+          "row": 5,
+          "column": 2,
+          "bbox": [
+            350,
+            575,
+            810,
+            104
+          ],
+          "text": "하자·유지관리·업그레이드·EOL·계약위반 처리, 통지·시정기간·사용권 범위를 명시.",
+          "textPreview": "하자·유지관리·업그레이드·EOL·계약위반 처리, 통지·시정기간·사용권 범위를 명시.",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "하자·유지관리·업그레이드·EOL·계약위반 처리, 통지·시정기간·사용권 범위를 명시.",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "하자·유지관리·업그레이드·EOL·계약위반 처리, 통지·시정기간·사용권 범위를 명시.",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 15,
+          "row": 5,
+          "column": 3,
+          "bbox": [
+            1160,
+            575,
+            370,
+            104
+          ],
+          "text": "지원 종료와 사용권 분리",
+          "textPreview": "지원 종료와 사용권 분리",
+          "fillColor": "#F3F6F8",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "지원 종료와 사용권 분리",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "지원 종료와 사용권 분리",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 16,
+          "row": 6,
+          "column": 1,
+          "bbox": [
+            70,
+            679,
+            280,
+            104
+          ],
+          "text": "계약 우선순위",
+          "textPreview": "계약 우선순위",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "계약 우선순위",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43",
+                "bold": true
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "계약 우선순위",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "bold": true,
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 17,
+          "row": 6,
+          "column": 2,
+          "bbox": [
+            350,
+            679,
+            810,
+            104
+          ],
+          "text": "공공 계약서·특수조건과 EULA가 충돌하는지 검토. 임의 면책·자동중단·일방 변경을 넣지 않음.",
+          "textPreview": "공공 계약서·특수조건과 EULA가 충돌하는지 검토. 임의 면책·자동중단·일방 변경을 넣지 않음.",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "공공 계약서·특수조건과 EULA가 충돌하는지 검토. 임의 면책·자동중단·일방 변경을 넣지 않음.",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "공공 계약서·특수조건과 EULA가 충돌하는지 검토. 임의 면책·자동중단·일방 변경을 넣지 않음.",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "index": 18,
+          "row": 6,
+          "column": 3,
+          "bbox": [
+            1160,
+            679,
+            370,
+            104
+          ],
+          "text": "법무·조달 검토",
+          "textPreview": "법무·조달 검토",
+          "fillColor": "#FFFFFF",
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "법무·조달 검토",
+              "resolvedTextStyle": {
+                "fontSize": 24,
+                "typeface": "Malgun Gothic",
+                "color": "#152F43"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "법무·조달 검토",
+                  "fontSize": 24,
+                  "typeface": "Malgun Gothic",
+                  "color": "#152F43",
+                  "autoFit": "none"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vulg7al8",
+      "id": "4",
+      "bbox": [
+        74,
+        808,
+        1380,
+        30
+      ],
+      "geometry": "rect",
+      "text": "근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트",
+      "textPreview": "근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 17,
+        "typeface": "Malgun Gothic",
+        "color": "#526676",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#526676"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트",
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#526676"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/atcfy5kn",
+      "id": "5",
+      "bbox": [
+        74,
+        852,
+        1260,
+        27
+      ],
+      "geometry": "rect",
+      "text": "인뎁스  G2B  ·  2026.09.23",
+      "textPreview": "인뎁스  G2B  ·  2026.09.23",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 17,
+        "typeface": "Malgun Gothic",
+        "color": "#526676",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "인뎁스  G2B  ·  2026.09.23"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "인뎁스  G2B  ·  2026.09.23",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Malgun Gothic",
+            "color": "#526676"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "인뎁스  G2B  ·  2026.09.23",
+              "fontSize": 17,
+              "typeface": "Malgun Gothic",
+              "color": "#526676"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/xw3y9k3e",
+      "id": "6",
+      "bbox": [
+        1410,
+        847,
+        120,
+        33
+      ],
+      "geometry": "rect",
+      "text": "12 / 51",
+      "textPreview": "12 / 51",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 19,
+        "typeface": "Malgun Gothic",
+        "color": "#526676",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "12 / 51"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "12 / 51",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Malgun Gothic",
+            "color": "#526676"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "12 / 51",
+              "fontSize": 19,
+              "typeface": "Malgun Gothic",
+              "color": "#526676"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

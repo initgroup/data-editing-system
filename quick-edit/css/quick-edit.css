@@ -1249,6 +1249,60 @@ progress::-moz-progress-bar {
     font-weight: 900;
 }
 
+.qe-process-options {
+    display: grid;
+    gap: 8px;
+}
+
+.qe-process-options label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--qe-line);
+    border-radius: 12px;
+    cursor: pointer;
+}
+
+.qe-process-options input {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--qe-brand-strong);
+}
+
+.qe-process-options label:has(input:checked) {
+    border-color: var(--qe-brand-strong);
+    background: var(--qe-brand-pale);
+}
+
+.qe-process-options label:has(input:disabled) {
+    cursor: default;
+    opacity: 0.72;
+}
+
+.qe-process-options span {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.qe-process-options strong {
+    font-size: 13px;
+}
+
+.qe-process-options small,
+.qe-process-description {
+    color: var(--qe-muted);
+    font-size: 11px;
+    line-height: 1.6;
+}
+
+.qe-process-description {
+    margin: 8px 0 0;
+}
+
 .qe-workspace-lock-note {
     padding: 10px 12px;
     margin: 12px 0 0;
@@ -3720,27 +3774,29 @@ button.qe-rule-card:hover,
 }
 
 .qe-rule-body {
-    overflow: hidden;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 8px;
+    min-width: 0;
     margin-top: 6px;
     color: #344159;
     font-family: var(--qe-mono);
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.55;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    white-space: normal;
 }
 
 .qe-rule-expression {
     display: block;
-    overflow: hidden;
     margin-top: 7px;
     color: #344159;
     font-family: inherit;
     font-size: 10px;
     font-weight: 650;
     line-height: 1.55;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
 }
 
 .qe-rule-columns {
@@ -3923,7 +3979,7 @@ button.qe-rule-card:hover,
 .qe-continuous-chart-wrap {
     position: relative;
     min-height: 360px;
-    padding: 12px 12px 34px;
+    padding: 12px;
     margin-top: 10px;
     border: 1px solid #dbe6e4;
     border-radius: 13px;
@@ -3937,17 +3993,11 @@ button.qe-rule-card:hover,
 }
 
 .qe-continuous-chart-wrap > p {
-    position: absolute;
-    right: 14px;
-    bottom: 8px;
-    left: 14px;
-    overflow: hidden;
-    margin: 0;
+    margin: 8px 0 0;
     color: var(--qe-muted);
     font-size: 11px;
     text-align: center;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
 }
 
 .qe-continuous-sample {
@@ -3991,13 +4041,24 @@ button.qe-rule-card:hover,
     padding: 8px 9px;
     text-align: left;
     border-bottom: 1px solid var(--qe-line-soft);
+}
+
+.qe-detail-table th,
+.qe-detail-table td:not(.is-rule-expression) {
     white-space: nowrap;
 }
 
-.qe-detail-table td {
+.qe-detail-table td:not(.is-rule-expression) {
     overflow: hidden;
     max-width: 340px;
     text-overflow: ellipsis;
+}
+
+.qe-detail-table td.is-rule-expression {
+    min-width: 280px;
+    max-width: 440px;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
 }
 
 .qe-detail-table th {
@@ -4745,11 +4806,7 @@ button.qe-rule-card:hover,
 }
 
 .qe-rule-fields .qe-rule-expression {
-    overflow: visible;
     font-size: 11px;
-    overflow-wrap: anywhere;
-    text-overflow: clip;
-    white-space: pre-wrap;
 }
 
 .qe-rule-fields--inline > div {

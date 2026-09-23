@@ -4,7 +4,7 @@ Factory for reusable flow-work routers.
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 from datetime import date, datetime
 from decimal import Decimal
 import hashlib
@@ -43,6 +43,10 @@ class SavedFlowRunRequest(BaseModel):
     quickEditSummary: Optional[Dict[str, Any]] = None
 
 
+class QuickEditControlRequest(BaseModel):
+    action: Literal["PAUSE", "STOP"]
+
+
 class SavedColumnTypeRerunRequest(BaseModel):
     flowId: int
     projectId: int
@@ -70,6 +74,7 @@ def normalize_quick_edit_summary(value: Any) -> Dict[str, Any]:
     return {
         "version": 1,
         "source": "QUICK_EDIT",
+        "processType": "MIXED_XAI" if text_value("processType", 32).upper() == "MIXED_XAI" else "LEGACY",
         "projectCode": text_value("projectCode", 100),
         "projectName": text_value("projectName", 200),
         "projectCreatedAt": text_value("projectCreatedAt", 64),
@@ -1244,7 +1249,7 @@ def create_flow_work_router(
             if not continued_run:
                 raise HTTPException(status_code=404, detail="The Quick Editing flow run was not found.")
             continued_status = str(continued_run.get("STATUS") or "").strip().upper()
-            if continued_status in {"STARTED", "RUNNING", "QUEUED", "PENDING"}:
+            if continued_status in {"STARTED", "RUNNING", "QUEUED", "PENDING", "PAUSE_REQUESTED", "STOP_REQUESTED"}:
                 raise HTTPException(status_code=409, detail="The selected Quick Editing flow run is still active.")
 
             flow_work.require_compatible_continue_run(
@@ -1433,10 +1438,10 @@ def create_flow_work_router(
             if not continued_run:
                 raise HTTPException(status_code=404, detail="The Quick Editing flow run was not found.")
             continued_status = str(continued_run.get("STATUS") or "").strip().upper()
-            if continued_status in {"STARTED", "RUNNING", "QUEUED", "PENDING"}:
+            if continued_status in {"STARTED", "RUNNING", "QUEUED", "PENDING", "PAUSE_REQUESTED", "STOP_REQUESTED"}:
                 raise HTTPException(status_code=409, detail="The selected Quick Editing flow run is still active.")
-            if continued_status not in {"FAILED", "ERROR", "CANCELLED"}:
-                raise HTTPException(status_code=400, detail="Only a failed Quick Editing run can resume from its failed stage.")
+            if continued_status not in {"FAILED", "ERROR", "CANCELLED", "PAUSED"}:
+                raise HTTPException(status_code=400, detail="Only a failed, stopped or paused Quick Editing run can resume.")
 
             previous_plan = flow_work.parse_json(continued_run.get("PLAN_JSON"), {})
             quick_edit_summary = normalize_quick_edit_summary(req.quickEditSummary)
@@ -1447,7 +1452,15 @@ def create_flow_work_router(
 
             full_plan = validation.get("plan") or []
             node_rows = flow_work.list_node_runs(conn, req.flowRunId).get("data") or []
-            selected_step, selected_plan = build_failed_stage_rerun_plan(full_plan, node_rows)
+            if continued_status == "PAUSED":
+                completed = {str(row.get("NODE_KEY") or "").upper() for row in node_rows
+                             if str(row.get("STATUS") or "").upper() in {"SUCCESS", "SKIPPED"}}
+                selected_plan = [step for step in full_plan if str(step.get("nodeKey") or "").upper() not in completed]
+                if not selected_plan:
+                    raise HTTPException(status_code=409, detail="The paused run has no unfinished tasks.")
+                selected_step = selected_plan[0]
+            else:
+                selected_step, selected_plan = build_failed_stage_rerun_plan(full_plan, node_rows)
             flow_work.require_compatible_continue_run(
                 conn,
                 req.flowId,
@@ -1817,6 +1830,29 @@ def create_flow_work_router(
                 normalized_page,
                 normalized_page_size,
             )
+        finally:
+            if conn:
+                conn.close()
+
+    @router.post("/quick-edit/history/{flow_run_id}/control")
+    def control_quick_edit_run(flow_run_id: int, req: QuickEditControlRequest, request: Request):
+        conn = None
+        try:
+            conn = get_target_db_connection(request)
+            history = flow_work.list_quick_edit_history(
+                conn, MENU_CODE, get_request_user_id(request),
+                get_request_role_code(request) == "ADMIN", 1, 1, flow_run_id=flow_run_id,
+            )
+            if not history.get("data"):
+                raise HTTPException(status_code=404, detail="Quick Editing execution history was not found.")
+            return {"status": "success", "data": flow_work.request_run_control(conn, flow_run_id, req.action)}
+        except HTTPException:
+            raise
+        except Exception as exc:
+            if conn:
+                conn.rollback()
+            logger.exception("Quick Editing run control failed.")
+            raise HTTPException(status_code=500, detail=str(exc))
         finally:
             if conn:
                 conn.close()

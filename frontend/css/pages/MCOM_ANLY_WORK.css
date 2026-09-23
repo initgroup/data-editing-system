@@ -744,8 +744,8 @@
 }
 
 .anly-work-violation-summary {
-    background: #fff1f2;
-    border: 1px solid #fecdd3;
+    background: var(--anly-violation-active, #fff1f2);
+    border: 1px solid var(--anly-violation-border, #fecdd3);
     max-width: 100%;
     min-width: 0;
     margin-bottom: 12px;
@@ -756,7 +756,7 @@
 .anly-work-violation-intro {
     align-items: center;
     background: rgba(255, 255, 255, 0.65);
-    border: 1px solid #fecdd3;
+    border: 1px solid var(--anly-violation-border, #fecdd3);
     display: grid;
     gap: 12px;
     grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
@@ -820,7 +820,7 @@
 
 .anly-work-violation-condition-panel {
     background: #ffffff;
-    border: 1px solid #fecdd3;
+    border: 1px solid var(--anly-violation-border, #fecdd3);
     margin-bottom: 12px;
     padding: 10px;
 }
@@ -841,7 +841,7 @@
 }
 
 .anly-work-violation-inline-summary {
-    border-top: 1px solid #fecdd3;
+    border-top: 1px solid var(--anly-violation-border, #fecdd3);
     display: grid;
     gap: 6px;
     grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -850,8 +850,8 @@
 }
 
 .anly-work-violation-inline-summary > button {
-    background: #fff7f8;
-    border: 1px solid #fecdd3;
+    background: var(--anly-violation-soft, #fff7f8);
+    border: 1px solid var(--anly-violation-border, #fecdd3);
     cursor: pointer;
     display: grid;
     gap: 2px;
@@ -862,8 +862,8 @@
 }
 
 .anly-work-violation-inline-summary > button.is-hit {
-    background: #fff1f2;
-    border-color: #fecdd3;
+    background: var(--anly-violation-active, #fff1f2);
+    border-color: var(--anly-violation-border, #fecdd3);
 }
 
 .anly-work-violation-inline-summary > button.is-muted {
@@ -872,9 +872,9 @@
 }
 
 .anly-work-violation-inline-summary > button.is-active {
-    background: #fff1f2;
-    border-color: #e11d48;
-    box-shadow: inset 0 0 0 1px rgba(225, 29, 72, 0.25);
+    background: var(--anly-violation-active, #fff1f2);
+    border-color: var(--anly-violation-accent, #e11d48);
+    box-shadow: inset 0 0 0 1px var(--anly-violation-focus, rgba(225, 29, 72, 0.25));
 }
 
 .anly-work-violation-inline-summary > button:disabled {
@@ -899,8 +899,8 @@
 .anly-work-violation-inline-summary > b {
     align-self: center;
     background: #ffffff;
-    border: 1px solid #fecdd3;
-    color: #9f1239;
+    border: 1px solid var(--anly-violation-border, #fecdd3);
+    color: var(--anly-violation-text, #9f1239);
     grid-column: 1 / -1;
     padding: 6px 8px;
     font-size: 11px;
@@ -908,16 +908,16 @@
 }
 
 .anly-work-violation-scope-note {
-    background: #fff7f8;
-    border: 1px solid #fecdd3;
-    color: #9f1239;
+    background: var(--anly-violation-soft, #fff7f8);
+    border: 1px solid var(--anly-violation-border, #fecdd3);
+    color: var(--anly-violation-text, #9f1239);
     font-size: 11px;
     margin-top: 6px;
     padding: 6px 8px;
 }
 
 .anly-work-violation-reason-strip {
-    border-top: 1px solid #fecdd3;
+    border-top: 1px solid var(--anly-violation-border, #fecdd3);
     display: grid;
     gap: 6px;
     grid-template-columns: repeat(auto-fit, minmax(min(128px, 100%), 1fr));
@@ -927,7 +927,7 @@
 
 .anly-work-violation-reason-strip > span {
     background: #ffffff;
-    border: 1px solid #fecdd3;
+    border: 1px solid var(--anly-violation-border, #fecdd3);
     display: grid;
     gap: 2px;
     min-width: 0;
@@ -946,9 +946,9 @@
 }
 
 .anly-work-violation-reason-strip > em {
-    background: #fff1f2;
-    border: 1px solid #fecdd3;
-    color: #9f1239;
+    background: var(--anly-violation-active, #fff1f2);
+    border: 1px solid var(--anly-violation-border, #fecdd3);
+    color: var(--anly-violation-text, #9f1239);
     font-size: 13px;
     font-style: normal;
     font-weight: 750;
@@ -958,8 +958,8 @@
 }
 
 .anly-work-violation-condition-panel button {
-    background: #fff7f8;
-    border: 1px solid #fecdd3;
+    background: var(--anly-violation-soft, #fff7f8);
+    border: 1px solid var(--anly-violation-border, #fecdd3);
     cursor: pointer;
     flex: 1 1 0;
     min-width: 64px;
@@ -968,9 +968,9 @@
 
 .anly-work-violation-condition-panel button:hover,
 .anly-work-violation-condition-panel button.is-active {
-    background: #fff1f2;
-    border-color: #e11d48;
-    box-shadow: inset 0 0 0 1px rgba(225, 29, 72, 0.15);
+    background: var(--anly-violation-active, #fff1f2);
+    border-color: var(--anly-violation-accent, #e11d48);
+    box-shadow: inset 0 0 0 1px var(--anly-violation-focus, rgba(225, 29, 72, 0.15));
 }
 
 .anly-work-violation-condition-panel button b,
@@ -992,7 +992,7 @@
 }
 
 .anly-work-violation-column-strip {
-    border-top: 1px solid #fecdd3;
+    border-top: 1px solid var(--anly-violation-border, #fecdd3);
     padding-top: 10px;
 }
 
@@ -1027,7 +1027,7 @@
 }
 
 .anly-work-violation-rule-tools input {
-    border: 1px solid #fda4af;
+    border: 1px solid var(--anly-violation-strong-border, #fda4af);
     height: 28px;
     min-width: 0;
     padding: 0 8px;
@@ -1037,8 +1037,8 @@
 .anly-work-violation-rule-tools > button {
     align-items: center;
     background: #ffffff;
-    border: 1px solid #fda4af;
-    color: #9f1239;
+    border: 1px solid var(--anly-violation-strong-border, #fda4af);
+    color: var(--anly-violation-text, #9f1239);
     cursor: pointer;
     display: inline-flex;
     flex: 0 0 auto;
@@ -1052,7 +1052,7 @@
 
 .anly-work-violation-rule-tools .anly-work-page-jump {
     background: rgba(255, 255, 255, 0.55);
-    border-left: 1px solid #fecdd3;
+    border-left: 1px solid var(--anly-violation-border, #fecdd3);
     padding-left: 8px;
 }
 
@@ -1067,7 +1067,7 @@
 .anly-work-violation-column-strip > div > button {
     align-items: center;
     background: #ffffff;
-    border: 1px solid #fda4af;
+    border: 1px solid var(--anly-violation-strong-border, #fda4af);
     color: inherit;
     cursor: pointer;
     display: inline-flex;
@@ -1080,20 +1080,20 @@
 
 .anly-work-violation-column-strip > div > button:hover,
 .anly-work-violation-rule-grid article header button:hover {
-    border-color: #e11d48;
-    box-shadow: inset 0 0 0 1px #e11d48;
+    border-color: var(--anly-violation-accent, #e11d48);
+    box-shadow: inset 0 0 0 1px var(--anly-violation-accent, #e11d48);
 }
 
 .anly-work-violation-column-strip > div > span > b,
 .anly-work-violation-column-strip > div > button > b {
-    color: #9f1239;
+    color: var(--anly-violation-text, #9f1239);
     flex: 0 0 auto;
     font-size: 11px;
     font-weight: 850;
 }
 
 .anly-work-violation-rule-grid {
-    border-top: 1px solid #fecdd3;
+    border-top: 1px solid var(--anly-violation-border, #fecdd3);
     display: grid;
     gap: 8px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1103,7 +1103,7 @@
 
 .anly-work-violation-rule-grid article {
     background: #ffffff;
-    border: 1px solid #fda4af;
+    border: 1px solid var(--anly-violation-strong-border, #fda4af);
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -1178,9 +1178,9 @@
 .anly-work-violation-rule-grid article header em,
 .anly-work-violation-rule-grid article header button,
 .anly-work-violation-rule-actions button {
-    background: #ffe4e6;
+    background: var(--anly-violation-badge, #ffe4e6);
     border: 1px solid transparent;
-    color: #9f1239;
+    color: var(--anly-violation-text, #9f1239);
     cursor: pointer;
     flex: 0 1 auto;
     font-size: 11px;
@@ -1191,6 +1191,7 @@
 }
 
 .anly-work-violation-rule-actions button:first-child {
+    min-height: 26px;
     min-width: 28px;
 }
 
@@ -1602,7 +1603,8 @@
 .anly-work-violation-rule-grid article footer {
     align-items: start;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(54px, 1fr));
+    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(min(110px, 100%), 1fr));
     margin-top: auto;
     width: 100%;
 }
@@ -2479,6 +2481,14 @@
 }
 
 .anly-work-symbolic-violation-summary {
+    --anly-violation-border: #fed7aa;
+    --anly-violation-strong-border: #fdba74;
+    --anly-violation-soft: #fff7ed;
+    --anly-violation-active: #ffedd5;
+    --anly-violation-badge: #ffedd5;
+    --anly-violation-accent: #ea580c;
+    --anly-violation-text: #9a3412;
+    --anly-violation-focus: rgba(234, 88, 12, 0.15);
     background: #fff7ed;
     border-color: #fed7aa;
 }
@@ -2652,7 +2662,7 @@
 .anly-work-symbolic-rule-card footer {
     border-top: 1px solid #e2e8f0;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(54px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
     margin-top: auto;
     padding-top: 8px;
 }
@@ -2668,6 +2678,7 @@
     color: #64748b;
     font-size: 10px;
     text-transform: uppercase;
+    white-space: normal;
 }
 
 .anly-work-symbolic-rule-card footer b {
@@ -3545,68 +3556,6 @@
     box-shadow: inset 3px 0 #3b82f6;
 }
 
-.anly-work-symbolic-formula-banner {
-    align-items: start;
-    background: #1e3a8a;
-    border-bottom: 1px solid #1d4ed8;
-    display: grid;
-    gap: 10px;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    padding: 10px 14px;
-}
-
-.anly-work-symbolic-formula-banner span {
-    background: rgba(255, 255, 255, 0.16);
-    border: 1px solid rgba(255, 255, 255, 0.38);
-    color: #ffffff;
-    font-size: 13px;
-    font-weight: 850;
-    padding: 4px 8px;
-}
-
-.anly-work-symbolic-formula-banner strong {
-    color: #ffffff;
-    display: block;
-    font-family: Consolas, "Courier New", monospace;
-    font-size: 17px;
-    font-weight: 850;
-    line-height: 1.45;
-    min-width: 0;
-    overflow: visible;
-    overflow-wrap: anywhere;
-    white-space: normal;
-    word-break: break-word;
-}
-
-.anly-work-symbolic-formula-text {
-    min-width: 0;
-    max-height: clamp(96px, 22vh, 220px);
-    min-height: 0;
-    overflow: auto;
-    overscroll-behavior: contain;
-    scrollbar-gutter: stable;
-}
-
-.anly-work-symbolic-formula-copy {
-    align-items: center;
-    align-self: start;
-    background: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.45);
-    color: #ffffff;
-    cursor: pointer;
-    display: inline-flex;
-    flex: 0 0 32px;
-    height: 32px;
-    justify-content: center;
-    width: 32px;
-}
-
-.anly-work-symbolic-formula-copy:hover,
-.anly-work-symbolic-formula-copy:focus-visible {
-    background: rgba(255, 255, 255, 0.26);
-    border-color: #ffffff;
-}
-
 .anly-work-symbolic-formula-banner .anly-work-column-ref,
 .anly-work-symbolic-formula-banner .anly-work-column-ref b,
 .anly-work-symbolic-formula-banner .anly-work-column-ref small {
@@ -3848,98 +3797,50 @@
     min-width: 0;
 }
 
-.anly-work-symbolic-chart-toolbar {
-    align-items: end;
-    background: #f8fafc;
-    border: 1px solid #dbe3ef;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    min-width: 0;
-    padding: 8px;
-}
-
-.anly-work-symbolic-chart-toolbar > label {
-    display: grid;
-    flex: 0 1 240px;
-    gap: 4px;
-    min-width: 150px;
-}
-
-.anly-work-symbolic-chart-toolbar > label > span {
-    color: #475569;
-    font-size: 10px;
-    font-weight: 800;
-    text-transform: uppercase;
-}
-
-.anly-work-symbolic-chart-toolbar select {
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
-    color: #0f172a;
-    font-size: 12px;
-    height: 32px;
-    min-width: 0;
-    padding: 0 8px;
-    width: 100%;
-}
-
-.anly-work-symbolic-chart-toolbar select:disabled,
-.anly-work-symbolic-chart-tools button:disabled {
-    cursor: not-allowed;
-    opacity: 0.48;
-}
-
-.anly-work-symbolic-chart-tools {
-    align-items: center;
-    display: flex;
-    flex: 1 1 auto;
-    flex-wrap: wrap;
-    gap: 4px;
-    justify-content: flex-end;
-    min-width: 0;
-}
-
-.anly-work-symbolic-chart-tools button,
-.anly-work-symbolic-chart-tools em {
-    align-items: center;
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
-    color: #0f172a;
-    display: inline-flex;
-    font-size: 11px;
-    font-style: normal;
-    font-weight: 800;
-    gap: 5px;
-    height: 32px;
-    justify-content: center;
-    min-width: 34px;
-    padding: 0 8px;
-}
-
-.anly-work-symbolic-chart-tools button {
-    cursor: pointer;
-}
-
-.anly-work-symbolic-chart-tools button:hover:not(:disabled),
-.anly-work-symbolic-chart-tools button:focus-visible {
-    background: #eff6ff;
-    border-color: #2563eb;
-    color: #1d4ed8;
-}
-
-.anly-work-symbolic-chart-tools button[aria-pressed="true"] {
-    background: #dbeafe;
-    border-color: #2563eb;
-    color: #1d4ed8;
-}
-
 .anly-work-symbolic-chart-wrap {
     display: grid;
     gap: 8px;
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) auto auto;
     min-height: 0;
     position: relative;
+}
+
+.anly-work-symbolic-chart-canvas {
+    min-height: 0;
+    min-width: 0;
+    position: relative;
+}
+
+.anly-work-symbolic-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px 10px;
+    min-width: 0;
+}
+
+.anly-work-symbolic-chart-legend button {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: #475569;
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 11px;
+    gap: 5px;
+    min-height: 26px;
+    padding: 2px 4px;
+}
+
+.anly-work-symbolic-chart-legend button:focus-visible {
+    border-color: #2563eb;
+    outline: 2px solid #bfdbfe;
+}
+
+.anly-work-symbolic-chart-legend button.is-hidden {
+    opacity: 0.45;
+    text-decoration: line-through;
 }
 
 .anly-work-symbolic-chart-wrap canvas {
@@ -5252,6 +5153,7 @@
 }
 
 .anly-work-readable-rule-sentence {
+    flex-shrink: 0;
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     display: grid;
@@ -5287,7 +5189,7 @@
 .anly-work-readable-rule-card footer {
     border-top: 1px solid #e2e8f0;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(54px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(110px, 100%), 1fr));
     padding-top: 8px;
 }
 
@@ -5676,11 +5578,18 @@
 }
 
 .anly-work-grid th,
-.anly-work-grid td {
+.anly-work-grid td:not(.is-rule-expression) {
     max-width: 280px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.anly-work-grid td.is-rule-expression {
+    min-width: 280px;
+    max-width: 440px;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
 }
 
 .anly-work-grid-wrap .anly-work-grid thead th {
@@ -5953,64 +5862,12 @@
         width: calc(100vw - 16px);
     }
 
-    .anly-work-symbolic-formula-banner {
-        align-items: start;
-        display: grid;
-        grid-template-columns: auto minmax(0, 1fr) auto;
-        max-height: none;
-        min-height: 0;
-        padding: 8px 10px;
-    }
-
-    .anly-work-symbolic-formula-banner > span {
-        justify-self: start;
-    }
-
-    .anly-work-symbolic-formula-banner strong {
-        font-size: 13px;
-    }
-
-    .anly-work-symbolic-formula-text {
-        -webkit-overflow-scrolling: touch;
-        grid-column: 2;
-        grid-row: 1;
-        max-height: clamp(120px, 28dvh, 250px);
-        min-height: 0;
-        overflow: auto;
-        overscroll-behavior: contain;
-        width: 100%;
-    }
-
-    .anly-work-symbolic-formula-copy {
-        align-self: start;
-        grid-column: 3;
-        grid-row: 1;
-    }
-
     .anly-work-symbolic-popup-body {
         padding: 8px;
     }
 
     .anly-work-symbolic-diagnostic-metrics {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .anly-work-symbolic-chart-toolbar {
-        align-items: stretch;
-    }
-
-    .anly-work-symbolic-chart-toolbar > label {
-        flex: 1 1 100%;
-        min-width: 0;
-    }
-
-    .anly-work-symbolic-chart-tools {
-        justify-content: flex-start;
-        width: 100%;
-    }
-
-    .anly-work-symbolic-chart-tools button {
-        flex: 0 0 34px;
     }
 
     .anly-work-symbolic-visual-shell {
@@ -6336,7 +6193,8 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
-.anly-work-result-switcher {
+.anly-work-result-switcher,
+.anly-work-rule-family-switcher {
     align-items: center;
     background: #f8fafc;
     border: 1px solid #dbe4ee;
@@ -6348,14 +6206,16 @@
     padding: 10px 12px;
 }
 
-.anly-work-result-switcher > div {
+.anly-work-result-switcher > div,
+.anly-work-rule-family-switcher > div {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     justify-content: flex-end;
 }
 
-.anly-work-result-switcher button {
+.anly-work-result-switcher button,
+.anly-work-rule-family-switcher button {
     align-items: center;
     background: #fff;
     border: 1px solid #cbd5e1;
@@ -6367,7 +6227,8 @@
     padding: 6px 10px;
 }
 
-.anly-work-result-switcher button.is-active {
+.anly-work-result-switcher button.is-active,
+.anly-work-rule-family-switcher button.is-active {
     background: #e0f2fe;
     border-color: #0284c7;
     color: #075985;

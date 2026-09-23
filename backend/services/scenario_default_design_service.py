@@ -1,10 +1,11 @@
-"""Create the editable four-stage default jobs and M04001 sample flow."""
+"""Create independent editable default scenarios and their M04001 flows."""
 
 from __future__ import annotations
 
 import json
 import re
 import time
+from pathlib import Path
 from typing import Any, Dict, List
 
 from fastapi import HTTPException
@@ -60,6 +61,52 @@ DEFAULT_STAGES = (
     },
 )
 
+MIXED_XAI_STAGES = (
+    {
+        "menuCode": "M03001",
+        "modelName": "MIXED_XAI_PROFILE",
+        "sourceType": "WEB_API",
+        "label": "혼합형 기초통계 분석",
+        "resultCreateYn": "T",
+        "resultName": "INIT$_TB_XAI_RUN",
+        "jobSuffix": "XAI_AUTO",
+    },
+    {
+        "menuCode": "M03002",
+        "modelName": "MIXED_XAI_RELATION",
+        "sourceType": "WEB_API",
+        "label": "혼합형 관계·결측·중복 분석",
+        "resultCreateYn": "T",
+        "resultName": "INIT$_TB_XAI_RUN",
+        "jobSuffix": "XAI_AUTO",
+    },
+    {
+        "menuCode": "M03003",
+        "modelName": "MIXED_XAI_RULE_DISCOVER",
+        "sourceType": "WEB_API",
+        "label": "혼합형 실제 값·범위 규칙 발굴",
+        "resultCreateYn": "T",
+        "resultName": "INIT$_TB_RULEDISC_ASSOC_SUM",
+        "jobSuffix": "XAI_AUTO",
+    },
+    {
+        "menuCode": "M03004",
+        "modelName": "MIXED_XAI_RULE_DETECT",
+        "sourceType": "WEB_API",
+        "label": "실제 값·범위 규칙 위반 탐지",
+        "resultCreateYn": "T",
+        "resultName": "INIT$_TB_RULEVIOL_ASSOC",
+        "jobSuffix": "XAI_AUTO",
+    },
+)
+
+
+def normalize_process_type(value: Any = "LEGACY") -> str:
+    process_type = str(value or "LEGACY").strip().upper()
+    if process_type not in {"LEGACY", "MIXED_XAI"}:
+        raise HTTPException(status_code=422, detail="processType must be LEGACY or MIXED_XAI.")
+    return process_type
+
 
 def provision_default_design(
     conn,
@@ -67,8 +114,11 @@ def provision_default_design(
     project_id: int,
     scenario_id: int,
     scenario_table_id: int,
+    process_type: str = "LEGACY",
 ) -> Dict[str, Any]:
-    """Create or reuse the four default jobs and their editable sample flow."""
+    """Create or reuse one independent scenario and its editable default flow."""
+    process_type = normalize_process_type(process_type)
+    stages = MIXED_XAI_STAGES if process_type == "MIXED_XAI" else DEFAULT_STAGES
     started_at = time.perf_counter()
     lock_started_at = time.perf_counter()
     context = lock_scenario_table(
@@ -85,7 +135,7 @@ def provision_default_design(
     created_job_ids: List[int] = []
     reused_job_ids: List[int] = []
     jobs_started_at = time.perf_counter()
-    for stage in DEFAULT_STAGES:
+    for stage in stages:
         job, created = ensure_default_job(
             conn,
             stage,
@@ -109,10 +159,12 @@ def provision_default_design(
         owner_name=owner_name,
         table_name=table_name,
         jobs=jobs,
+        process_type=process_type,
     )
     flow_seconds = time.perf_counter() - flow_started_at
     return {
         "status": "success",
+        "processType": process_type,
         "scenarioTableId": scenario_table_id,
         "ownerName": owner_name,
         "tableName": table_name,
@@ -186,7 +238,10 @@ def ensure_default_job(
         (
             row for row in existing_jobs
             if safe_int(row.get("SCENARIO_TABLE_ID")) == scenario_table_id
-            and str(row.get("EXEC_OBJECT_NAME") or row.get("EXEC_METHOD") or "").strip().upper() == model_name
+            and model_name in {
+                str(row.get("EXEC_OBJECT_NAME") or "").strip().upper(),
+                str(row.get("EXEC_METHOD") or "").strip().upper(),
+            }
         ),
         None,
     )
@@ -282,7 +337,7 @@ def build_db_object_job_request(
         scenarioId=scenario_id,
         scenarioTableId=scenario_table_id,
         jobGroup=stage["menuCode"],
-        jobName=create_job_name(stage["menuCode"], table_name),
+        jobName=create_job_name(stage["menuCode"], table_name, stage.get("jobSuffix", "AUTO")),
         jobDesc=f"{stage['label']} 기본 작업 · {owner_name}.{table_name}",
         ownerName=owner_name,
         tableName=table_name,
@@ -331,16 +386,34 @@ def build_web_api_job_request(
         None,
     )
     if not resource:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Default Python API resource {model_name} is not registered or active.",
-        )
-    resource_id = int(resource.get("OML_RESOURCE_ID") or 0)
-    detail = data_work.require_success(
-        execute_query(conn, "DATA_WORK_OML_RESOURCE_DETAIL", {"resourceId": resource_id}),
-        "Python API resource parameter query failed.",
-    )
-    rows = detail.get("data", [])
+        builtin_stage = next((item for item in MIXED_XAI_STAGES
+                              if item["modelName"] == model_name
+                              and item["menuCode"] == stage["menuCode"]), None)
+        if builtin_stage is None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Default Python API resource {model_name} is not registered or active.",
+            )
+        # An inactive/non-Python registration must not be mistaken for an absent one.
+        registered = data_work.require_success(
+            execute_query(conn, "DATA_WORK_OML_RESOURCE_MATCH", {"modelName": model_name}),
+            "Python API resource registration query failed.",
+        ).get("data", [])
+        if registered:
+            raise HTTPException(
+                status_code=409,
+                detail=(f"{model_name}: 등록된 모델이 비활성 상태이거나 Python API 설정이 올바르지 않습니다. "
+                        "M90002에서 사용 여부와 Python API 설정을 확인하세요. "
+                        "등록 설정은 내장 기본값으로 덮어쓰지 않습니다."),
+            )
+        resource_id = None
+        rows = load_builtin_api_resource_rows(builtin_stage)
+    else:
+        resource_id = int(resource.get("OML_RESOURCE_ID") or 0)
+        rows = data_work.require_success(
+            execute_query(conn, "DATA_WORK_OML_RESOURCE_DETAIL", {"resourceId": resource_id}),
+            "Python API resource parameter query failed.",
+        ).get("data", [])
     if not rows:
         raise HTTPException(
             status_code=409,
@@ -409,7 +482,7 @@ def build_web_api_job_request(
         scenarioId=scenario_id,
         scenarioTableId=scenario_table_id,
         jobGroup=stage["menuCode"],
-        jobName=create_job_name(stage["menuCode"], table_name),
+        jobName=create_job_name(stage["menuCode"], table_name, stage.get("jobSuffix", "AUTO")),
         jobDesc=f"{stage['label']} 기본 작업 · {owner_name}.{table_name}",
         ownerName=owner_name,
         tableName=table_name,
@@ -431,6 +504,77 @@ def build_web_api_job_request(
     )
 
 
+def load_builtin_api_resource_rows(stage: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Snapshot a shipped internal preset into a JOB, without changing the registry."""
+    model_name = stage["modelName"]
+    preset_path = Path(__file__).resolve().parents[2] / "frontend/config/M90002.python-api-presets.json"
+    try:
+        presets = json.loads(preset_path.read_text(encoding="utf-8"))
+        matches = [item for group in presets["groups"] for item in group["resources"]
+                   if item.get("objectName") == model_name]
+        if len(matches) != 1:
+            raise ValueError("A unique built-in preset is required.")
+        preset = matches[0]
+        endpoint = "/api/mlAnalysis/" + model_name.lower().replace("_", "-")
+        output = preset["output"]
+        if (preset.get("objectType") != "INTERNAL_API"
+                or preset.get("endpoint") != endpoint
+                or preset.get("httpMethod") != "POST"
+                or preset.get("useYn") != "Y"
+                or output.get("resultCreateYn") != stage["resultCreateYn"]
+                or output.get("resultTableName") != stage["resultName"]
+                or output.get("persistMode") != "SERVICE_MANAGED"):
+            raise ValueError("The built-in API contract does not match its stage.")
+        spec = {
+            "apiRegistryVersion": 2,
+            "apiType": "INTERNAL_API",
+            "method": model_name,
+            "endpoint": endpoint,
+            "adapter": "INTERNAL_PYTHON_API",
+            "output": {
+                "resultCreateYn": stage["resultCreateYn"],
+                "resultOwner": ":INIT$TargetOwner",
+                "resultTableName": stage["resultName"],
+                "persistMode": "SERVICE_MANAGED",
+            },
+        }
+        resource = {
+            "RESOURCE_NAME": model_name,
+            "RESOURCE_LABEL": preset.get("label") or stage["label"],
+            "EXEC_METHOD": model_name,
+            "SPEC_JSON": json.dumps(spec, ensure_ascii=False),
+        }
+        rows = []
+        names = set()
+        for item in preset["details"]:
+            key = str(item.get("key") or "")
+            if not key.startswith("INPUT."):
+                continue
+            name = key[len("INPUT."):]
+            data_type = re.fullmatch(r"IN (VARCHAR2|NUMBER|DATE|TIMESTAMP|BOOLEAN|JSON|CLOB)", item["value"])
+            if not re.fullmatch(r"P_[A-Z][A-Z0-9_]*", name) or name in names or not data_type:
+                raise ValueError("Invalid or duplicate built-in input parameter.")
+            names.add(name)
+            rows.append({
+                **resource, "PARAM_NAME": name, "BIND_NAME": name,
+                "DATA_TYPE": data_type.group(1), "PARAM_DESC": item.get("comment") or "",
+                "DEFAULT_VALUE": item.get("defaultValue", ""),
+                "ITEM_ORDER": int(item.get("order") or len(rows) + 1),
+            })
+        required = {"P_TARGET_OWNER": ":INIT$TargetOwner", "P_TARGET_TABLE": ":INIT$TargetTable",
+                    "P_RUN_SOURCE_TYPE": ":INIT$RunSourceType", "P_RUN_ID": ":INIT$RunId"}
+        defaults = {row["PARAM_NAME"]: row["DEFAULT_VALUE"] for row in rows}
+        if any(defaults.get(name) != value for name, value in required.items()):
+            raise ValueError("Built-in target/run runtime bindings are missing or incorrect.")
+        return rows
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        raise HTTPException(
+            status_code=500,
+            detail=(f"{model_name}: 내장 Python API 프리셋이 누락되었거나 단계 정의와 일치하지 않습니다. "
+                    "앱 코드와 frontend/config/M90002.python-api-presets.json을 함께 배포하세요."),
+        ) from error
+
+
 def ensure_default_flow(
     conn,
     *,
@@ -440,10 +584,14 @@ def ensure_default_flow(
     owner_name: str,
     table_name: str,
     jobs: List[Dict[str, Any]],
+    process_type: str = "LEGACY",
 ) -> tuple[Dict[str, Any], bool]:
-    flow_name = create_flow_name(table_name)
-    marker = create_flow_marker(scenario_table_id)
+    process_type = normalize_process_type(process_type)
+    flow_type = "MIXED_XAI_SCENARIO" if process_type == "MIXED_XAI" else FLOW_TYPE
+    flow_name = create_flow_name(table_name, process_type)
+    marker = create_flow_marker(scenario_table_id, process_type)
     flows = flow_work.list_flows(conn, FLOW_MENU_CODE, project_id, scenario_id).get("data", [])
+    flows = [row for row in flows if str(row.get("FLOW_TYPE") or FLOW_TYPE).upper() == flow_type]
     existing = next(
         (
             row for row in flows
@@ -464,7 +612,7 @@ def ensure_default_flow(
                 for node in loaded.get("NODES", [])
                 if node.get("REF_WORK_JOB_ID") or node.get("refWorkJobId")
             }
-            if job_ids and job_ids.issubset(ref_ids):
+            if job_ids and job_ids == ref_ids:
                 existing = loaded
                 break
     if existing:
@@ -477,15 +625,15 @@ def ensure_default_flow(
         scenarioId=scenario_id,
         flowGroup=FLOW_GROUP,
         flowName=flow_name,
-        flowDesc=f"{marker} M02002 대상 테이블 등록 시 생성된 기본 4단계 FLOW · {owner_name}.{table_name}",
-        flowType=FLOW_TYPE,
+        flowDesc=f"{marker} {process_type} 기본 {len(jobs)}단계 FLOW · {owner_name}.{table_name}",
+        flowType=flow_type,
         executionMode="DAG",
         useYn="Y",
         status="DRAFT",
         nodes=[flow_work.FlowNodeRequest(**node) for node in nodes],
         edges=[flow_work.FlowEdgeRequest(**edge) for edge in edges],
     )
-    flow_id = flow_work.save_flow(conn, FLOW_MENU_CODE, request, FLOW_GROUP, FLOW_TYPE)
+    flow_id = flow_work.save_flow(conn, FLOW_MENU_CODE, request, FLOW_GROUP, flow_type)
     return flow_work.load_flow(conn, FLOW_MENU_CODE, flow_id), True
 
 
@@ -685,16 +833,18 @@ def parse_json_object(value: Any) -> Dict[str, Any]:
         return {}
 
 
-def create_job_name(menu_code: str, table_name: str) -> str:
-    return f"{menu_code}_{table_name}_AUTO"[:200]
+def create_job_name(menu_code: str, table_name: str, suffix: str = "AUTO") -> str:
+    return f"{menu_code}_{table_name}_{suffix}"[:200]
 
 
-def create_flow_name(table_name: str) -> str:
-    return f"{table_name} 기본 규칙발굴 FLOW"[:200]
+def create_flow_name(table_name: str, process_type: str = "LEGACY") -> str:
+    label = "혼합형 XAI 규칙발굴 4단계" if process_type == "MIXED_XAI" else "기본 규칙발굴"
+    return f"{table_name} {label} FLOW"[:200]
 
 
-def create_flow_marker(scenario_table_id: int) -> str:
-    return f"[{FLOW_DESCRIPTION_MARKER}:{scenario_table_id}]"
+def create_flow_marker(scenario_table_id: int, process_type: str = "LEGACY") -> str:
+    suffix = ":MIXED_XAI:V3" if process_type == "MIXED_XAI" else ""
+    return f"[{FLOW_DESCRIPTION_MARKER}:{scenario_table_id}{suffix}]"
 
 
 def create_node_description(job: Dict[str, Any]) -> str:

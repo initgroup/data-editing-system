@@ -11,10 +11,10 @@
         { key: "project", title: "프로젝트", description: "작업 프로젝트를 준비합니다." },
         { key: "scenario", title: "시나리오", description: "규칙 발굴 시나리오를 준비합니다." },
         { key: "table", title: "대상 테이블", description: "INITUP$ 테이블을 만들고 시나리오에 등록합니다." },
-        { key: "models", title: "모델 설정", description: "기본 4단계 모델과 실행 파라미터를 저장합니다." },
+        { key: "models", title: "모델 설정", description: "선택한 시나리오의 모델과 실행 파라미터를 저장합니다." },
         { key: "flow", title: "FLOW 설계", description: "화면에 설계도를 표시하지 않고 내부 FLOW를 저장합니다." },
         { key: "run", title: "규칙 발굴 실행", description: "저장된 FLOW를 실행하고 상세 이력을 조회합니다." },
-        { key: "results", title: "결과 분석", description: "발견된 범주형·연속형 규칙을 요약합니다." }
+        { key: "results", title: "결과 분석", description: "선택한 시나리오에서 발견된 규칙을 요약합니다." }
     ];
     const ALLOWED_EXTENSIONS = new Set(["csv", "tsv", "txt", "xlsx", "xlsm"]);
     const COLUMN_TYPE_OPTIONS = [
@@ -74,8 +74,14 @@
         chartPoints: []
     };
     let continuousDetailRequestId = 0;
+    let continuousDetailAbort = null;
+    let formulaChartView = null;
+    let formulaChartPayload = null;
     let chartResizeTimer = null;
+    let chartResizeObserver = null;
+    let chartResizeBound = false;
     let pipelineBusy = false;
+    let controlBusy = false;
     let activePipelineAction = "";
     let snapshotBusy = false;
     let pollGeneration = 0;
@@ -109,6 +115,7 @@
             completedSteps: [],
             stepProgress: 0,
             workspaceMode: "new",
+            processType: "MIXED_XAI",
             fileMeta: null,
             uploadId: null,
             projectId: null,
@@ -155,6 +162,7 @@
             return {
                 ...initialState(),
                 ...parsed,
+                processType: normalizeProcessType(parsed.processType),
                 completedSteps: Array.isArray(parsed.completedSteps)
                     ? [...new Set(parsed.completedSteps.map(Number).filter((value) => value >= 0 && value < STEP_COUNT))]
                     : [],
@@ -194,6 +202,51 @@
 
     function valueOf(...ids) {
         return String(byId(...ids)?.value || "").trim();
+    }
+
+    function normalizeProcessType(value) {
+        return String(value || "").toUpperCase() === "MIXED_XAI" ? "MIXED_XAI" : "LEGACY";
+    }
+
+    function isMixedXai() {
+        return state.processType === "MIXED_XAI";
+    }
+
+    function modelStageCount() {
+        if (!isMixedXai()) return 4;
+        const executed = currentSnapshot?.nodes?.length;
+        if (state.flowRunId && [2, 4].includes(executed)) return executed;
+        const saved = state.jobIds?.length;
+        return state.flowId && [2, 4].includes(saved) ? saved : 4;
+    }
+
+    function processLabel() {
+        return isMixedXai() ? "혼합형 XAI" : "기존 유형·관계 분석";
+    }
+
+    function renderProcessSelection() {
+        const fieldset = byId("qeProcessType");
+        if (fieldset) {
+            fieldset.disabled = pipelineBusy || state.historyView || Boolean(state.scenarioTableId || state.flowId);
+            fieldset.querySelectorAll('input[name="processType"]').forEach((input) => {
+                input.checked = input.value === normalizeProcessType(state.processType);
+            });
+        }
+        const oldXai = Boolean(resultData.mixedXai) && !window.RuleResultCommon.isPattern(resultData.mixedXai);
+        setText(byId("qeProcessDescription"), isMixedXai()
+            ? (oldXai ? "이 실행은 과거 Isolation Forest 이상 후보 설명 규칙입니다. 실제 값 패턴 규칙은 새 실행에서 발굴합니다." : window.RuleResultCommon.t("Rules predict actual column values, ranges and formulas after basic statistics and relationship analysis."))
+            : "컬럼 유형과 관계를 분석한 후 범주형·연속형 규칙을 발굴합니다.");
+        setHidden(byId("qeCommonResults"), false);
+        setHidden(byId("qeMixedXaiResults"), !isMixedXai());
+        setHidden(byId("qeMixedEarlyStages"), !isMixedXai());
+        setHidden(byId("continuousTab"), false);
+        setText(byId("categoryTab")?.querySelector("strong"), window.RuleResultCommon.t(isMixedXai() && !oldXai ? "Value and range rules" : "IF–THEN rules"));
+        setText(byId("continuousTab")?.querySelector("strong"), window.RuleResultCommon.t("Continuous formula rules"));
+        setText(byId("continuousTab")?.querySelector("small"), window.RuleResultCommon.t("Numeric relationships and formulas"));
+        setText(byId("categoryTab")?.querySelector("small"), isMixedXai() ? window.RuleResultCommon.t(oldXai ? "Candidate rule" : "Pattern rules") : "연관성과 값 패턴");
+        setText(byId("qeResultsDescription"), isMixedXai()
+            ? window.RuleResultCommon.t(oldXai ? "Inspect the rules explaining anomaly candidates and their matching rows." : "Inspect expected values, confidence and rows that violate the IF–THEN patterns.")
+            : "오류가 많은 규칙을 우선 표시합니다. 카드를 누르면 상세 규칙을 확인할 수 있습니다.");
     }
 
     function sqlStringLiteral(value) {
@@ -574,6 +627,7 @@
             if (index === state.currentStep) currentElement = element;
         });
         updateResultDetailAction();
+        renderProcessSelection();
         if (currentElement && lastRenderedStep !== state.currentStep) {
             lastRenderedStep = state.currentStep;
             const viewport = currentElement.closest(".qe-stepper-wrap");
@@ -608,7 +662,7 @@
             project: state.projectId ? `${state.projectName || state.projectCode} · #${state.projectId}` : "대기",
             scenario: state.scenarioId ? `${state.scenarioName || state.scenarioCode} · #${state.scenarioId}` : "대기",
             table: state.tableName ? `${state.tableOwner}.${state.tableName}` : "대기",
-            models: state.jobIds.length === 4 ? "기본 4단계 완료" : (state.jobIds.length ? `${state.jobIds.length}/4단계 확인 필요` : "4단계 대기"),
+            models: state.jobIds.length === modelStageCount() ? `${processLabel()} ${modelStageCount()}단계 완료` : (state.jobIds.length ? `${state.jobIds.length}/${modelStageCount()}단계 확인 필요` : `${modelStageCount()}단계 대기`),
             flow: state.flowId ? `${state.flowName || "자동 설계"} · #${state.flowId}` : "대기",
             run: state.flowRunId ? `#${state.flowRunId}` : "대기"
         };
@@ -616,7 +670,7 @@
             state.projectId && "project",
             state.scenarioId && "scenario",
             state.tableName && "table",
-            state.jobIds.length === 4 && "models",
+            state.jobIds.length === modelStageCount() && "models",
             state.flowId && "flow",
             state.flowRunId && "run"
         ].filter(Boolean));
@@ -746,7 +800,9 @@
 
         setText(
             banner?.querySelector("[data-history-view-label]"),
-            `실행 #${state.flowRunId} · ${state.projectName || state.projectCode || "프로젝트"} · 컬럼 유형은 편집·저장 후 같은 실행 ID로 재실행할 수 있습니다.`
+            isMixedXai()
+                ? `실행 #${state.flowRunId} · 혼합형 XAI · 저장된 독립 시나리오를 재실행할 수 있습니다.`
+                : `실행 #${state.flowRunId} · ${state.projectName || state.projectCode || "프로젝트"} · 컬럼 유형은 편집·저장 후 같은 실행 ID로 재실행할 수 있습니다.`
         );
         const target = byId("qeHistoryStepResultList");
         if (!target) return;
@@ -767,6 +823,7 @@
     }
 
     function renderState(message) {
+        renderProcessSelection();
         renderStepper();
         renderFile();
         renderUploadProgress();
@@ -777,7 +834,11 @@
         renderWorkspaceSummary();
         const step = STEPS[state.currentStep] || STEPS[0];
         setText(byId("currentStage", "qeCurrentStepTitle"), step.title);
-        const description = state.error || message || state.lastRunMessage || step.description;
+        const controlMessage = state.controlRequest
+            ? (state.controlRequest === "STOP" ? window.RuleResultCommon.t("Stop requested. The current task will finish before the pipeline stops.") : window.RuleResultCommon.t("Pause requested. The current task will finish before the pipeline pauses."))
+            : (state.status === "paused" ? window.RuleResultCommon.t("Paused. Resume continues from the next unfinished stage.")
+                : (state.status === "stopped" ? window.RuleResultCommon.t("Stopped. Restart runs the saved FLOW from the beginning.") : ""));
+        const description = state.error || controlMessage || message || state.lastRunMessage || step.description;
         setText(byId("currentStageMessage", "qeCurrentStepDescription"), description);
 
         const completed = state.completedSteps.length;
@@ -799,7 +860,8 @@
                 state.status === "failed" ? "확인 필요"
                     : (state.status === "success" ? "완료"
                         : (state.status === "warning" ? "일부 확인 필요"
-                            : (state.status === "running" ? "자동 진행 중" : "대기"))));
+                            : (state.status === "paused" ? window.RuleResultCommon.t("Paused") : (state.status === "stopped" ? window.RuleResultCommon.t("Stopped")
+                                : (state.controlRequest ? "요청 처리 중" : (state.status === "running" ? "자동 진행 중" : "대기")))))));
         }
 
         const historySection = byId("historySection", "qeHistorySection");
@@ -811,6 +873,27 @@
     }
 
     function updateActionState() {
+        const pauseButton = byId("qePauseButton");
+        setText(pauseButton, window.RuleResultCommon.t("Pause"));
+        setText(byId("qeStopButton"), window.RuleResultCommon.t("Stop"));
+        const resumeButton = byId("qeResumeButton");
+        const stopButton = byId("qeStopButton");
+        const resumable = ["paused", "stopped"].includes(state.status);
+        const activeRun = R.ACTIVE_STATUSES.has(R.normalizeStatus(state.lastRunStatus));
+        const controllable = (pipelineBusy && state.status === "running") || activeRun;
+        if (pauseButton) {
+            pauseButton.hidden = !controllable;
+            pauseButton.disabled = controlBusy || Boolean(state.controlRequest);
+        }
+        if (stopButton) {
+            stopButton.hidden = !controllable && state.status !== "paused";
+            stopButton.disabled = controlBusy || state.controlRequest === "STOP";
+        }
+        if (resumeButton) {
+            resumeButton.hidden = !resumable;
+            resumeButton.disabled = pipelineBusy || controlBusy;
+            setText(resumeButton, window.RuleResultCommon.t(state.status === "stopped" ? "Restart" : "Resume"));
+        }
         const startButton = byId("runButton", "qeStartButton");
         const retryButton = byId("retryButton", "qeRetryButton");
         const historyFullRerunButton = byId("qeHistoryFullRerunButton");
@@ -831,7 +914,7 @@
         };
         if (startButton) {
             startButton.disabled = pipelineBusy || (!readOnlyHistory && (!hasInput || !client.targetConnectionId));
-            startButton.hidden = readOnlyHistory ? false : ["failed", "warning"].includes(state.status);
+            startButton.hidden = resumable || (readOnlyHistory ? false : ["failed", "warning"].includes(state.status));
             setText(startButton.querySelector("span:first-child") || startButton, readOnlyHistory || state.status === "success" ? "새 작업 시작" : "전체 자동 실행");
             setRunningState(startButton, PIPELINE_ACTION.FULL_AUTO);
         }
@@ -918,6 +1001,64 @@
                 || (getWorkspaceMode() === "existing" && !valueOf("existingProject", "qeProjectSelect"));
         }
         updateResultDetailAction();
+        renderProcessSelection();
+    }
+
+    function haltPipeline(status) {
+        state.status = status;
+        state.controlRequest = "";
+        state.error = "";
+        persistState();
+        renderState();
+        const error = new Error(status);
+        error.name = "AbortError";
+        throw error;
+    }
+
+    function controlCheckpoint() {
+        if (state.controlRequest) haltPipeline(state.controlRequest === "STOP" ? "stopped" : "paused");
+    }
+
+    async function requestPipelineControl(action) {
+        if (controlBusy || (!pipelineBusy && state.status !== "paused" && !R.ACTIVE_STATUSES.has(state.lastRunStatus))) return;
+        controlBusy = true;
+        state.controlRequest = action;
+        persistState();
+        renderState();
+        try {
+            if (state.flowRunId && (R.ACTIVE_STATUSES.has(state.lastRunStatus) || state.lastRunStatus === "PAUSED")) {
+                const response = await client.controlQuickEditRun(state.flowRunId, action);
+                state.lastRunStatus = response.data?.STATUS || state.lastRunStatus;
+                if (["PAUSED", "CANCELLED"].includes(state.lastRunStatus) && !pipelineBusy) {
+                    state.status = state.lastRunStatus === "PAUSED" ? "paused" : "stopped";
+                    state.controlRequest = "";
+                }
+                if (["SUCCESS", "FAILED", "ERROR"].includes(state.lastRunStatus)) state.controlRequest = "";
+            } else if (!pipelineBusy) {
+                state.status = action === "STOP" ? "stopped" : "paused";
+                state.controlRequest = "";
+            }
+        } catch (error) {
+            state.controlRequest = "";
+            showToast(error.message || "실행 제어 요청을 저장하지 못했습니다.", "error");
+        } finally {
+            controlBusy = false;
+            persistState();
+            renderState();
+        }
+    }
+
+    async function resumePipeline() {
+        if (pipelineBusy || controlBusy) return;
+        const stopped = state.status === "stopped";
+        state.controlRequest = "";
+        state.failedStageRerunRequestToken = "";
+        if (!stopped && state.flowRunId && state.lastRunStatus === "PAUSED") {
+            await rerunHistoryFromFailedStage();
+        } else {
+            state.historyView = false;
+            await runPipeline({ forceNewRun: stopped && Boolean(state.flowRunId) });
+        }
     }
 
     async function runPipeline(options = {}) {
@@ -950,22 +1091,28 @@
                 persistState();
             }
             completeStep(0, "파일 임시 업로드가 완료되었습니다.");
+            controlCheckpoint();
 
             await ensureProject();
             completeStep(1, "프로젝트가 준비되었습니다.");
+            controlCheckpoint();
 
             await ensureScenario();
             completeStep(2, "시나리오가 준비되었습니다.");
+            controlCheckpoint();
 
             await ensureTargetAndDesign();
-            completeStep(4, "기본 4단계 모델 저장이 완료되었습니다.");
+            completeStep(4, `${processLabel()} ${modelStageCount()}단계 모델 저장이 완료되었습니다.`);
             completeStep(5, "샘플 노드 기반 FLOW가 내부에 자동 저장되었습니다.");
+            controlCheckpoint();
 
             await ensureFlowRun(generation, options);
             completeStep(6, "FLOW 실행이 완료되었습니다.");
+            controlCheckpoint();
 
             setStep(7, "실행 결과에서 규칙을 정리하고 있습니다.", 0.25);
             await loadResults();
+            controlCheckpoint();
             completeStep(7, "자동 규칙 분석까지 모두 완료되었습니다.");
             state.status = state.resultWarning ? "warning" : "success";
             state.currentStep = 7;
@@ -1114,7 +1261,7 @@
             state.scenarioTableId
             && state.flowId
             && Array.isArray(state.jobIds)
-            && state.jobIds.length === 4
+            && state.jobIds.length === modelStageCount()
         );
         if (!state.scenarioTableId) {
             setStep(3, "대상 테이블을 현재 시나리오에 등록하고 있습니다.", 0.75);
@@ -1125,7 +1272,8 @@
                 scenarioId: state.scenarioId,
                 ownerName: state.tableOwner,
                 tableName: state.tableName,
-                tableComment: fileOptions.tableComment
+                tableComment: fileOptions.tableComment,
+                processType: state.processType
             });
             const registrationRequestSeconds = (performance.now() - registrationStartedAt) / 1000;
             const saved = registration.data || {};
@@ -1146,15 +1294,16 @@
         completeStep(3, `대상 테이블 등록 완료 · 컬럼 ${R.formatNumber(state.columnCount, 0)}개 · 로우 ${R.formatNumber(state.rowCount, 0)}건`);
 
         if (!designComplete) {
-            setStep(4, "기본 4단계 모델과 FLOW 자동 설계를 저장하고 있습니다.", 0.25);
+            setStep(4, `${processLabel()} ${modelStageCount()}단계 모델과 FLOW 설계를 저장하고 있습니다.`, 0.25);
             const design = await client.provisionDefaultDesign({
                 projectId: state.projectId,
                 scenarioId: state.scenarioId,
-                scenarioTableId: state.scenarioTableId
+                scenarioTableId: state.scenarioTableId,
+                processType: state.processType
             });
             const automation = design.automation || {};
             if (automation.status !== "success") {
-                throw new Error(automation.message || "대상 테이블은 등록되었지만 기본 4단계 자동 설계에 실패했습니다.");
+                throw new Error(automation.message || "대상 테이블은 등록되었지만 선택한 시나리오의 자동 설계에 실패했습니다.");
             }
             state.jobIds = Array.isArray(automation.jobIds)
                 ? [...new Set(automation.jobIds.map(Number).filter((jobId) => Number.isInteger(jobId) && jobId > 0))]
@@ -1162,8 +1311,8 @@
             state.flowId = Number(automation.flowId || 0);
             state.flowName = automation.flowName || "자동 규칙 발굴 FLOW";
             state.designTimings = automation.timings || design.timings || null;
-            if (!state.scenarioTableId || state.jobIds.length !== 4 || !state.flowId) {
-                throw new Error("기본 4단계 모델 또는 FLOW 저장 결과가 완전하지 않습니다.");
+            if (!state.scenarioTableId || state.jobIds.length !== modelStageCount() || !state.flowId) {
+                throw new Error("선택한 시나리오의 모델 또는 FLOW 저장 결과가 완전하지 않습니다.");
             }
             persistState();
         }
@@ -1199,12 +1348,15 @@
             persistState();
             renderState("FLOW 실행이 시작되었습니다. 상세 이력을 자동 조회합니다.");
         }
+        if (state.controlRequest) await client.controlQuickEditRun(state.flowRunId, state.controlRequest);
         await pollRunUntilTerminal(generation);
     }
 
     function buildQuickEditSummary() {
         return {
             source: "QUICK_EDIT",
+            processType: state.processType,
+            flowType: isMixedXai() ? "MIXED_XAI_SCENARIO" : "INTEGRATED_EDITING_SCENARIO",
             projectCode: state.projectCode,
             projectName: state.projectName,
             projectCreatedAt: state.projectCreatedAt,
@@ -1223,6 +1375,34 @@
         };
     }
 
+    async function monitorActiveRun() {
+        pipelineBusy = true;
+        state.status = "running";
+        const generation = ++pollGeneration;
+        updateActionState();
+        try {
+            await pollRunUntilTerminal(generation);
+            if (!state.completedSteps.includes(6)) state.completedSteps.push(6);
+            state.currentStep = 7;
+            await loadResults();
+            controlCheckpoint();
+            if (!state.completedSteps.includes(7)) state.completedSteps.push(7);
+            state.status = state.resultWarning ? "warning" : "success";
+            persistState();
+            renderState(state.resultWarning || "자동 실행과 결과 분석이 완료되었습니다.");
+        } catch (error) {
+            if (error?.name === "AbortError") return;
+            state.status = "failed";
+            state.error = error.message;
+            persistState();
+            renderState();
+        } finally {
+            pipelineBusy = false;
+            updateActionState();
+            renderColumnTypeFinal();
+        }
+    }
+
     async function fetchSnapshot(options = {}) {
         if (!state.flowRunId || snapshotBusy) return currentSnapshot;
         snapshotBusy = true;
@@ -1231,6 +1411,8 @@
             currentSnapshot = response.data || { run: {}, nodes: [] };
             const run = currentSnapshot.run || {};
             state.lastRunStatus = R.normalizeStatus(run.STATUS || state.lastRunStatus);
+            if (state.lastRunStatus === "PAUSED") state.status = "paused";
+            if (state.lastRunStatus === "CANCELLED") state.status = "stopped";
             state.lastRunMessage = run.MESSAGE || state.lastRunMessage;
             persistState();
             renderHistory();
@@ -1251,12 +1433,18 @@
                 const nodes = Array.isArray(snapshot?.nodes) ? snapshot.nodes : [];
                 const successCount = nodes.filter((node) => R.normalizeStatus(node.STATUS) === "SUCCESS").length;
                 state.stepProgress = Math.min(0.95, nodes.length ? successCount / nodes.length : 0.15);
-                renderState(`실행 #${state.flowRunId} · ${R.statusLabel(runStatus)} · ${successCount}/${nodes.length || 4} 단계 완료`);
-                if (runStatus === "SUCCESS") return snapshot;
+                renderState(`실행 #${state.flowRunId} · ${R.statusLabel(runStatus)} · ${successCount}/${nodes.length || modelStageCount()} 단계 완료`);
+                if (runStatus === "SUCCESS") { state.controlRequest = ""; return snapshot; }
+                if (runStatus === "PAUSED") haltPipeline("paused");
+                if (runStatus === "CANCELLED") haltPipeline("stopped");
+                if (runStatus === "PAUSE_REQUESTED") state.controlRequest = "PAUSE";
+                if (runStatus === "STOP_REQUESTED") state.controlRequest = "STOP";
                 if (["FAILED", "ERROR", "CANCELLED"].includes(runStatus)) {
+                    state.controlRequest = "";
                     throw new Error(snapshot?.run?.MESSAGE || `FLOW 실행이 ${R.statusLabel(runStatus)} 상태로 종료되었습니다.`);
                 }
             } catch (error) {
+                if (error?.name === "AbortError") throw error;
                 if (["FAILED", "ERROR", "CANCELLED"].includes(R.normalizeStatus(state.lastRunStatus))) throw error;
                 failures += 1;
                 if (failures >= 6) throw new Error(`실행 이력을 계속 조회하지 못했습니다. 실행 #${state.flowRunId}은 서버에서 계속될 수 있습니다. 다시 시도해 주세요.`);
@@ -1444,6 +1632,45 @@
     }
 
     async function loadResultsData() {
+        if (isMixedXai()) {
+            const [rulesResult, statsResult] = await Promise.allSettled([
+                client.getMixedXaiResults(state.flowRunId, state.tableOwner, state.tableName),
+                client.getDescriptiveStatistics(state.flowRunId)
+            ]);
+            if (rulesResult.status === "rejected") throw rulesResult.reason;
+            const response = rulesResult.value;
+            const statsError = statsResult.status === "rejected" ? (statsResult.reason?.message || "기초통계 조회 실패") : "";
+            const statistics = statsError ? { data: { available: false, notice: statsError } } : statsResult.value;
+            const payload = response.data || {};
+            if (!payload.ruleSummary) throw new Error(window.RuleResultCommon.t("Rule summary is unavailable. Reload after restarting the backend."));
+            const rules = payload.ruleSummary?.rules || [];
+            const pattern = window.RuleResultCommon.isPattern(payload);
+            const categorical = pattern ? window.RuleResultCommon.patternSummary(payload.ruleSummary, "VALUE") : payload.ruleSummary;
+            const continuous = window.RuleResultCommon.continuousSummary(payload);
+            resultData = { mixedXai: payload, categorical, continuous: { symbolicRuleSummary: continuous }, descriptiveStatistics: statistics, columnTypeFinal: null,
+                categoricalViolation: { violationSummary: { topRules: rules, overview: {
+                    VIOLATION_COUNT: payload.summary?.violationCount ?? payload.summary?.ruleMatchCount,
+                    VIOLATED_RULE_COUNT: rules.filter((r) => Number(r.MATCH_COUNT) > 0).length
+                } } } };
+            for (const [kind, familyRules] of [["categorical", categorical.rules || []], ["continuous", continuous.topRules || []]]) {
+                const violationSummary = { topRules: familyRules.map((r) => ({ ...r, VIOLATION_COUNT: r.VIOLATION_COUNT ?? r.MATCH_COUNT })), columnComments: payload.ruleSummary.columnComments, overview: {
+                    VIOLATION_COUNT: familyRules.reduce((n, r) => n + Number(r.VIOLATION_COUNT ?? r.MATCH_COUNT ?? 0), 0),
+                    VIOLATED_RULE_COUNT: familyRules.filter((r) => Number(r.VIOLATION_COUNT ?? r.MATCH_COUNT) > 0).length } };
+                resultData[`${kind}Violation`] = { [kind === "categorical" ? "violationSummary" : "symbolicViolationSummary"]: violationSummary };
+            }
+            if (resultData.categorical && !pattern) resultData.categorical.columnComments = {
+                ...resultData.categorical.columnComments, ANOMALY_CANDIDATE: window.RuleResultCommon.t("Anomaly candidate") };
+            ruleDistributionFilters.categorical = { type: "ALL", value: "", label: "" };
+            ruleDistributionFilters.continuous = { type: "ALL", value: "", label: "" };
+            state.resultArtifacts = { mixedXai: !pattern, mixedPattern: pattern, categorical: { objectName: rules[0]?.MODEL_NAME || payload.summary?.modelName }, categoricalViolation: { owner: state.tableOwner, objectName: pattern ? "INIT$_TB_RULEVIOL_ASSOC" : "INIT$_TB_RULEVIOL_XAI", targetOwner: state.tableOwner, targetTable: state.tableName } };
+            state.resultArtifacts.continuous = { owner: state.tableOwner, objectName: "INIT$_TB_RULEDISC_ASSOC_SUM" };
+            state.resultArtifacts.continuousViolation = { ...state.resultArtifacts.categoricalViolation };
+            state.resultWarning = statsError;
+            columnTypeDirtyChanges.clear();
+            persistState();
+            renderResults();
+            return;
+        }
         const response = await client.getRunNodes(state.flowRunId);
         const nodes = Array.isArray(response.data) ? response.data : [];
         const artifacts = collectResultArtifacts(nodes);
@@ -1895,6 +2122,7 @@
     }
 
     function hasSuccessfulColumnTypeStage() {
+        if (isMixedXai()) return false;
         const nodes = Array.isArray(currentSnapshot?.nodes) ? currentSnapshot.nodes : [];
         return nodes.some((node) => {
             const menuCode = String(node.REF_MENU_CODE || "").trim().toUpperCase();
@@ -1908,6 +2136,7 @@
     }
 
     function canEditColumnTypeFinal() {
+        if (isMixedXai()) return false;
         const runStatus = R.normalizeStatus(state.lastRunStatus || currentSnapshot?.run?.STATUS || "");
         return Boolean(
             state.projectId
@@ -1964,6 +2193,10 @@
 
     function renderColumnTypeFinal(options = {}) {
         const section = byId("qeColumnTypeSummary");
+        if (isMixedXai()) {
+            setHidden(section, true);
+            return;
+        }
         const kpis = byId("qeColumnTypeKpis");
         const groups = byId("qeColumnTypeGroups");
         const editor = byId("qeColumnTypeEditor");
@@ -2263,6 +2496,7 @@
             completeStep(6, "변경된 컬럼 유형 기준 규칙 발굴 실행이 완료되었습니다.");
             setStep(7, "변경된 컬럼 유형으로 생성된 규칙 결과를 다시 불러오고 있습니다.", 0.5);
             await loadResults();
+            controlCheckpoint();
             completeStep(7, "변경된 컬럼 유형 기준 결과 분석이 완료되었습니다.");
             state.status = state.resultWarning ? "warning" : "success";
             state.currentStep = 7;
@@ -2272,6 +2506,7 @@
             renderState(state.resultWarning || "변경된 FINAL 컬럼 유형으로 규칙 발굴 결과를 갱신했습니다.");
             showToast(state.resultWarning || "변경 컬럼유형 재실행이 완료되었습니다.", state.resultWarning ? "warning" : "success");
         } catch (error) {
+            if (error?.name === "AbortError") return;
             state.status = "failed";
             state.error = error?.message || "변경 컬럼유형 재실행 중 오류가 발생했습니다.";
             state.columnTypeRerunRequestToken = "";
@@ -2423,9 +2658,76 @@
         if (typeof dialog?.showModal === "function") dialog.showModal();
     }
 
+    function renderMixedXaiResults() {
+        const common = window.RuleResultCommon;
+        const summary = resultData.mixedXai?.summary || {};
+        setText(byId("qeMixedXaiTitle"), common.t("Validation diagnostics"));
+        const kpis = byId("qeMixedXaiKpis");
+        if (kpis) kpis.innerHTML = R.renderKpis(common.diagnostics(summary));
+        setText(byId("qeMixedXaiSummary"), common.notes(summary));
+        let early = byId("qeMixedEarlyStages");
+        if (!early && byId("qeMixedXaiResults")) {
+            early = document.createElement("section");
+            early.id = "qeMixedEarlyStages";
+            early.className = "qe-result-block";
+            byId("qeMixedXaiResults").insertAdjacentElement("afterend", early);
+        }
+        if (early) {
+            const stages = ["PROFILE", "RELATION"].map((kind) => common.stageSummary(summary, kind));
+            early.innerHTML = stages.map((stage) => `<details class="qe-details"><summary><strong>${R.escapeHtml(stage.title)}</strong></summary>
+                <div class="qe-result-block"><div class="qe-kpi-grid">${R.renderKpis(stage.metrics)}</div><p class="qe-statistics-notice">${R.escapeHtml(stage.notes)}</p>
+                ${stage.sections.map((section) => `<h4>${R.escapeHtml(section.title)}</h4><div class="qe-detail-table-wrap"><table class="qe-detail-table"><thead><tr>${section.columns.map((column) => `<th>${R.escapeHtml(section.columnLabels[column])}</th>`).join("")}</tr></thead>
+                    <tbody>${section.rows.map((row) => `<tr>${section.columns.map((column) => `<td>${R.escapeHtml(row[column] ?? "-")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`).join("")}</div></details>`).join("");
+        }
+    }
+
+    function renderRuleSummaryTable(page = 1, kind = "categorical") {
+        const target = byId(kind === "continuous" ? "qeContinuousSummaryTable" : "qeRuleSummaryTable");
+        if (!target) return;
+        const common = window.RuleResultCommon;
+        const active = ruleDistributionFilters[kind];
+        const summary = common.filterSummary(kind === "continuous" ? resultData.continuous?.symbolicRuleSummary : resultData.categorical, {
+            conditionCount: active.type === "CONDITION_COUNT" ? active.value : "ALL",
+            resultColumn: ["RESULT_COLUMN", "TARGET_COLUMN"].includes(active.type) ? active.value : "ALL", pageSize: 20
+        }, page);
+        const rows = summary.rules || [];
+        const pattern = common.isPattern(resultData.mixedXai);
+        const columns = pattern ? common.patternColumns : isMixedXai() ? common.columns : ["RULE_ID", "CONDITION_TEXT", "RESULT_TEXT", "CONDITION_COUNT", "RULE_SUPPORT", "RULE_CONFIDENCE", "RULE_LIFT"];
+        const labels = pattern ? common.patternColumnLabels() : common.columnLabels();
+        if (!isMixedXai()) labels.RULE_SUPPORT = common.t("Support");
+        const cell = (row, col) => col === "RESULT_TEXT" && common.isXai(row) ? common.t("Anomaly candidate")
+            : col === "VALIDATION_STATUS" ? common.validationStatus(row[col])
+            : row[col] ?? "-";
+        const totalPages = Math.max(1, Math.ceil(summary.total / summary.pageSize));
+        target.innerHTML = `<div class="qe-result-block__title"><h3>${R.escapeHtml(common.t("Rule summary table"))}</h3>
+            <button type="button" class="qe-secondary-button" data-summary-export>${R.escapeHtml(common.t("Export"))}</button></div>
+            <div class="qe-detail-table-wrap"><table class="qe-detail-table"><thead><tr>${columns.map((c) => `<th>${R.escapeHtml(labels[c] || c)}</th>`).join("")}</tr></thead>
+            <tbody>${rows.map((row) => `<tr>${columns.map((c) => `<td${c === "RESULT_TEXT" && common.isFormula(row) ? ' class="is-rule-expression"' : ""}>${R.escapeHtml(cell(row, c))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+            <div class="qe-dialog__actions"><span>${summary.total} · ${summary.page}/${totalPages}</span>
+            <button type="button" class="qe-secondary-button" data-summary-page="${summary.page - 1}" ${summary.page <= 1 ? "disabled" : ""}>${R.escapeHtml(common.t("Previous"))}</button>
+            <button type="button" class="qe-secondary-button" data-summary-page="${summary.page + 1}" ${summary.page >= totalPages ? "disabled" : ""}>${R.escapeHtml(common.t("Next"))}</button></div>`;
+        target.querySelectorAll("[data-summary-page]").forEach((button) => {
+            button.onclick = () => renderRuleSummaryTable(Number(button.dataset.summaryPage), kind);
+        });
+        target.querySelector("[data-summary-export]").onclick = () => {
+            const escapeCell = (value) => {
+                let text = String(value ?? "");
+                if (/^[=+@\-\t\r]/.test(text)) text = "'" + text;
+                return `"${text.replaceAll('"', '""')}"`;
+            };
+            const csv = [columns, ...rows.map((row) => columns.map((c) => cell(row, c)))].map((values) => values.map(escapeCell).join(",")).join("\r\n");
+            const url = URL.createObjectURL(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }));
+            const link = document.createElement("a");
+            link.href = url; link.download = "rule-summary.csv"; link.click();
+            window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        };
+    }
+
     function renderResults() {
         const panel = byId("resultsSection", "qeResultsPanel");
         setHidden(panel, false);
+        renderProcessSelection();
+        if (isMixedXai()) renderMixedXaiResults();
         const categorical = resultData.categorical;
         const categoricalOverview = categorical?.overview || {};
         const categoryKpis = byId("categoryKpis", "qeCategoricalKpis");
@@ -2437,7 +2739,19 @@
         reconcileRuleDistributionFilter("categorical", categoricalLegendRules);
         const categoricalRules = getDisplayedRules("categorical");
         const categoricalFilter = ruleDistributionFilters.categorical;
-        if (categoryKpis) categoryKpis.innerHTML = R.renderKpis([
+        if (categoryKpis) categoryKpis.innerHTML = R.renderKpis(isMixedXai() && !window.RuleResultCommon.isPattern(resultData.mixedXai) ? [
+            { label: window.RuleResultCommon.t("Total rules"), value: R.formatNumber(categoricalOverview.TOTAL_RULES, 0), tone: "primary" },
+            { label: window.RuleResultCommon.t("Mapped rules"), value: R.formatNumber(categoricalOverview.MAPPED_RULES, 0) },
+            { label: window.RuleResultCommon.t("Candidate rows"), value: R.formatNumber(categoricalViolationOverview.VIOLATION_COUNT, 0) },
+            { label: window.RuleResultCommon.t("Rules with candidates"), value: R.formatNumber(categoricalViolationOverview.VIOLATED_RULE_COUNT, 0) }
+        ] : window.RuleResultCommon.isPattern(resultData.mixedXai) ? [
+            { label: window.RuleResultCommon.t("Total rules"), value: R.formatNumber(categoricalOverview.TOTAL_RULES, 0), tone: "primary" },
+            { label: window.RuleResultCommon.t("Mapped rules"), value: R.formatNumber(categoricalOverview.MAPPED_RULES, 0) },
+            { label: window.RuleResultCommon.t("Average confidence"), value: R.formatRatio(categoricalOverview.AVG_CONFIDENCE) },
+            { label: window.RuleResultCommon.t("Average lift"), value: R.formatNumber(categoricalOverview.AVG_LIFT, 2) },
+            { label: window.RuleResultCommon.t("Violation rows"), value: R.formatNumber(categoricalViolationOverview.VIOLATION_COUNT, 0) },
+            { label: window.RuleResultCommon.t("Rules with violations"), value: R.formatNumber(categoricalViolationOverview.VIOLATED_RULE_COUNT, 0) }
+        ] : [
             { label: "전체 규칙", value: R.formatNumber(categoricalOverview.TOTAL_RULES, 0), tone: "primary" },
             { label: "매핑 규칙", value: R.formatNumber(categoricalOverview.MAPPED_RULES, 0) },
             { label: "평균 신뢰도", value: R.formatRatio(categoricalOverview.AVG_CONFIDENCE) },
@@ -2448,7 +2762,7 @@
         if (categoryCharts) {
             const conditionItems = R.filterLegendItems((categorical?.conditionDist || []).map((row) => ({
                 key: String(Number(row.CONDITION_COUNT || 0)),
-                label: `${row.CONDITION_COUNT ?? 0}개 조건`, value: Number(row.RULE_COUNT || 0)
+                label: `${row.CONDITION_COUNT ?? 0} ${window.RuleResultCommon.t("Conditions")}`, value: Number(row.RULE_COUNT || 0)
             })), categoricalLegendRules, "categorical", "CONDITION_COUNT");
             const resultItems = R.filterLegendItems((categorical?.resultTop || []).map((row) => ({
                 key: String(row.RESULT_COLUMN || "").trim().toUpperCase(),
@@ -2456,32 +2770,38 @@
             })), categoricalLegendRules, "categorical", "RESULT_COLUMN");
             const chartBody = categoryCharts.querySelector("[data-chart-body]") || categoryCharts;
             chartBody.innerHTML = `
-                <section><h4>조건 개수별 규칙</h4>${R.renderBars(conditionItems, {
+                <section><h4>${R.escapeHtml(window.RuleResultCommon.t("Rules by condition count"))}</h4>${R.renderBars(conditionItems, {
                     ariaLabel: "조건 개수별 범주형 규칙 수", interactive: true,
                     filterKind: "categorical", filterType: "CONDITION_COUNT", activeFilter: categoricalFilter
                 })}</section>
-                <section><h4>결과 컬럼별 규칙</h4>${R.renderBars(resultItems, {
+                <section><h4>${R.escapeHtml(window.RuleResultCommon.t("Rules by result column"))}</h4>${R.renderBars(resultItems, {
                     accent: "mint", ariaLabel: "결과 컬럼별 범주형 규칙 수", interactive: true,
                     filterKind: "categorical", filterType: "RESULT_COLUMN", activeFilter: categoricalFilter
                 })}</section>`;
             setText(
                 categoryCharts.querySelector("[data-chart-caption]"),
-                categoricalFilter.type === "ALL" ? "전체 · 범례별 상위 규칙" : `${categoricalFilter.label} 선택`
+                categoricalFilter.type === "ALL" ? window.RuleResultCommon.t("Top rules by group") : `${categoricalFilter.label} · ${window.RuleResultCommon.t("Selected")}`
             );
         }
         if (categoryRules) {
             categoryRules.innerHTML = R.renderCategoricalRules(categoricalRules, {
                 columnComments: categoricalComments,
+                mixedXai: isMixedXai(),
+                mixedPattern: window.RuleResultCommon.isPattern(resultData.mixedXai),
                 violationCounts: getViolationCountMap("categorical")
             });
             setText(
                 categoryRules.closest(".qe-result-block")?.querySelector("[data-rule-count]"),
                 categoricalFilter.type === "ALL"
-                    ? `범례별 상위 ${categoricalRules.length}개`
-                    : `${categoricalFilter.label} · 상위 ${categoricalRules.length}개`
+                    ? `${window.RuleResultCommon.t("Top rules by group")} · ${categoricalRules.length}`
+                    : `${categoricalFilter.label} · ${categoricalRules.length}`
             );
             prepareCategoricalDetail(categoricalRules);
         }
+        renderRuleSummaryTable();
+        setText(byId("categoryChartTitle"), window.RuleResultCommon.t("Rule distribution"));
+        setText(byId("categoryRuleTitle"), window.RuleResultCommon.t("Top rules"));
+        setText(byId("qeCategoricalDetail")?.querySelector(".qe-continuous-detail__header p"), window.RuleResultCommon.t("Select a rule to inspect its conditions, result and matching rows."));
 
         const continuous = resultData.continuous?.symbolicRuleSummary || {};
         const continuousOverview = continuous.overview || {};
@@ -2494,7 +2814,14 @@
         const continuousKpis = byId("continuousKpis", "qeContinuousKpis");
         const continuousCharts = byId("continuousCharts", "qeContinuousCharts");
         const continuousRules = byId("continuousRules", "qeContinuousRules");
-        if (continuousKpis) continuousKpis.innerHTML = R.renderKpis([
+        if (continuousKpis) continuousKpis.innerHTML = R.renderKpis(isMixedXai() ? [
+            { label: window.RuleResultCommon.t("Continuous formula rules"), value: R.formatNumber(continuousOverview.RULE_COUNT, 0), tone: "mint" },
+            { label: window.RuleResultCommon.t("Target columns"), value: R.formatNumber(continuousOverview.TARGET_COLUMN_COUNT, 0) },
+            { label: window.RuleResultCommon.t("Average within-tolerance rate"), value: R.formatRatio(continuousOverview.AVG_CONFIDENCE) },
+            { label: window.RuleResultCommon.t("Average validation within-tolerance rate"), value: R.formatRatio(continuousOverview.AVG_VALIDATION_CONFIDENCE) },
+            { label: window.RuleResultCommon.t("Average validation R²"), value: R.formatNumber(continuousOverview.AVG_VALIDATION_R2, 3) },
+            { label: window.RuleResultCommon.t("Violation rows"), value: R.formatNumber(continuousViolationOverview.VIOLATION_COUNT, 0) }
+        ] : [
             { label: "전체 수식 규칙", value: R.formatNumber(continuousOverview.RULE_COUNT, 0), tone: "mint" },
             { label: "대상 컬럼", value: R.formatNumber(continuousOverview.TARGET_COLUMN_COUNT, 0) },
             { label: "선택 규칙", value: R.formatNumber(continuousOverview.SELECTED_RULE_COUNT, 0) },
@@ -2509,35 +2836,58 @@
             })), continuousLegendRules, "continuous", "TARGET_COLUMN");
             const methodItems = R.filterLegendItems((continuous.methodGroups || []).map((row) => ({
                 key: String(row.METHOD || "").trim().toUpperCase(),
-                label: row.METHOD || "방법 미지정", value: Number(row.RULE_COUNT || 0)
+                label: isMixedXai() ? window.RuleResultCommon.formulaMethod(row) : row.METHOD || "방법 미지정", value: Number(row.RULE_COUNT || 0)
             })), continuousLegendRules, "continuous", "METHOD");
             const chartBody = continuousCharts.querySelector("[data-chart-body]") || continuousCharts;
             chartBody.innerHTML = `
-                <section><h4>대상 컬럼별 규칙</h4>${R.renderBars(targetItems, {
+                <section><h4>${R.escapeHtml(window.RuleResultCommon.t("Rules by result column"))}</h4>${R.renderBars(targetItems, {
                     ariaLabel: "대상 컬럼별 연속형 규칙 수", interactive: true,
                     filterKind: "continuous", filterType: "TARGET_COLUMN", activeFilter: continuousFilter
                 })}</section>
-                <section><h4>발굴 방법별 규칙</h4>${R.renderBars(methodItems, {
+                <section><h4>${R.escapeHtml(window.RuleResultCommon.t("Rules by discovery method"))}</h4>${R.renderBars(methodItems, {
                     accent: "mint", ariaLabel: "발굴 방법별 연속형 규칙 수", interactive: true,
                     filterKind: "continuous", filterType: "METHOD", activeFilter: continuousFilter
                 })}</section>`;
             setText(
                 continuousCharts.querySelector("[data-chart-caption]"),
-                continuousFilter.type === "ALL" ? "전체 · 범례별 상위 규칙" : `${continuousFilter.label} 선택`
+                continuousFilter.type === "ALL" ? window.RuleResultCommon.t("Top rules by group") : `${continuousFilter.label} · ${window.RuleResultCommon.t("Selected")}`
             );
         }
         if (continuousRules) {
             continuousRules.innerHTML = R.renderContinuousRules(displayedContinuousRules, {
                 columnComments: continuousComments,
-                violationCounts: getViolationCountMap("continuous")
+                violationCounts: getViolationCountMap("continuous"),
+                mixedPattern: isMixedXai(), emptyMessage: isMixedXai() ? window.RuleResultCommon.continuousDiagnostic(resultData.mixedXai).message : ""
             });
             setText(
                 continuousRules.closest(".qe-result-block")?.querySelector("[data-rule-count]"),
                 continuousFilter.type === "ALL"
-                    ? `범례별 상위 ${displayedContinuousRules.length}개`
+                    ? `${window.RuleResultCommon.t("Top rules by group")} · ${displayedContinuousRules.length}`
                     : `${continuousFilter.label} · 상위 ${displayedContinuousRules.length}개`
             );
             prepareContinuousDetail(displayedContinuousRules);
+        }
+        setText(byId("continuousRuleTitle"), window.RuleResultCommon.t("Continuous formula rules"));
+        setText(byId("continuousChartTitle"), window.RuleResultCommon.t("Rule distribution"));
+        let continuousNotice = byId("qeContinuousDiscoveryNotice");
+        let continuousTable = byId("qeContinuousSummaryTable");
+        if (!continuousNotice && byId("continuousPanel")) {
+            continuousNotice = document.createElement("section");
+            continuousNotice.id = "qeContinuousDiscoveryNotice";
+            continuousNotice.className = "qe-result-block";
+            byId("continuousPanel").prepend(continuousNotice);
+            continuousTable = document.createElement("section");
+            continuousTable.id = "qeContinuousSummaryTable";
+            continuousTable.className = "qe-result-block";
+            byId("qeContinuousDetail")?.insertAdjacentElement("beforebegin", continuousTable);
+        }
+        setHidden(continuousNotice, !isMixedXai());
+        setHidden(continuousTable, !isMixedXai());
+        if (isMixedXai() && continuousNotice) {
+            const diagnostic = window.RuleResultCommon.continuousDiagnostic(resultData.mixedXai);
+            continuousNotice.innerHTML = `<p>${R.escapeHtml(diagnostic.message)}</p><div class="qe-kpi-grid">${R.renderKpis(diagnostic.metrics)}</div>
+                ${diagnostic.reasons.length ? `<details class="qe-details"><summary>${R.escapeHtml(window.RuleResultCommon.t("Continuous discovery reasons"))}</summary><p>${R.escapeHtml(window.RuleResultCommon.t("Reason counts refer to excluded columns or rejected candidates, not source rows."))}</p><ul>${diagnostic.reasons.map((r) => `<li>${R.escapeHtml(r.label)}: ${R.escapeHtml(r.count)}</li>`).join("")}</ul></details>` : ""}`;
+            renderRuleSummaryTable(1, "continuous");
         }
 
         renderDescriptiveStatistics();
@@ -2571,11 +2921,18 @@
         const select = byId("qeContinuousRuleSelect");
         const safeRules = Array.isArray(rules) ? rules : [];
         setHidden(panel, safeRules.length === 0);
-        if (!select || !safeRules.length) return;
+        if (!safeRules.length) {
+            cancelContinuousDetailRequest();
+            destroyFormulaChart();
+            continuousDetail.ruleId = "";
+            continuousDetail.rule = null;
+            return;
+        }
+        if (!select) return;
         const selectedRuleId = continuousDetail.ruleId;
         select.innerHTML = safeRules.map((rule, index) => {
             const targetLabel = R.getColumnLabel(rule.TARGET_COLUMN || `규칙 ${index + 1}`, getResultColumnComments("continuous"));
-            return `<option value="${index}">${R.escapeHtml(targetLabel)} · ${R.escapeHtml(rule.METHOD || "수식 규칙")}</option>`;
+            return `<option value="${index}">${R.escapeHtml(targetLabel)} · ${R.escapeHtml(window.RuleResultCommon.isFormula(rule) ? window.RuleResultCommon.formulaMethod(rule) : rule.METHOD || "수식 규칙")}</option>`;
         }).join("");
         const selectedIndex = safeRules.findIndex((rule) => String(rule.RULE_ID || "") === selectedRuleId);
         const nextIndex = selectedIndex >= 0 ? selectedIndex : 0;
@@ -2694,7 +3051,7 @@
     }
 
     function toFiniteNumber(value) {
-        if (value === null || value === undefined || String(value).trim() === "") return null;
+        if (value === null || value === undefined || typeof value === "boolean" || String(value).trim() === "") return null;
         const number = Number(value);
         return Number.isFinite(number) ? number : null;
     }
@@ -2743,6 +3100,7 @@
     }
 
     function formatDiagnosticNumber(value, digits = 4) {
+        if (value == null || value === "") return "-";
         const number = Number(value);
         if (!Number.isFinite(number)) return "-";
         const absolute = Math.abs(number);
@@ -2750,23 +3108,79 @@
         return number.toLocaleString("ko-KR", { maximumFractionDigits: digits });
     }
 
+    function cancelContinuousDetailRequest() {
+        continuousDetailRequestId += 1;
+        continuousDetailAbort?.abort();
+        continuousDetailAbort = null;
+    }
+
+    function destroyFormulaChart() {
+        formulaChartView?.destroy();
+        formulaChartView = null;
+        formulaChartPayload = null;
+        const target = byId("qeFormulaRuleChart");
+        if (target) {
+            target.replaceChildren();
+            target.hidden = true;
+        }
+    }
+
+    function renderFormulaChart() {
+        const panel = byId("qeContinuousDetail");
+        if (!panel) return;
+        let target = byId("qeFormulaRuleChart");
+        if (!target) {
+            target = document.createElement("div");
+            target.id = "qeFormulaRuleChart";
+            byId("qeContinuousRuleSummary")?.insertAdjacentElement("afterend", target);
+        }
+        target.hidden = false;
+        if (!continuousDetail.chartPayload || continuousDetail.error) {
+            formulaChartView?.destroy();
+            formulaChartView = null;
+            formulaChartPayload = null;
+            const message = continuousDetail.error || window.FormulaRuleChart.t("Loading current source samples using the saved formula.");
+            target.innerHTML = `<p class="qe-empty" role="status">${R.escapeHtml(message)}</p>`;
+            return;
+        }
+        if (!formulaChartView) {
+            formulaChartView = window.FormulaRuleChart.mount(target, continuousDetail.chartPayload, {
+                translate: window.RuleResultCommon.t,
+                columnComments: getResultColumnComments("continuous")
+            });
+        } else if (formulaChartPayload !== continuousDetail.chartPayload) {
+            formulaChartView.update(continuousDetail.chartPayload);
+        }
+        formulaChartPayload = continuousDetail.chartPayload;
+    }
+
     async function loadContinuousDetail(ruleIndex, force = false) {
         const rules = getDisplayedRules("continuous");
         const index = Math.max(0, Math.min(rules.length - 1, Number(ruleIndex) || 0));
         const rule = rules[index];
         const artifact = state.resultArtifacts?.continuous;
-        if (!rule || !artifact?.owner) return;
+        if (!rule) return;
+        const formula = window.RuleResultCommon.isFormula(rule);
+        if (!formula && !artifact?.owner) return;
         const ruleId = String(rule.RULE_ID || "").trim();
         if (!ruleId) return;
         const select = byId("qeContinuousRuleSelect");
         if (select) select.value = String(index);
-        if (!force && continuousDetail.ruleId === ruleId && (continuousDetail.rows.length || continuousDetail.error)) {
+        const scope = { flowRunId: state.flowRunId, targetOwner: rule.TARGET_OWNER || state.tableOwner,
+            targetTable: rule.TARGET_TABLE || state.tableName, modelName: rule.MODEL_NAME, ruleId };
+        const detailKey = JSON.stringify([scope.flowRunId, scope.targetOwner, scope.targetTable, scope.modelName, ruleId]);
+        if (!force && continuousDetail.detailKey === detailKey && (continuousDetail.chartPayload || continuousDetail.rows.length || continuousDetail.error)) {
             renderContinuousDetail();
             return;
         }
-        const requestId = ++continuousDetailRequestId;
+        cancelContinuousDetailRequest();
+        destroyFormulaChart();
+        const requestId = continuousDetailRequestId;
+        const controller = new AbortController();
+        continuousDetailAbort = controller;
         continuousDetail = {
             ruleId,
+            detailKey,
             ruleIndex: index,
             rule,
             rows: [],
@@ -2778,23 +3192,39 @@
             selectedRowIndex: null,
             chartPoints: []
         };
+        if (formula) renderContinuousDetail();
         setText(byId("qeContinuousDetailMessage"), "규칙 샘플과 수식 계산 결과를 불러오는 중입니다.");
         const metrics = byId("qeContinuousDetailMetrics");
         if (metrics) metrics.innerHTML = '<div><span>상태</span><strong>조회 중</strong><small>샘플 계산</small></div>';
         try {
-            const response = await client.getSymbolicRuleSample({
+            const response = formula ? await client.getMixedFormulaSample({ ...scope, sampleLimit: 300 }, { signal: controller.signal })
+                : await client.getSymbolicRuleSample({
                 owner: artifact.owner,
                 ruleId,
                 flowRunId: state.flowRunId,
                 sampleLimit: 200
-            });
+            }, { signal: controller.signal });
             if (requestId !== continuousDetailRequestId) return;
             const payload = response.data || {};
+            if (formula) {
+                const savedRule = payload.rule || {};
+                continuousDetail.rule = { ...rule,
+                    RESULT_TEXT: savedRule.resultText ?? rule.RESULT_TEXT,
+                    CONDITION_TEXT: savedRule.conditionText ?? rule.CONDITION_TEXT,
+                    RESULT_COLUMN: savedRule.resultColumn ?? rule.RESULT_COLUMN,
+                    ABSOLUTE_TOLERANCE: savedRule.absoluteTolerance ?? rule.ABSOLUTE_TOLERANCE,
+                    RELATIVE_TOLERANCE: savedRule.relativeTolerance ?? rule.RELATIVE_TOLERANCE };
+                continuousDetail.chartPayload = payload;
+                continuousDetail.error = "";
+                renderContinuousDetail();
+                return;
+            }
             const mergedRule = { ...rule, ...(payload.rule || {}) };
             const rows = Array.isArray(payload.rows) ? payload.rows : [];
             const evaluation = evaluateContinuousRows(mergedRule, rows);
             continuousDetail = {
                 ruleId,
+                detailKey,
                 ruleIndex: index,
                 rule: mergedRule,
                 rows,
@@ -2807,8 +3237,10 @@
                 chartPoints: []
             };
         } catch (error) {
-            if (requestId !== continuousDetailRequestId) return;
-            continuousDetail.error = error.message || "연속형 상세 샘플을 조회하지 못했습니다.";
+            if (requestId !== continuousDetailRequestId || error?.name === "AbortError") return;
+            continuousDetail.error = error.message || (formula ? window.FormulaRuleChart.t("Could not load formula chart samples.") : "연속형 상세 샘플을 조회하지 못했습니다.");
+        } finally {
+            if (continuousDetailAbort === controller) continuousDetailAbort = null;
         }
         renderContinuousDetail();
     }
@@ -2818,6 +3250,18 @@
         if (!panel || !continuousDetail.rule) return;
         panel.hidden = false;
         const rule = continuousDetail.rule;
+        const formula = window.RuleResultCommon.isFormula(rule);
+        setText(byId("qeContinuousDetailTitle"), formula ? window.RuleResultCommon.t("Continuous formula details") : "연속형 상세 그래프");
+        setText(panel.querySelector(".qe-continuous-detail__header p"), formula ? window.FormulaRuleChart.t("The saved formula is evaluated against current source samples; no model is refitted.") : "샘플 데이터의 실제값과 수식 예측값을 비교합니다.");
+        setHidden(byId("qeContinuousChartMode")?.closest("label"), formula);
+        setHidden(panel.querySelector(".qe-continuous-chart-wrap"), formula);
+        setHidden(panel.querySelector(".qe-continuous-sample"), formula);
+        setHidden(byId("qeContinuousDetailMetrics"), formula);
+        if (formula) {
+            setText(byId("qeContinuousDetailReload"), window.RuleResultCommon.t("Reload"));
+            setText(byId("qeContinuousRuleSelect")?.closest("label")?.querySelector("span"), window.RuleResultCommon.t("Rule"));
+            byId("qeContinuousRuleSelect")?.setAttribute("aria-label", window.RuleResultCommon.t("Continuous formula details"));
+        }
         const metrics = continuousDetail.metrics;
         const violationCount = getRuleViolationCount("continuous", rule);
         const summaryTarget = byId("qeContinuousRuleSummary");
@@ -2828,6 +3272,11 @@
                 rule
             );
         }
+        if (formula) {
+            renderFormulaChart();
+            return;
+        }
+        destroyFormulaChart();
         const metricTarget = byId("qeContinuousDetailMetrics");
         if (metricTarget) metricTarget.innerHTML = [
             ["샘플", R.formatNumber(continuousDetail.sampleCount, 0), continuousDetail.hasMore ? "일부 표본" : "조회 행"],
@@ -2864,7 +3313,7 @@
         ];
         target.innerHTML = `<table class="qe-detail-table">
             <thead><tr><th>No</th>${columns.map((column) => `<th>${R.escapeHtml(column.label)}</th>`).join("")}</tr></thead>
-            <tbody>${rows.map((item) => `<tr data-continuous-row-index="${item.rowIndex}" tabindex="-1"
+            <tbody>${rows.map((item, index) => `<tr data-continuous-row-index="${item.rowIndex}" tabindex="${continuousDetail.selectedRowIndex === item.rowIndex || continuousDetail.selectedRowIndex == null && index === 0 ? 0 : -1}"
                     class="${continuousDetail.selectedRowIndex === item.rowIndex ? "is-selected" : ""}"
                     aria-selected="${continuousDetail.selectedRowIndex === item.rowIndex ? "true" : "false"}">
                 <td class="is-number">${item.rowIndex + 1}</td>
@@ -2873,11 +3322,13 @@
         </table>`;
     }
 
-    function focusContinuousSampleRow(row) {
+    function focusContinuousSampleRow(row, options = {}) {
         const grid = byId("qeContinuousSampleTable");
         if (!row || !grid) return;
-        grid.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+        const detail = continuousDetail;
+        if (options.scrollPage !== false) grid.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
         window.requestAnimationFrame(() => {
+            if (!row.isConnected || detail !== continuousDetail) return;
             const rowRect = row.getBoundingClientRect();
             const gridRect = grid.getBoundingClientRect();
             const nextTop = grid.scrollTop
@@ -2891,7 +3342,7 @@
                 left: Math.max(0, nextLeft),
                 behavior: "smooth"
             });
-            row.focus({ preventScroll: true });
+            if (options.focus !== false) row.focus({ preventScroll: true });
         });
     }
 
@@ -2905,7 +3356,8 @@
             const selected = Number(row.dataset.continuousRowIndex) === normalizedIndex;
             row.classList.toggle("is-selected", selected);
             row.setAttribute("aria-selected", selected ? "true" : "false");
-            if (selected && options.scroll !== false) focusContinuousSampleRow(row);
+            row.tabIndex = selected ? 0 : -1;
+            if (selected && options.scroll !== false) focusContinuousSampleRow(row, options);
         });
         drawContinuousDetailChart();
     }
@@ -2916,12 +3368,13 @@
         if (!canvas || !points.length) return null;
         const rect = canvas.getBoundingClientRect();
         if (!rect.width || !rect.height) return null;
-        const x = (event.clientX - rect.left) * (Number(canvas.dataset.chartWidth || rect.width) / rect.width);
-        const y = (event.clientY - rect.top) * (Number(canvas.dataset.chartHeight || rect.height) / rect.height);
+        const x = event.clientX - rect.left, y = event.clientY - rect.top;
+        const scaleX = rect.width / Number(canvas.dataset.chartWidth || rect.width);
+        const scaleY = rect.height / Number(canvas.dataset.chartHeight || rect.height);
         let nearest = null;
         let nearestDistance = maxDistance;
         points.forEach((point) => {
-            const distance = Math.hypot(point.screenX - x, point.screenY - y);
+            const distance = Math.hypot(point.screenX * scaleX - x, point.screenY * scaleY - y);
             if (distance <= nearestDistance) {
                 nearest = point;
                 nearestDistance = distance;
@@ -2931,33 +3384,59 @@
     }
 
     function handleContinuousChartClick(event) {
-        const point = findContinuousChartPoint(event, 14);
+        const point = findContinuousChartPoint(event, window.RegressionDiagnostics.chartInteraction.hitRadius);
         if (!point) return;
         selectContinuousSampleRow(point.rowIndex);
     }
 
     function handleContinuousChartKeydown(event) {
-        if (!["ArrowLeft", "ArrowRight", "Home", "End", "Enter", " "].includes(event.key)) return;
-        const rows = continuousDetail.evaluatedRows || [];
+        if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "Enter", " "].includes(event.key)) return;
+        const rows = continuousDetail.chartPoints || [];
         if (!rows.length) return;
-        const current = rows.findIndex((row) => row.rowIndex === continuousDetail.selectedRowIndex);
+        const focusedRow = event.target.closest?.("tr[data-continuous-row-index]");
+        const current = rows.findIndex((row) => row.rowIndex === (focusedRow ? Number(focusedRow.dataset.continuousRowIndex) : continuousDetail.selectedRowIndex));
         let next = current >= 0 ? current : 0;
-        if (event.key === "ArrowLeft") next = Math.max(0, next - 1);
-        else if (event.key === "ArrowRight") next = Math.min(rows.length - 1, next + 1);
+        if (current >= 0 && ["ArrowLeft", "ArrowUp"].includes(event.key)) next = Math.max(0, next - 1);
+        else if (current >= 0 && ["ArrowRight", "ArrowDown"].includes(event.key)) next = Math.min(rows.length - 1, next + 1);
         else if (event.key === "Home") next = 0;
         else if (event.key === "End") next = rows.length - 1;
         event.preventDefault();
-        selectContinuousSampleRow(rows[next].rowIndex);
+        selectContinuousSampleRow(rows[next].rowIndex, {focus: !!focusedRow, scrollPage: false});
+    }
+
+    function scheduleContinuousChartDraw() {
+        window.clearTimeout(chartResizeTimer);
+        chartResizeTimer = window.setTimeout(() => { chartResizeTimer = null; drawContinuousDetailChart(); }, 120);
+    }
+
+    function bindContinuousChartResize() {
+        if (chartResizeBound) return;
+        chartResizeBound = true;
+        window.addEventListener("resize", scheduleContinuousChartDraw);
+        const canvas = byId("qeContinuousDetailChart");
+        if (canvas && typeof ResizeObserver === "function") {
+            chartResizeObserver = new ResizeObserver(scheduleContinuousChartDraw);
+            chartResizeObserver.observe(canvas);
+        }
+    }
+
+    function destroyContinuousChartResize() {
+        window.clearTimeout(chartResizeTimer); chartResizeTimer = null;
+        chartResizeObserver?.disconnect(); chartResizeObserver = null;
+        window.removeEventListener("resize", scheduleContinuousChartDraw);
+        chartResizeBound = false;
     }
 
     function drawContinuousDetailChart() {
+        if (window.RuleResultCommon.isFormula(continuousDetail.rule)) return;
         const canvas = byId("qeContinuousDetailChart");
         const message = byId("qeContinuousDetailMessage");
         const rows = continuousDetail.evaluatedRows || [];
-        if (!canvas) return;
+        if (!canvas || !canvas.isConnected || !canvas.clientWidth || !canvas.clientHeight) return;
         const context = canvas.getContext("2d");
-        const cssWidth = Math.max(560, canvas.parentElement?.clientWidth - 24 || 900);
-        const cssHeight = Math.max(260, canvas.clientHeight || 315);
+        if (!context) return;
+        const cssWidth = canvas.clientWidth;
+        const cssHeight = canvas.clientHeight;
         const ratio = Math.min(2, window.devicePixelRatio || 1);
         canvas.width = Math.round(cssWidth * ratio);
         canvas.height = Math.round(cssHeight * ratio);
@@ -2968,6 +3447,8 @@
         if (!rows.length) {
             continuousDetail.chartPoints = [];
             setText(message, continuousDetail.error || "그래프로 표시할 계산 샘플이 없습니다.");
+            canvas.setAttribute("aria-label", continuousDetail.error || "그래프로 표시할 계산 샘플이 없습니다.");
+            canvas.title = "";
             context.fillStyle = "#718096";
             context.font = "12px system-ui, sans-serif";
             context.textAlign = "center";
@@ -2975,11 +3456,19 @@
             return;
         }
         const mode = valueOf("qeContinuousChartMode") || "actual-predicted";
-        const points = rows.map((item) => mode === "residual"
+        const diagnostic = R.buildRegressionDiagnostics(rows.map((item) => mode === "residual"
             ? { x: item.predicted, y: item.residual, residual: item.residual, rowIndex: item.rowIndex }
-            : { x: item.actual, y: item.predicted, residual: item.residual, rowIndex: item.rowIndex });
+            : { x: item.actual, y: item.predicted, residual: item.residual, rowIndex: item.rowIndex }));
+        const points = diagnostic.points;
+        if (!points.length) {
+            continuousDetail.chartPoints = [];
+            setText(message, "그래프로 표시할 유효한 숫자 표본이 없습니다.");
+            canvas.setAttribute("aria-label", "그래프로 표시할 유효한 숫자 표본이 없습니다.");
+            canvas.title = "";
+            return;
+        }
         const allX = points.map((item) => item.x);
-        const allY = points.map((item) => item.y);
+        const allY = [...points.map((item) => item.y), ...diagnostic.bands.flatMap((band) => [band.piLower, band.piUpper])];
         let minX = Math.min(...allX);
         let maxX = Math.max(...allX);
         let minY = Math.min(...allY);
@@ -2997,15 +3486,23 @@
         };
         [minX, maxX] = padRange(minX, maxX);
         [minY, maxY] = padRange(minY, maxY);
-        const plot = { left: 68, top: 18, right: cssWidth - 22, bottom: cssHeight - 52 };
+        const tickSteps = cssWidth < 480 ? 3 : 5;
+        context.font = "11px system-ui, sans-serif";
+        const tickWidths = Array.from({length: tickSteps + 1}, (_, index) => ({
+            x: context.measureText(formatDiagnosticNumber(minX + (maxX - minX) * index / tickSteps, 3)).width,
+            y: context.measureText(formatDiagnosticNumber(minY + (maxY - minY) * index / tickSteps, 3)).width
+        }));
+        const plot = { left: Math.max(68, Math.ceil(Math.max(...tickWidths.map((item) => item.y))) + 36),
+            top: 45, right: cssWidth - Math.max(22, Math.ceil(Math.max(...tickWidths.map((item) => item.x)) / 2) + 4), bottom: cssHeight - 52 };
+        plot.top = Math.max(plot.top, R.drawRegressionLegend(context, diagnostic, plot, false) + 12);
         const mapX = (value) => plot.left + ((value - minX) / (maxX - minX)) * (plot.right - plot.left);
         const mapY = (value) => plot.bottom - ((value - minY) / (maxY - minY)) * (plot.bottom - plot.top);
-        context.font = "9px system-ui, sans-serif";
+        context.font = "11px system-ui, sans-serif";
         context.textAlign = "right";
         context.textBaseline = "middle";
-        for (let index = 0; index <= 5; index += 1) {
-            const xValue = minX + ((maxX - minX) * index / 5);
-            const yValue = minY + ((maxY - minY) * index / 5);
+        for (let index = 0; index <= tickSteps; index += 1) {
+            const xValue = minX + ((maxX - minX) * index / tickSteps);
+            const yValue = minY + ((maxY - minY) * index / tickSteps);
             const x = mapX(xValue);
             const y = mapY(yValue);
             context.strokeStyle = "#e7edf4";
@@ -3022,9 +3519,12 @@
             context.textAlign = "right";
             context.fillText(formatDiagnosticNumber(yValue, 3), plot.left - 9, y);
         }
-        context.strokeStyle = mode === "residual" ? "#cf3c4f" : "#d07b24";
-        context.lineWidth = 1.5;
-        context.setLineDash([6, 5]);
+        R.drawRegressionLegend(context, diagnostic, plot);
+        R.drawRegressionBands(context, diagnostic, mapX, mapY);
+        const referenceStyle = window.RegressionDiagnostics.chartStyle.reference;
+        context.strokeStyle = referenceStyle.stroke;
+        context.lineWidth = referenceStyle.width;
+        context.setLineDash(referenceStyle.dash);
         context.beginPath();
         if (mode === "residual") {
             context.moveTo(plot.left, mapY(0));
@@ -3037,29 +3537,23 @@
         }
         context.stroke();
         context.setLineDash([]);
-        const mae = Math.max(Number(continuousDetail.metrics?.mae || 0), Number.EPSILON);
         continuousDetail.chartPoints = points.map((point) => ({
             ...point,
             screenX: mapX(point.x),
             screenY: mapY(point.y)
         }));
-        continuousDetail.chartPoints.forEach((point) => {
-            const outlier = Math.abs(point.residual) > mae * 2;
+        window.RegressionDiagnostics.drawPlotFrame(context, plot);
+        [...continuousDetail.chartPoints].sort((a, b) => Number(a.rowIndex === continuousDetail.selectedRowIndex) - Number(b.rowIndex === continuousDetail.selectedRowIndex)).forEach((point) => {
+            const outlier = point.isAttention === true;
             const selected = point.rowIndex === continuousDetail.selectedRowIndex;
-            context.beginPath();
-            context.arc(point.screenX, point.screenY, selected ? 6 : outlier ? 3.8 : 2.8, 0, Math.PI * 2);
-            context.fillStyle = selected ? "rgba(245, 158, 11, 0.92)" : outlier ? "rgba(207, 60, 79, 0.72)" : "rgba(36, 87, 214, 0.58)";
-            context.fill();
-            context.strokeStyle = selected ? "#b45309" : outlier ? "#b72f43" : "#2457d6";
-            context.lineWidth = selected ? 1.4 : 0.7;
-            context.stroke();
+            window.RegressionDiagnostics.drawPoint(context, point.screenX, point.screenY, outlier, selected);
         });
         const comments = getResultColumnComments("continuous");
         const targetLabel = R.getColumnLabel(continuousDetail.rule?.TARGET_COLUMN || "Y", comments);
         const xLabel = mode === "residual" ? `예측값 · ${targetLabel}` : `실제값 · ${targetLabel}`;
         const yLabel = mode === "residual" ? "잔차 (실제값 - 예측값)" : `예측값 · ${targetLabel}`;
         context.fillStyle = "#344159";
-        context.font = "600 10px system-ui, sans-serif";
+        context.font = "600 11px system-ui, sans-serif";
         context.textAlign = "center";
         context.fillText(xLabel, (plot.left + plot.right) / 2, cssHeight - 10);
         context.save();
@@ -3067,11 +3561,12 @@
         context.rotate(-Math.PI / 2);
         context.fillText(yLabel, 0, 0);
         context.restore();
-        const detailMessage = mode === "residual"
-            ? "잔차가 0선을 중심으로 고르게 분포할수록 안정적입니다. 빨간 점은 MAE의 2배를 넘는 표본이며, 점을 누르면 하단 상세 행으로 이동합니다."
-            : "점이 기준선(y=x)에 가까울수록 예측 오차가 작습니다. 빨간 점은 MAE의 2배를 넘는 표본이며, 점을 누르면 하단 상세 행으로 이동합니다.";
+        const referenceMessage = mode === "residual"
+            ? "주황 점선은 잔차 0입니다."
+            : "주황 점선(y=x)에 가까울수록 예측 오차가 작습니다.";
+        const detailMessage = `${referenceMessage} ${R.getRegressionDiagnosticMessage(diagnostic)}`;
         setText(message, detailMessage);
-        canvas.setAttribute("aria-label", `${targetLabel} ${mode === "residual" ? "예측값과 잔차" : "실제값과 예측값"} 비교 그래프, ${points.length}개 표본. 점을 선택하면 하단 상세 행으로 이동합니다.`);
+        canvas.setAttribute("aria-label", `${targetLabel} ${mode === "residual" ? "예측값과 잔차" : "실제값과 예측값"} 비교 그래프, ${points.length}개 표본. ${diagnostic.ok ? `95% PI 밖 ${diagnostic.outsideCount}개.` : "경계 산정 불가."} ${detailMessage}`);
     }
 
     function selectResultTab(tabName) {
@@ -3091,7 +3586,7 @@
 
     function handleResultTabKeydown(event) {
         if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-        const tabs = [...document.querySelectorAll("[data-result-tab]")];
+        const tabs = [...document.querySelectorAll("[data-result-tab]")].filter((tab) => !tab.hidden);
         if (!tabs.length) return;
         const currentIndex = Math.max(0, tabs.indexOf(event.currentTarget));
         let nextIndex = currentIndex;
@@ -3118,23 +3613,26 @@
 
     function renderInlineRuleContent(kind, index, rule) {
         const comments = getResultColumnComments(kind);
-        if (kind === "categorical") {
-            const resultText = rule.RESULT_TEXT
-                || [rule.RESULT_COLUMN, rule.RESULT_VALUE].filter((value) => value !== null && value !== undefined && value !== "").join(" = ")
-                || "-";
-            return `<div class="qe-quick-insight">
-                    <strong>핵심 안내</strong>
-                    <span>IF 조건을 만족하지만 예상 결과와 다른 데이터를 위반으로 확인합니다.</span>
-                </div>
+        if (kind === "categorical" || window.RuleResultCommon.isFormula(rule)) {
+            const common = window.RuleResultCommon;
+            const mixed = common.isXai(rule);
+            const resultText = mixed ? common.t("Anomaly candidate") : (rule.RESULT_TEXT
+                || [rule.RESULT_COLUMN, rule.RESULT_VALUE].filter((value) => value != null && value !== "").join(" = ") || "-");
+            const pattern = common.isPattern(rule);
+            const metrics = mixed || pattern ? common.metrics(rule) : [
+                { label: common.t("Confidence"), value: R.formatRatio(rule.RULE_CONFIDENCE) },
+                { label: common.t("Lift"), value: R.formatNumber(rule.RULE_LIFT, 3) }
+            ];
+            return `<div class="qe-quick-insight"><strong>${R.escapeHtml(common.t("Details"))}</strong>
+                <span>${R.escapeHtml(mixed || pattern ? common.ruleNotes(rule, resultData.mixedXai?.summary) : common.t("IF is satisfied but THEN is not satisfied."))}</span></div>
                 <dl class="qe-rule-fields qe-rule-fields--inline">
-                    <div class="is-wide"><dt>조건</dt><dd>${R.escapeHtml(R.annotateColumnText(rule.CONDITION_TEXT || rule.CONDITION_COLUMN || "-", comments))}</dd></div>
-                    <div class="is-wide"><dt>예상 결과</dt><dd>${R.escapeHtml(R.annotateColumnText(resultText, comments))}</dd></div>
-                    <div><dt>결과 컬럼</dt><dd>${R.escapeHtml(R.getColumnLabel(rule.RESULT_COLUMN || "-", comments))}</dd></div>
-                    <div><dt>신뢰도</dt><dd>${R.escapeHtml(R.formatRatio(rule.RULE_CONFIDENCE))}</dd></div>
-                    <div><dt>향상도</dt><dd>${R.escapeHtml(R.formatNumber(rule.RULE_LIFT, 3))}</dd></div>
-                    <div><dt>조건 수</dt><dd>${R.escapeHtml(R.formatNumber(rule.CONDITION_COUNT, 0))}개</dd></div>
-                </dl>
-                ${renderRuleViolationAction(kind, index, rule)}`;
+                    <div class="is-wide"><dt>${R.escapeHtml(common.t("Condition"))} · IF</dt><dd>${R.escapeHtml(R.annotateColumnText(rule.CONDITION_TEXT || rule.CONDITION_COLUMN || "-", comments))}</dd></div>
+                    <div class="is-wide"><dt>${R.escapeHtml(common.t("Result"))} · THEN</dt><dd>${R.escapeHtml(R.annotateColumnText(resultText, comments))}</dd></div>
+                    <div><dt>${R.escapeHtml(common.t("Result column"))}</dt><dd>${R.escapeHtml(R.getColumnLabel(rule.RESULT_COLUMN || "-", comments))}</dd></div>
+                    <div><dt>${R.escapeHtml(common.t("Condition count"))}</dt><dd>${R.escapeHtml(R.formatNumber(rule.CONDITION_COUNT, 0))}</dd></div>
+                    ${metrics.map((m) => `<div><dt>${R.escapeHtml(m.label)}</dt><dd>${R.escapeHtml(m.value)}</dd></div>`).join("")}
+                    ${mixed || pattern ? `<div><dt>${R.escapeHtml(common.t("Validation status"))}</dt><dd>${R.escapeHtml(common.validationStatus(rule.VALIDATION_STATUS))}</dd></div>` : ""}
+                </dl>${renderRuleViolationAction(kind, index, rule)}`;
         }
 
         const features = Array.isArray(rule.FEATURE_LIST)
@@ -3170,7 +3668,7 @@
         const body = byId("qeCategoricalDetailBody");
         if (!panel || !body || !rule) return;
         categoricalDetail = { ruleId: String(rule.RULE_ID || ""), ruleIndex: normalizedIndex };
-        setText(byId("qeCategoricalDetailTitle"), `범주형 규칙 상세 · ${rule.RULE_ID || normalizedIndex + 1}`);
+        setText(byId("qeCategoricalDetailTitle"), `${window.RuleResultCommon.t("IF–THEN rule detail")} · ${rule.RULE_ID || normalizedIndex + 1}`);
         body.innerHTML = renderInlineRuleContent("categorical", normalizedIndex, rule);
         panel.hidden = false;
         if (options.scroll !== false) {
@@ -3189,11 +3687,13 @@
 
     function renderRuleViolationAction(kind, index, rule) {
         const count = getRuleViolationCount(kind, rule);
-        const countLabel = count === null ? "저장된 위반 데이터를 조회합니다." : `저장된 위반 ${R.formatNumber(count, 0)}건`;
+        const mixed = window.RuleResultCommon.isXai(rule);
+        const pattern = window.RuleResultCommon.isPattern(rule);
+        const countLabel = mixed || pattern ? `${window.RuleResultCommon.t(pattern ? "Violation rows" : "Candidate rows")} ${R.formatNumber(count, 0)}` : (count === null ? "저장된 위반 데이터를 조회합니다." : `저장된 위반 ${R.formatNumber(count, 0)}건`);
         return `<div class="qe-rule-violation-actions">
             <span>${R.escapeHtml(countLabel)}</span>
             <button type="button" class="qe-secondary-button" data-load-violations="true"
-                    data-rule-kind="${R.escapeHtml(kind)}" data-rule-index="${index}">위반 데이터 조회</button>
+                    data-rule-kind="${R.escapeHtml(kind)}" data-rule-index="${index}">${R.escapeHtml(window.RuleResultCommon.t(mixed ? "View candidates" : "View violations"))}</button>
         </div>
         <div class="qe-rule-violation-result" data-violation-result data-rule-kind="${R.escapeHtml(kind)}" hidden></div>`;
     }
@@ -3245,6 +3745,7 @@
                 targetOwner: artifact.targetOwner || state.tableOwner,
                 targetTable: artifact.targetTable || state.tableName,
                 ruleModelName: state.resultArtifacts?.categorical?.objectName,
+                mixedPattern: state.resultArtifacts?.mixedPattern,
                 ruleId: rule.RULE_ID,
                 flowRunId: state.flowRunId,
                 page,
@@ -3270,15 +3771,16 @@
         const pageSize = Number(response?.pageSize || 20);
         const totalPages = Math.max(1, Math.ceil(total / pageSize));
         if (!rows.length) {
-            target.innerHTML = "<p>이 규칙에서 저장된 위반 데이터가 없습니다.</p>";
+            target.innerHTML = `<p>${R.escapeHtml(response?.mixedXai ? window.RuleResultCommon.t("No saved candidate rows for this rule.") : window.RuleResultCommon.t("No saved violation rows for this rule."))}</p>`;
             return;
         }
-        const preferred = kind === "categorical"
-            ? ["CASE_ID", "RESULT_COLUMN", "EXPECTED_VALUE", "ACTUAL_VALUE", "VIOLATION_SCORE", "RULE_CONFIDENCE", "RULE_LIFT", "VIOLATION_REASON"]
+        const formula = rows.every((row) => window.RuleResultCommon.isFormula(row));
+        const preferred = kind === "categorical" || formula
+            ? ["CASE_ID", "RESULT_COLUMN", "EXPECTED_VALUE", "ACTUAL_VALUE", "EXPECTED_LOWER", "EXPECTED_UPPER", "RESIDUAL", "ABS_ERROR", "VIOLATION_SCORE", "RULE_CONFIDENCE", "RULE_LIFT", "VIOLATION_REASON"]
             : ["CASE_ID", "TARGET_COLUMN", "PREDICTED_VALUE", "ACTUAL_VALUE", "ABS_ERROR", "ERROR_PCT", "TOLERANCE_PCT", "VIOLATION_SCORE", "VIOLATION_REASON"];
         const available = new Set(Object.keys(rows[0] || {}).map((key) => key.toUpperCase()));
-        const columns = preferred.filter((key) => available.has(key));
-        const labels = {
+        const columns = (response?.mixedXai ? [...preferred, ...new Set(rows.flatMap(Object.keys))].filter((key, i, all) => available.has(key.toUpperCase()) && all.indexOf(key) === i) : preferred.filter((key) => available.has(key))).filter((key) => !formula || key !== "RULE_LIFT");
+        const labels = response?.mixedXai || response?.mixedPattern ? window.RuleResultCommon.candidateColumnLabels() : {
             CASE_ID: "행 식별값", RESULT_COLUMN: "결과 컬럼", TARGET_COLUMN: "대상 컬럼",
             EXPECTED_VALUE: "기대값", PREDICTED_VALUE: "예측값", ACTUAL_VALUE: "실제값",
             ABS_ERROR: "절대 오차", ERROR_PCT: "오차율", TOLERANCE_PCT: "허용 오차율",
@@ -3287,14 +3789,22 @@
         };
         const comments = getResultColumnComments(kind);
         const numericColumns = R.getViolationNumericColumns(kind);
+        ["EXPECTED_LOWER", "EXPECTED_UPPER", "RESIDUAL", "ABS_ERROR"].forEach((column) => numericColumns.add(column));
+        if (rows.some((row) => window.RuleResultCommon.isFormula(row))) labels.RULE_CONFIDENCE = window.RuleResultCommon.t("Within-tolerance rate");
         const renderValue = (row, column) => {
             const value = row[column];
+            if (column === "ACTUAL_VALUE") return window.RuleResultCommon.actualValue(value);
+            if (column === "VIOLATION_REASON") return window.RuleResultCommon.violationReason(value, row);
+            if (value == null || value === "") return "-";
+            if (column === "MODEL_AGREEMENT") return formatPercent(value);
             if (["RESULT_COLUMN", "TARGET_COLUMN"].includes(column)) return R.getColumnLabel(value, comments);
             if (["ERROR_PCT", "TOLERANCE_PCT"].includes(column)) return R.formatRatio(value, 2);
             if (numericColumns.has(column)) return formatDiagnosticNumber(value, 5);
             return value == null || value === "" ? "-" : String(value);
         };
-        const summaryMarkup = `<strong>위반 데이터</strong><span>전체 ${R.escapeHtml(R.formatNumber(total, 0))}건 · ${page}/${totalPages} 페이지</span>`;
+        const summaryMarkup = response?.mixedXai
+            ? `<strong>${R.escapeHtml(window.RuleResultCommon.t("Candidate preview"))}</strong><span>${R.escapeHtml(R.formatNumber(total, 0))} · ${page}/${totalPages}</span><p>${R.escapeHtml(window.RuleResultCommon.t("Counts are rule-row matches; one row may match several rules. Only a bounded preview is stored."))}</p>`
+            : `<strong>${R.escapeHtml(window.RuleResultCommon.t(response?.mixedPattern ? "Violation preview" : "Violation data"))}</strong><span>${R.escapeHtml(R.formatNumber(total, 0))} · ${page}/${totalPages}</span>${response?.mixedPattern ? `<p>${R.escapeHtml(window.RuleResultCommon.t("Counts are rule-row matches; one row may match several rules. Only a bounded preview is stored."))}</p>` : ""}`;
         const gridMarkup = `
             <table class="qe-detail-table">
                 <thead><tr><th>No</th>${columns.map((column) => `<th>${R.escapeHtml(labels[column] || column)}</th>`).join("")}</tr></thead>
@@ -3305,9 +3815,9 @@
             </table>`;
         const paginationMarkup = `
                 <button type="button" class="qe-secondary-button" data-violation-page="${Math.max(1, page - 1)}"
-                        data-rule-kind="${R.escapeHtml(kind)}" data-rule-index="${index}" ${page <= 1 ? "disabled" : ""}>이전</button>
+                        data-rule-kind="${R.escapeHtml(kind)}" data-rule-index="${index}" ${page <= 1 ? "disabled" : ""}>${R.escapeHtml(window.RuleResultCommon.t("Previous"))}</button>
                 <button type="button" class="qe-secondary-button" data-violation-page="${Math.min(totalPages, page + 1)}"
-                        data-rule-kind="${R.escapeHtml(kind)}" data-rule-index="${index}" ${page >= totalPages ? "disabled" : ""}>다음</button>`;
+                        data-rule-kind="${R.escapeHtml(kind)}" data-rule-index="${index}" ${page >= totalPages ? "disabled" : ""}>${R.escapeHtml(window.RuleResultCommon.t("Next"))}</button>`;
         const summaryTarget = target.querySelector("[data-violation-summary]");
         const gridTarget = target.querySelector("[data-violation-grid]");
         const paginationTarget = target.querySelector("[data-violation-pagination]");
@@ -3475,7 +3985,8 @@
                 columnTypeFinal: null
             };
             columnTypeDirtyChanges.clear();
-            continuousDetailRequestId += 1;
+            cancelContinuousDetailRequest();
+            destroyFormulaChart();
             continuousDetail = {
                 ruleId: "", ruleIndex: -1, rule: null, rows: [], evaluatedRows: [],
                 metrics: null, sampleCount: 0, hasMore: false, error: "",
@@ -3484,6 +3995,7 @@
             state = {
                 ...initialState(),
                 ...restored,
+                processType: normalizeProcessType(restored.processType),
                 version: STATE_VERSION,
                 targetContextId: client.targetConnectionId,
                 historyView: true,
@@ -3492,6 +4004,8 @@
                 completedSteps: Array.isArray(restored.completedSteps) ? restored.completedSteps : [],
                 jobIds: Array.isArray(restored.jobIds) ? restored.jobIds : []
             };
+            if (state.lastRunStatus === "PAUSED") state.status = "paused";
+            if (state.lastRunStatus === "CANCELLED") state.status = "stopped";
             lastRenderedStep = -1;
             persistState();
             renderResultsEmpty();
@@ -3500,13 +4014,14 @@
             byId("qeRunHistoryDialog")?.close();
             window.scrollTo({ top: 0, behavior: "smooth" });
 
+            if (R.ACTIVE_STATUSES.has(R.normalizeStatus(state.lastRunStatus))) { await monitorActiveRun(); return; }
             if (!R.ACTIVE_STATUSES.has(R.normalizeStatus(state.lastRunStatus))) {
                 pipelineBusy = true;
                 updateActionState();
                 try {
                     await loadResults({
                         showPanelLoading: true,
-                        loadingMessage: `실행 #${runId}의 컬럼 유형·기초통계·규칙 결과를 불러오고 있습니다.`
+                        loadingMessage: isMixedXai() ? `실행 #${runId}의 기초통계·관계·규칙 결과를 불러오고 있습니다.` : `실행 #${runId}의 컬럼 유형·기초통계·규칙 결과를 불러오고 있습니다.`
                     });
                     if (R.normalizeStatus(state.lastRunStatus) === "SUCCESS") {
                         state.status = state.resultWarning ? "warning" : "success";
@@ -3516,7 +4031,7 @@
                     renderState(
                         R.normalizeStatus(state.lastRunStatus) === "SUCCESS"
                             ? (state.resultWarning || `실행 #${runId}의 저장된 분석 결과를 불러왔습니다.`)
-                            : `실행 #${runId}의 컬럼 유형 결과를 불러왔습니다. M03001 성공 시 편집·재실행할 수 있습니다.`
+                            : isMixedXai() ? `실행 #${runId}의 저장된 혼합형 분석 결과를 불러왔습니다. 완료되지 않은 단계부터 재실행할 수 있습니다.` : `실행 #${runId}의 컬럼 유형 결과를 불러왔습니다. M03001 성공 시 편집·재실행할 수 있습니다.`
                     );
                 } catch (error) {
                     if (R.normalizeStatus(state.lastRunStatus) === "SUCCESS") state.status = "warning";
@@ -3591,7 +4106,8 @@
         };
         columnTypeDirtyChanges.clear();
         resetRuleDistributionFilters();
-        continuousDetailRequestId += 1;
+        cancelContinuousDetailRequest();
+        destroyFormulaChart();
         continuousDetail = {
             ruleId: "", ruleIndex: -1, rule: null, rows: [], evaluatedRows: [],
             metrics: null, sampleCount: 0, hasMore: false, error: "",
@@ -3612,6 +4128,12 @@
     }
 
     function renderResultsEmpty() {
+        cancelContinuousDetailRequest();
+        destroyFormulaChart();
+        ["qeMixedXaiKpis", "qeMixedXaiRules", "qeMixedXaiRows", "qeMixedEarlyStages"].forEach((id) => {
+            const target = byId(id);
+            if (target) target.innerHTML = "";
+        });
         setResultsLoading(false);
         setHidden(byId("resultsSection", "qeResultsPanel"), true);
         setHidden(byId("qeCategoricalDetail"), true);
@@ -3652,6 +4174,7 @@
             updateActionState();
             try {
                 await loadResults();
+                controlCheckpoint();
                 if (!state.completedSteps.includes(7)) state.completedSteps.push(7);
                 state.status = state.resultWarning ? "warning" : "success";
                 state.error = "";
@@ -3674,7 +4197,7 @@
     }
 
     function validateHistoryRerun() {
-        if (!state.historyView || !state.projectId || !state.scenarioId || !state.flowId || !state.flowRunId) {
+        if (!state.projectId || !state.scenarioId || !state.flowId || !state.flowRunId) {
             throw new Error("재실행할 과거 프로젝트·시나리오·FLOW 정보를 확인할 수 없습니다.");
         }
         const runStatus = R.normalizeStatus(state.lastRunStatus || currentSnapshot?.run?.STATUS || "");
@@ -3774,6 +4297,7 @@
             completeStep(6, "실패 단계부터 규칙 발굴 재실행이 완료되었습니다.");
             setStep(7, "재실행 결과를 다시 불러오고 있습니다.", 0.5);
             await loadResults();
+            controlCheckpoint();
             completeStep(7, "재실행 결과 분석이 완료되었습니다.");
             state.status = state.resultWarning ? "warning" : "success";
             state.currentStep = 7;
@@ -3783,6 +4307,7 @@
             renderState(state.resultWarning || "실패 단계부터 재실행이 완료되었습니다.");
             showToast(state.resultWarning || "실패 단계부터 재실행이 완료되었습니다.", state.resultWarning ? "warning" : "success");
         } catch (error) {
+            if (error?.name === "AbortError") return;
             state.status = "failed";
             state.error = error?.message || "실패 단계부터 재실행 중 오류가 발생했습니다.";
             state.failedStageRerunRequestToken = "";
@@ -3799,6 +4324,19 @@
     }
 
     function bindEvents() {
+        byId("qePauseButton")?.addEventListener("click", () => requestPipelineControl("PAUSE"));
+        byId("qeStopButton")?.addEventListener("click", () => requestPipelineControl("STOP"));
+        byId("qeResumeButton")?.addEventListener("click", resumePipeline);
+        byId("qeProcessType")?.addEventListener("change", (event) => {
+            if (!event.target.matches('input[name="processType"]')) return;
+            if (pipelineBusy || state.historyView || state.scenarioTableId || state.flowId) {
+                renderProcessSelection();
+                return;
+            }
+            state.processType = normalizeProcessType(event.target.value);
+            persistState();
+            renderState();
+        });
         const fileInput = byId("sourceFile", "qeFileInput");
         fileInput?.addEventListener("change", () => selectFile(fileInput.files?.[0]));
         const dropZone = byId("fileDropZone", "qeDropZone");
@@ -3984,13 +4522,7 @@
             const row = event.target.closest("tr[data-continuous-row-index]");
             if (row) selectContinuousSampleRow(Number(row.dataset.continuousRowIndex), { scroll: false });
         });
-        byId("qeContinuousSampleTable")?.addEventListener("keydown", (event) => {
-            if (!["Enter", " "].includes(event.key)) return;
-            const row = event.target.closest("tr[data-continuous-row-index]");
-            if (!row) return;
-            event.preventDefault();
-            selectContinuousSampleRow(Number(row.dataset.continuousRowIndex), { scroll: false });
-        });
+        byId("qeContinuousSampleTable")?.addEventListener("keydown", handleContinuousChartKeydown);
         byId("qeContinuousDetailReload")?.addEventListener("click", () => {
             const index = Number(valueOf("qeContinuousRuleSelect") || continuousDetail.ruleIndex || 0);
             loadContinuousDetail(index, true).catch((error) => showToast(error.message, "error"));
@@ -3999,10 +4531,9 @@
             const toast = byId("toast", "qeToastRegion");
             if (toast) toast.hidden = true;
         });
-        window.addEventListener("resize", () => {
-            window.clearTimeout(chartResizeTimer);
-            chartResizeTimer = window.setTimeout(drawContinuousDetailChart, 120);
-        });
+        bindContinuousChartResize();
+        window.addEventListener("pagehide", destroyContinuousChartResize);
+        window.addEventListener("pageshow", () => { bindContinuousChartResize(); scheduleContinuousChartDraw(); });
         document.addEventListener("visibilitychange", () => {
             if (!document.hidden && !state.historyView && state.flowRunId && R.ACTIVE_STATUSES.has(R.normalizeStatus(state.lastRunStatus))) {
                 fetchSnapshot({ silent: true }).catch(() => {});
@@ -4024,6 +4555,8 @@
             window.location.reload();
         });
         window.addEventListener("beforeunload", () => {
+            cancelContinuousDetailRequest();
+            destroyFormulaChart();
             targetContextChannel?.close();
             targetContextChannel = null;
         }, { once: true });
@@ -4052,7 +4585,8 @@
                     columnTypeFinal: null
                 };
                 columnTypeDirtyChanges.clear();
-                continuousDetailRequestId += 1;
+                cancelContinuousDetailRequest();
+                destroyFormulaChart();
                 continuousDetail = {
                     ruleId: "", ruleIndex: -1, rule: null, rows: [], evaluatedRows: [],
                     metrics: null, sampleCount: 0, hasMore: false, error: "",
@@ -4077,8 +4611,10 @@
             if (state.historyView && state.flowRunId) {
                 try {
                     await fetchSnapshot({ silent: true });
+                    if (R.ACTIVE_STATUSES.has(R.normalizeStatus(state.lastRunStatus))) { await monitorActiveRun(); return; }
                     if (!R.ACTIVE_STATUSES.has(R.normalizeStatus(state.lastRunStatus))) {
                         await loadResults();
+                        controlCheckpoint();
                         if (R.normalizeStatus(state.lastRunStatus) === "SUCCESS") {
                             state.status = state.resultWarning ? "warning" : "success";
                         }
@@ -4091,34 +4627,13 @@
                     persistState();
                     renderState("과거 실행의 일부 결과를 불러오지 못했습니다.");
                 }
-            } else if (state.flowRunId && ["running", "failed"].includes(state.status)) {
-                pipelineBusy = true;
-                state.status = "running";
-                const generation = ++pollGeneration;
-                updateActionState();
-                try {
-                    await pollRunUntilTerminal(generation);
-                    if (!state.completedSteps.includes(6)) state.completedSteps.push(6);
-                    state.currentStep = 7;
-                    await loadResults();
-                    if (!state.completedSteps.includes(7)) state.completedSteps.push(7);
-                    state.status = state.resultWarning ? "warning" : "success";
-                    persistState();
-                    renderState(state.resultWarning || "자동 실행과 결과 분석이 완료되었습니다.");
-                } catch (error) {
-                    state.status = "failed";
-                    state.error = error.message;
-                    persistState();
-                    renderState();
-                } finally {
-                    pipelineBusy = false;
-                    updateActionState();
-                    renderColumnTypeFinal();
-                }
+            } else if (state.flowRunId && ["running", "failed", "paused", "stopped"].includes(state.status)) {
+                await monitorActiveRun();
             } else if (state.flowRunId && ["success", "warning"].includes(state.status)) {
                 try {
                     await fetchSnapshot({ silent: true });
                     await loadResults();
+                    controlCheckpoint();
                     state.status = state.resultWarning ? "warning" : "success";
                     state.error = "";
                     persistState();
@@ -4131,6 +4646,7 @@
                 }
             }
         } catch (error) {
+            if (error?.name === "AbortError") return;
             state.status = "failed";
             state.error = error.message;
             const sessionTarget = byId("sessionStatus", "qeSessionStatus");

@@ -276,7 +276,8 @@ SELECT R.TARGET_OWNER AS OWNER_NAME
 WITH SOURCE_RULES AS
 (
     SELECT 'ASSOCIATION' AS SOURCE_RULE_TYPE
-         , 'CATEGORICAL' AS RULE_GROUP_CODE
+         , CASE WHEN R.RULE_SOURCE = 'MIXED_PATTERN_TREE' AND SUBSTR(R.RULE_ID, 1, 14) = 'MIXED_FORMULA_'
+                THEN 'CONTINUOUS' ELSE 'CATEGORICAL' END AS RULE_GROUP_CODE
          , R.RUN_SOURCE_TYPE
          , R.RUN_ID
          , R.OWNER AS SOURCE_OWNER
@@ -304,7 +305,9 @@ WITH SOURCE_RULES AS
          , R.CREATE_DT
       FROM "INIT$_TB_RULEDISC_ASSOC_SUM" R
      WHERE 1=1
-       AND :ruleGroup IN ('ALL', 'CATEGORICAL')
+       AND (:ruleGroup = 'ALL' OR :ruleGroup =
+            CASE WHEN R.RULE_SOURCE = 'MIXED_PATTERN_TREE' AND SUBSTR(R.RULE_ID, 1, 14) = 'MIXED_FORMULA_'
+                 THEN 'CONTINUOUS' ELSE 'CATEGORICAL' END)
        AND R.RUN_SOURCE_TYPE = :runSourceType
        AND R.RUN_ID = :runId
        AND (:targetOwner IS NULL OR R.TARGET_OWNER = :targetOwner)
@@ -719,7 +722,9 @@ SELECT *
 SELECT (
            SELECT COUNT(*)
              FROM "INIT$_TB_RULEDISC_ASSOC_SUM" R
-            WHERE :ruleGroup IN ('ALL', 'CATEGORICAL')
+            WHERE (:ruleGroup = 'ALL' OR :ruleGroup =
+                   CASE WHEN R.RULE_SOURCE = 'MIXED_PATTERN_TREE' AND SUBSTR(R.RULE_ID, 1, 14) = 'MIXED_FORMULA_'
+                        THEN 'CONTINUOUS' ELSE 'CATEGORICAL' END)
               AND R.RUN_SOURCE_TYPE = :runSourceType
               AND R.RUN_ID = :runId
               AND (:targetOwner IS NULL OR R.TARGET_OWNER = :targetOwner)
@@ -976,6 +981,7 @@ SELECT R.EDIT_RULE_ID
 
 -- [MCOMMON_EDIT_RULE_SOURCE_ASSOC_DETAIL]
 SELECT R.CONDITION_TEXT AS RULE_EXPRESSION
+     , R.RULE_SOURCE
      , R.RESULT_VALUE AS EXPECTED_VALUE
      , R.RULE_SUPPORT
      , R.RULE_CONFIDENCE
@@ -989,6 +995,27 @@ SELECT R.CONDITION_TEXT AS RULE_EXPRESSION
    AND R.TARGET_OWNER = :targetOwner
    AND R.TARGET_TABLE = :targetTable
    AND R.RESULT_COLUMN = :targetColumn
+;
+
+-- [MCOMMON_EDIT_PATTERN_SOURCE_DETAIL]
+SELECT R.CONDITION_JSON
+     , R.RESULT_TEXT AS RESULT_EXPRESSION
+     , R.RESULT_JSON
+     , R.VALIDATION_JSON
+     , R.RESULT_KIND
+     , R.VIOLATION_COUNT
+     , R.RULE_SOURCE
+  FROM "INIT$_TB_RULEDISC_ASSOC_SUM" R
+ WHERE 1=1
+   AND R.RUN_SOURCE_TYPE = :runSourceType
+   AND R.RUN_ID = :runId
+   AND R.OWNER = :sourceOwner
+   AND R.MODEL_NAME = :sourceObjectName
+   AND R.RULE_ID = :sourceRuleId
+   AND R.TARGET_OWNER = :targetOwner
+   AND R.TARGET_TABLE = :targetTable
+   AND R.RESULT_COLUMN = :targetColumn
+   AND R.RULE_SOURCE = 'MIXED_PATTERN_TREE'
 ;
 
 -- [MCOMMON_EDIT_RULE_SOURCE_SYMBOLIC_DETAIL]
@@ -1270,6 +1297,77 @@ SELECT /*+ NO_PARALLEL(T) */ ORA_HASH(ROWIDTOCHAR(T.ROWID), 4294967295) AS VIOLA
        OR UPPER({caseIdExpression}) LIKE '%' || UPPER(:keyword) || '%'
        OR UPPER(TO_CHAR(T.{targetColumn})) LIKE '%' || UPPER(:keyword) || '%'
        OR UPPER(TO_CHAR(:expectedValue)) LIKE '%' || UPPER(:keyword) || '%'
+       )
+;
+
+-- [MCOMMON_EDIT_LIVE_VIOLATION_PATTERN]
+SELECT /*+ NO_PARALLEL(T) */ ORA_HASH(ROWIDTOCHAR(T.ROWID), 4294967295) AS VIOLATION_ID
+     , CAST(NULL AS VARCHAR2(30)) AS RUN_SOURCE_TYPE
+     , CAST(NULL AS NUMBER) AS RUN_ID
+     , :targetOwner AS TARGET_OWNER
+     , :targetTable AS TARGET_TABLE
+     , :targetOwner AS RULE_OWNER
+     , :targetTable AS SOURCE_OBJECT_NAME
+     , :ruleId AS RULE_ID
+     , {caseIdExpression} AS CASE_ID
+     , {caseRowidExpression} AS CASE_ROWID
+     , :conditionText AS CONDITION_TEXT
+     , :targetColumnName AS TARGET_COLUMN
+     , :expectedValue AS EXPECTED_VALUE
+     , CAST(NULL AS NUMBER) AS PREDICTED_VALUE
+     , TO_CHAR(T.{targetColumn}) AS ACTUAL_VALUE
+     , CAST(NULL AS NUMBER) AS ABS_ERROR
+     , CAST(NULL AS NUMBER) AS ERROR_PCT
+     , 1 AS VIOLATION_SCORE
+     , :violationReason AS VIOLATION_REASON
+     , SYSTIMESTAMP AS CREATE_DT
+  FROM {targetObject} T
+ WHERE ({conditionExpression})
+   AND CASE WHEN ({resultExpression}) THEN 0 ELSE 1 END = 1
+   AND (
+          :keyword IS NULL
+       OR UPPER({caseIdExpression}) LIKE '%' || UPPER(:keyword) || '%'
+       OR UPPER(TO_CHAR(T.{targetColumn})) LIKE '%' || UPPER(:keyword) || '%'
+       OR UPPER(TO_CHAR(:expectedValue)) LIKE '%' || UPPER(:keyword) || '%'
+       )
+;
+
+-- [MCOMMON_EDIT_PATTERN_REPLACEMENT]
+SELECT {formulaExpression} AS EXPECTED_VALUE
+  FROM {targetObject} T
+ WHERE T.{trackingColumn} = :sourceRowid
+   AND ({conditionExpression})
+;
+
+-- [MCOMMON_EDIT_LIVE_VIOLATION_FORMULA_PATTERN]
+SELECT /*+ NO_PARALLEL(T) */ ORA_HASH(ROWIDTOCHAR(T.ROWID), 4294967295) AS VIOLATION_ID
+     , CAST(NULL AS VARCHAR2(30)) AS RUN_SOURCE_TYPE
+     , CAST(NULL AS NUMBER) AS RUN_ID
+     , :targetOwner AS TARGET_OWNER
+     , :targetTable AS TARGET_TABLE
+     , :targetOwner AS RULE_OWNER
+     , :targetTable AS SOURCE_OBJECT_NAME
+     , :ruleId AS RULE_ID
+     , {caseIdExpression} AS CASE_ID
+     , {caseRowidExpression} AS CASE_ROWID
+     , :conditionText AS CONDITION_TEXT
+     , :targetColumnName AS TARGET_COLUMN
+     , TO_CHAR({formulaExpression}) AS EXPECTED_VALUE
+     , {formulaExpression} AS PREDICTED_VALUE
+     , TO_CHAR(T.{targetColumn}) AS ACTUAL_VALUE
+     , ABS({actualNumericExpression} - ({formulaExpression})) AS ABS_ERROR
+     , CAST(NULL AS NUMBER) AS ERROR_PCT
+     , ABS({actualNumericExpression} - ({formulaExpression})) AS VIOLATION_SCORE
+     , :violationReason AS VIOLATION_REASON
+     , SYSTIMESTAMP AS CREATE_DT
+  FROM {targetObject} T
+ WHERE ({conditionExpression})
+   AND CASE WHEN ({resultExpression}) THEN 0 ELSE 1 END = 1
+   AND (
+          :keyword IS NULL
+       OR UPPER({caseIdExpression}) LIKE '%' || UPPER(:keyword) || '%'
+       OR UPPER(TO_CHAR(T.{targetColumn})) LIKE '%' || UPPER(:keyword) || '%'
+       OR UPPER(TO_CHAR({formulaExpression})) LIKE '%' || UPPER(:keyword) || '%'
        )
 ;
 

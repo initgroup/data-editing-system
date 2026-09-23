@@ -39,12 +39,13 @@ def get_artifact_definition(artifact_name: Any) -> Dict[str, Any]:
 
 
 def get_node_model_name(node: Dict[str, Any]) -> str:
-    return normalize_model_name(
-        node.get("execObjectName")
-        or node.get("EXEC_OBJECT_NAME")
-        or node.get("execMethod")
-        or node.get("EXEC_METHOD")
-    )
+    candidates = [normalize_model_name(node.get(key)) for key in
+                  ("execObjectName", "EXEC_OBJECT_NAME", "execMethod", "EXEC_METHOD")]
+    # A registered API can have its own resource name while executing a known method.
+    for name in candidates:
+        if name and get_model_contract(name):
+            return name
+    return next((name for name in candidates if name), "")
 
 
 def get_node_contract(node: Dict[str, Any]) -> Dict[str, Any]:
@@ -157,6 +158,11 @@ def build_ancestor_map(nodes: Iterable[Dict[str, Any]], edges: Iterable[Dict[str
 
 def validate_flow_contracts(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> List[str]:
     errors: List[str] = []
+    known_contracts = [get_node_contract(node) for node in nodes if get_node_contract(node)]
+    if any(contract.get("scenario") == "MIXED_XAI" for contract in known_contracts) and any(
+        contract.get("scenario") != "MIXED_XAI" for contract in known_contracts
+    ):
+        errors.append("Mixed XAI and legacy discovery models must use separate FLOW scenarios.")
     node_map = {str(node.get("nodeKey") or ""): node for node in nodes}
     ancestor_map = build_ancestor_map(nodes, edges)
 

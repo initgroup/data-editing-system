@@ -1498,7 +1498,7 @@
                     ...row,
                     RUN_ID: row.RUN_ID ?? row.SOURCE_RUN_ID,
                     RUN_SOURCE_TYPE: row.RUN_SOURCE_TYPE ?? row.SOURCE_RUN_SOURCE_TYPE,
-                    RULE_GROUP_CODE: row.SOURCE_RULE_TYPE === "SYMBOLIC" ? "CONTINUOUS" : "CATEGORICAL",
+                    RULE_GROUP_CODE: row.RESULT_KIND === "FORMULA" || row.SOURCE_RULE_TYPE === "SYMBOLIC" ? "CONTINUOUS" : "CATEGORICAL",
                     CONDITION_COUNT: row.CONDITION_COUNT ?? row.COMPLEXITY,
                     TARGET_COLUMN_COMMENT: row.TARGET_COLUMN_COMMENT
                         || row.COLUMN_COMMENTS?.[row.TARGET_COLUMN]
@@ -1574,7 +1574,7 @@
                     this.gridColumns = [
                         ...commonColumns,
                         { key: "RULE_EXPRESSION", label: "IF 조건", width: 320, className: "is-rule-detail", render: (value, row, index) => this.renderRulePreview(value, row, index, "IF") },
-                        { key: "EXPECTED_VALUE", label: "THEN 결과", width: 175, className: "is-rule-detail", render: (value, row, index) => this.renderRulePreview(`${row.TARGET_COLUMN} = ${value ?? "-"}`, row, index, "THEN") },
+                        { key: "EXPECTED_VALUE", label: "THEN 결과", width: 175, className: "is-rule-detail", render: (value, row, index) => this.renderRulePreview(row.RESULT_EXPRESSION || `${row.TARGET_COLUMN} = ${value ?? "-"}`, row, index, "THEN") },
                         { key: "RULE_SUPPORT", label: "Support", width: 70, className: "is-number", render: (value) => this.formatMetric(value) },
                         { key: "RULE_CONFIDENCE", label: "신뢰도", width: 66, className: "is-number", render: (value) => this.formatMetric(value) },
                         { key: "RULE_LIFT", label: "Lift", width: 58, className: "is-number", render: (value) => this.formatMetric(value) },
@@ -1584,7 +1584,7 @@
                     this.gridColumns = [
                         ...commonColumns,
                         { key: "RULE_EXPRESSION", label: "규칙 표현 (IF / f(X))", width: 330, className: "is-rule-detail", render: (value, row, index) => this.renderRulePreview(value, row, index, "IF") },
-                        { key: "EXPECTED_VALUE", label: "결과 / 예측 대상", width: 180, className: "is-rule-detail", render: (value, row, index) => this.renderRulePreview(`${row.TARGET_COLUMN} = ${value ?? "-"}`, row, index, "THEN") },
+                        { key: "EXPECTED_VALUE", label: "결과 / 예측 대상", width: 180, className: "is-rule-detail", render: (value, row, index) => this.renderRulePreview(row.RESULT_EXPRESSION || `${row.TARGET_COLUMN} = ${value ?? "-"}`, row, index, "THEN") },
                         { key: "RULE_CONFIDENCE", label: "신뢰도 / Score", width: 82, className: "is-number", render: (value) => this.formatMetric(value) },
                         ...decisionColumns
                     ];
@@ -3194,7 +3194,7 @@
                 const selectedType = String(singleRule?.SOURCE_RULE_TYPE || "").toUpperCase();
                 const ruleResult = selectedType === "SYMBOLIC"
                     ? `예측 대상 ${singleRule?.TARGET_COLUMN || "-"}`
-                    : `${singleRule?.TARGET_COLUMN || "-"} = ${singleRule?.EXPECTED_VALUE ?? "-"}`;
+                    : (singleRule?.RESULT_EXPRESSION || `${singleRule?.TARGET_COLUMN || "-"} = ${singleRule?.EXPECTED_VALUE ?? "-"}`);
                 const tableNames = [...new Set(
                     selectedRules.map(
                         (rule) => `${rule.TARGET_OWNER || "-"}.${rule.TARGET_TABLE || "-"}`
@@ -3443,13 +3443,21 @@
                     || (session && !["DRAFT", "EDITING", "VALIDATED"].includes(sessionStatus));
                 const hasSavedChange = Boolean(row.EDIT_CHANGE_ID)
                     || !["", "UNEDITED"].includes(String(row.CHANGE_STATUS || "").toUpperCase());
+                const requiresManualValue = row.AUTO_REPLACE_YN === "N" || ["RANGE", "FORMULA"].includes(row.RESULT_KIND);
                 const suggestedValue = hasSavedChange
                     ? row.CURRENT_VALUE
-                    : (row.EXPECTED_VALUE ?? row.CURRENT_VALUE ?? row.ACTUAL_VALUE ?? "");
+                    : (requiresManualValue
+                        ? (row.CURRENT_VALUE ?? row.ACTUAL_VALUE ?? "")
+                        : (row.EXPECTED_VALUE ?? row.CURRENT_VALUE ?? row.ACTUAL_VALUE ?? ""));
+                const editorTitle = !row.CASE_ROWID
+                    ? this.pageLabel("editRowidMissing", "원본 ROWID가 없어 수정할 수 없습니다.")
+                    : requiresManualValue
+                        ? (row.RESULT_KIND === "FORMULA" ? this.pageLabel("formulaReplacementHelp", "수식 예측값은 자동 교정값이 아닙니다. 원본 값과 허용 오차를 확인하여 실제 수정값을 입력하세요.") : this.pageLabel("rangeReplacementHelp", "허용 범위 규칙에는 단일 교정값이 없습니다. 범위 안의 실제 수정값을 입력하세요."))
+                        : this.pageLabel("editReplacementHelp", "INITDN$에 저장할 수정값");
                 return `
                     <span class="edit-work-inline-editor">
-                        <input id="editValue-${PAGE_CODE}-${index}" value="${this.escapeHtml(suggestedValue ?? "")}" ${disabled ? "disabled" : ""} title="${row.CASE_ROWID ? "INITDN$에 저장할 수정값" : "원본 ROWID가 없어 수정할 수 없습니다."}">
-                        <button type="button" class="is-primary" onclick="${PAGE_CODE}.saveViolationChange(${index})" ${disabled ? "disabled" : ""}>수정 저장</button>
+                        <input id="editValue-${PAGE_CODE}-${index}" value="${this.escapeHtml(suggestedValue ?? "")}" ${disabled ? "disabled" : ""} title="${this.escapeHtml(editorTitle)}">
+                        <button type="button" class="is-primary" onclick="${PAGE_CODE}.saveViolationChange(${index})" ${disabled ? "disabled" : ""}>${this.escapeHtml(this.pageLabel("buttonSaveCorrection", "수정 저장"))}</button>
                     </span>
                 `;
             },
@@ -4254,9 +4262,13 @@
                         [
                             { label: this.pageLabel("analysisRuleId", "규칙 ID"), value: (row) => this.analysisRuleIdentifier(row) },
                             { label: this.pageLabel("analysisTargetColumn", "대상 컬럼"), value: (row) => row.TARGET_COLUMN || "-" },
-                            { label: this.pageLabel("analysisRuleExpression", "수식"), value: (row) => row.RULE_EXPRESSION || "-" },
+                            { label: this.pageLabel("analysisRuleExpression", "수식"), value: (row) => (row.RESULT_KIND === "FORMULA" ? row.RESULT_EXPRESSION : row.RULE_EXPRESSION) || row.RULE_EXPRESSION || "-" },
                             { label: this.pageLabel("analysisTolerance", "허용오차"), value: (row) => {
                                 const value = row.EFFECTIVE_TOLERANCE_PCT ?? row.RULE_TOLERANCE_PCT;
+                                if (row.RESULT_KIND === "FORMULA" && row.ABSOLUTE_TOLERANCE != null) {
+                                    const absolute = `${this.analysisNumber(row.ABSOLUTE_TOLERANCE)} ${this.pageLabel("analysisTargetUnits", "결과 단위")}`;
+                                    return Number(value) > 0 ? `max(${absolute}, |f(X)| × ${this.analysisNumber(value)}%)` : absolute;
+                                }
                                 const suffix = row.TOLERANCE_DEFAULTED
                                     ? ` (${this.pageLabel("analysisDefaultTolerance", "기본값")})`
                                     : "";
@@ -5651,7 +5663,7 @@
             isContinuousRule(row) {
                 const group = String(row?.RULE_GROUP_CODE || "").toUpperCase();
                 const sourceType = String(row?.SOURCE_RULE_TYPE || "").toUpperCase();
-                return group === "CONTINUOUS" || sourceType === "SYMBOLIC";
+                return row?.RESULT_KIND === "FORMULA" || group === "CONTINUOUS" || sourceType === "SYMBOLIC";
             },
 
             parseFeatureColumns(row) {
@@ -5693,10 +5705,10 @@
             },
 
             renderSymbolicFormulaPreview(value, row, index) {
-                const expression = String(value || "-");
+                const expression = String((row?.RESULT_KIND === "FORMULA" ? row.RESULT_EXPRESSION : value) || value || "-");
                 return `
                     <button type="button" class="edit-work-rule-preview edit-work-symbolic-preview" title="클릭하여 수식 상세 보기" onclick="event.stopPropagation(); ${PAGE_CODE}.openRuleDetail(${index}, 'FORMULA')">
-                        <span class="edit-work-formula-mark">f(X) =</span>
+                        <span class="edit-work-formula-mark">${row?.RESULT_KIND === "FORMULA" ? "THEN" : "f(X) ="}</span>
                         <span>${this.renderColumnAwareText(expression, row?.COLUMN_COMMENTS || {})}</span>
                     </button>
                 `;
@@ -5754,7 +5766,8 @@
                     EDIT_RULE_ID: masterRule.EDIT_RULE_ID || violation?.EDIT_RULE_ID,
                     RULE_NAME: masterRule.RULE_NAME || violation?.RULE_NAME,
                     SOURCE_RULE_TYPE: sourceType,
-                    RULE_GROUP_CODE: sourceType === "SYMBOLIC" ? "CONTINUOUS" : "CATEGORICAL",
+                    RULE_GROUP_CODE: (masterRule.RESULT_KIND || violation?.RESULT_KIND) === "FORMULA" || sourceType === "SYMBOLIC" ? "CONTINUOUS" : "CATEGORICAL",
+                    RESULT_KIND: masterRule.RESULT_KIND || violation?.RESULT_KIND,
                     RUN_ID: masterRule.SOURCE_RUN_ID ?? violation?.RUN_ID,
                     RULE_EXPRESSION: masterRule.RULE_EXPRESSION || violation?.CONDITION_TEXT || "",
                     TARGET_OWNER: masterRule.TARGET_OWNER || violation?.TARGET_OWNER,
@@ -5765,6 +5778,7 @@
                         || "",
                     COLUMN_COMMENTS: masterRule.COLUMN_COMMENTS || violation?.COLUMN_COMMENTS || {},
                     EXPECTED_VALUE: masterRule.EXPECTED_VALUE ?? violation?.EXPECTED_VALUE,
+                    RESULT_EXPRESSION: masterRule.RESULT_EXPRESSION || violation?.RESULT_EXPRESSION,
                     CONDITION_COUNT: masterRule.CONDITION_COUNT ?? masterRule.COMPLEXITY,
                     SOURCE_OBJECT_NAME: masterRule.SOURCE_OBJECT_NAME
                         || violation?.SOURCE_OBJECT_NAME
@@ -5858,6 +5872,8 @@
             },
 
             buildContinuousRuleDetailContent(row, focusSection = "FORMULA") {
+                const formula = row.RESULT_KIND === "FORMULA";
+                const expression = formula ? row.RESULT_EXPRESSION || row.RULE_EXPRESSION : row.RULE_EXPRESSION;
                 const comments = row.COLUMN_COMMENTS || {};
                 const features = this.parseFeatureColumns(row);
                 return `
@@ -5867,6 +5883,7 @@
                         <div><dt>방법</dt><dd>${this.escapeHtml(row.METHOD || row.MODEL_TYPE || "-")}</dd></div>
                         <div><dt>모델/소스</dt><dd>${this.escapeHtml(row.SOURCE_OBJECT_NAME || "-")}</dd></div>
                     </dl>
+                    ${formula ? `<section class="edit-work-detail-rule"><strong>IF</strong><pre>${this.renderColumnAwareText(row.RULE_EXPRESSION || "-", comments)}</pre></section>` : ""}
                     <section class="edit-work-symbolic-flow" aria-label="연속형 규칙 수식 흐름">
                         <div class="edit-work-symbolic-node is-features ${focusSection === "FEATURES" ? "is-focus" : ""}">
                             <small>INPUT FEATURES</small>
@@ -5877,7 +5894,7 @@
                         <div class="edit-work-symbolic-node is-formula ${focusSection === "FORMULA" || focusSection === "IF" ? "is-focus" : ""}">
                             <small>SYMBOLIC FORMULA</small>
                             <strong>f(X)</strong>
-                            <pre>${this.renderColumnAwareText(row.RULE_EXPRESSION || "-", comments)}</pre>
+                            <pre>${this.renderColumnAwareText(expression || "-", comments)}</pre>
                         </div>
                         <i class="fas fa-arrow-right" aria-hidden="true"></i>
                         <div class="edit-work-symbolic-node is-target ${focusSection === "TARGET" || focusSection === "THEN" ? "is-focus" : ""}">
@@ -5888,16 +5905,23 @@
                     </section>
                     <section class="edit-work-detail-rule ${focusSection === "FORMULA" || focusSection === "IF" ? "is-focus" : ""}">
                         <strong>전체 수식</strong>
-                        <pre><span class="edit-work-formula-mark">f(X) = </span>${this.renderColumnAwareText(row.RULE_EXPRESSION || "-", comments)}</pre>
+                        <pre><span class="edit-work-formula-mark">${formula ? "THEN " : "f(X) = "}</span>${this.renderColumnAwareText(expression || "-", comments)}</pre>
                     </section>
                     <dl class="edit-work-detail-metrics is-symbolic">
+                        ${formula ? [
+                            [this.pageLabel("formulaCoverage", "허용 오차 충족률"), this.analysisPercent(row.RULE_CONFIDENCE)],
+                            [this.pageLabel("formulaValidationCoverage", "검증 허용 오차 충족률"), this.analysisPercent(row.VALIDATION_CONFIDENCE)],
+                            [this.pageLabel("formulaValidationR2", "검증 R²"), this.formatMetric(row.VALIDATION_R2)],
+                            [this.pageLabel("formulaValidationMae", "검증 평균 절대 오차(결과 단위)"), this.formatMetric(row.VALIDATION_MAE)],
+                            [this.pageLabel("formulaAbsoluteTolerance", "절대 허용 오차(결과 단위)"), this.formatMetric(row.ABSOLUTE_TOLERANCE)]
+                        ].map(([label, value]) => `<div><dt>${this.escapeHtml(label)}</dt><dd>${this.escapeHtml(value)}</dd></div>`).join("") : `
                         <div><dt>Score</dt><dd>${this.escapeHtml(this.formatMetric(row.RULE_CONFIDENCE))}</dd></div>
                         <div><dt>복잡도</dt><dd>${this.escapeHtml(row.CONDITION_COUNT ?? "-")}</dd></div>
-                        <div><dt>순위</dt><dd>${this.escapeHtml(row.RANK_NO ?? "-")}</dd></div>
+                        <div><dt>순위</dt><dd>${this.escapeHtml(row.RANK_NO ?? "-")}</dd></div>`}
                         <div><dt>입력 피처</dt><dd>${features.length.toLocaleString()}개</dd></div>
                         <div><dt>판단</dt><dd>${this.badge(row.DECISION_STATUS)}</dd></div>
                     </dl>
-                    <p class="edit-work-detail-note">연속형 규칙은 IF/THEN 연관 규칙이 아니라 입력 피처를 수식 f(X)에 적용해 대상 컬럼을 예측하는 규칙입니다.</p>
+                    <p class="edit-work-detail-note">${this.escapeHtml(formula ? this.pageLabel("formulaRuleHelp", "IF 조건에서 실제값과 수식 예측값의 차이가 허용 오차 안에 있어야 합니다. 예측값은 자동 교정값이 아닙니다.") : "연속형 규칙은 입력 피처를 수식 f(X)에 적용해 대상 컬럼을 예측하는 규칙입니다.")}</p>
                 `;
             },
 

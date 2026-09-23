@@ -1,0 +1,210 @@
+.rule-chart-formula-banner {
+    align-items: start;
+    background: #1e3a8a;
+    border-bottom: 1px solid #1d4ed8;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 10px 14px;
+}
+
+.rule-chart-formula-label {
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.38);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 850;
+    padding: 4px 8px;
+}
+
+.rule-chart-formula-expression {
+    color: #ffffff;
+    display: block;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 17px;
+    font-weight: 850;
+    line-height: 1.45;
+    min-width: 0;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    word-break: break-word;
+}
+
+.rule-chart-formula-text {
+    min-width: 0;
+    max-height: clamp(96px, 22vh, 220px);
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+.rule-chart-formula-copy {
+    align-items: center;
+    align-self: start;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    color: #ffffff;
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 32px;
+    height: 32px;
+    justify-content: center;
+    width: 32px;
+}
+
+.rule-chart-formula-copy:hover,
+.rule-chart-formula-copy:focus-visible {
+    background: rgba(255, 255, 255, 0.26);
+    border-color: #ffffff;
+}
+
+.rule-chart-formula-copy svg {
+    fill: none;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    width: 16px;
+}
+
+.rule-chart-formula-copy-status {
+    color: #ffffff;
+    font-size: 11px;
+    grid-column: 2;
+}
+
+.rule-chart-formula-copy-status:empty {
+    display: none;
+}
+
+.rule-chart-toolbar {
+    align-items: end;
+    background: #f8fafc;
+    border: 1px solid #dbe3ef;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+    padding: 8px;
+}
+
+.rule-chart-toolbar > label {
+    display: grid;
+    flex: 0 1 240px;
+    gap: 4px;
+    min-width: 150px;
+}
+
+.rule-chart-toolbar > label > span {
+    color: #475569;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.rule-chart-toolbar select {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #0f172a;
+    font-size: 12px;
+    height: 32px;
+    min-width: 0;
+    padding: 0 8px;
+    width: 100%;
+}
+
+.rule-chart-toolbar select:disabled,
+.rule-chart-tools button:disabled {
+    cursor: not-allowed;
+    opacity: 0.48;
+}
+
+.rule-chart-tools {
+    align-items: center;
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: flex-end;
+    min-width: 0;
+}
+
+.rule-chart-tools button,
+.rule-chart-tools em {
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #0f172a;
+    display: inline-flex;
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 800;
+    gap: 5px;
+    height: 32px;
+    justify-content: center;
+    min-width: 34px;
+    padding: 0 8px;
+}
+
+.rule-chart-tools button {
+    cursor: pointer;
+}
+
+.rule-chart-tools button:hover:not(:disabled),
+.rule-chart-tools button:focus-visible {
+    background: #eff6ff;
+    border-color: #2563eb;
+    color: #1d4ed8;
+}
+
+.rule-chart-tools button[aria-pressed="true"] {
+    background: #dbeafe;
+    border-color: #2563eb;
+    color: #1d4ed8;
+}
+
+@media (max-width: 760px) {
+    .rule-chart-formula-banner {
+        padding: 8px 10px;
+    }
+
+    .rule-chart-formula-label {
+        justify-self: start;
+    }
+
+    .rule-chart-formula-expression {
+        font-size: 13px;
+    }
+
+    .rule-chart-formula-text {
+        -webkit-overflow-scrolling: touch;
+        grid-column: 2;
+        grid-row: 1;
+        max-height: clamp(120px, 28dvh, 250px);
+        width: 100%;
+    }
+
+    .rule-chart-formula-copy {
+        grid-column: 3;
+        grid-row: 1;
+    }
+
+    .rule-chart-toolbar {
+        align-items: stretch;
+    }
+
+    .rule-chart-toolbar > label {
+        flex: 1 1 100%;
+        min-width: 0;
+    }
+
+    .rule-chart-tools {
+        justify-content: flex-start;
+        width: 100%;
+    }
+
+    .rule-chart-tools button {
+        flex: 0 0 34px;
+    }
+}

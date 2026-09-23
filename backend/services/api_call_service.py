@@ -26,6 +26,10 @@ INTERNAL_METHODS = {
     "SYMBOLIC_REGRESSION_RULE",
     "INTEGRATED_RULE_DISCOVER",
     "INTEGRATED_RULE_VIOLATION_DETECT",
+    "MIXED_XAI_PROFILE",
+    "MIXED_XAI_RELATION",
+    "MIXED_XAI_RULE_DISCOVER",
+    "MIXED_XAI_RULE_DETECT",
 }
 
 
@@ -62,6 +66,12 @@ def execute_api_job(
 
 
 def execute_internal_python_api(conn, method: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    if method in {"MIXED_XAI_PROFILE", "MIXED_XAI_RELATION"}:
+        from backend.services import mixed_analysis_profile_service as analysis
+        return (analysis.profile if method == "MIXED_XAI_PROFILE" else analysis.relationships)(conn, payload)
+    if method in {"MIXED_XAI_RULE_DISCOVER", "MIXED_XAI_RULE_DETECT"}:
+        from backend.services import mixed_xai_service
+        return (mixed_xai_service.discover if method == "MIXED_XAI_RULE_DISCOVER" else mixed_xai_service.detect)(conn, payload)
     if method == "LASSO_FEATURE_SELECT":
         return ml_analysis_service.run_lasso_feature_select(conn, payload)
     if method == "RELATION_NETWORK_CLUSTER":
@@ -78,6 +88,12 @@ def execute_internal_python_api(conn, method: str, payload: Dict[str, Any]) -> D
 
 
 def create_internal_success_message(method: str, result: Dict[str, Any]) -> str:
+    if method in {"MIXED_XAI_PROFILE", "MIXED_XAI_RELATION"}:
+        return f"Mixed analysis completed: {result.get('columnCount', 0)} columns; {result.get('sampleCount', 0)} sampled rows."
+    if method in {"MIXED_XAI_RULE_DISCOVER", "MIXED_XAI_RULE_DETECT"}:
+        if result.get("algorithm") == "MIXED_PATTERN_TREE":
+            return f"Mixed patterns: {result.get('ruleCount', 0)} actual IF/THEN rules; {result.get('violationCount', 0)} rule-row violations."
+        return f"Mixed XAI: {result.get('ruleCount', 0)} candidate rules; {result.get('ruleMatchCount', 0)} rule-row matches."
     if method == "LASSO_FEATURE_SELECT":
         return (
             "LASSO feature selection completed. "

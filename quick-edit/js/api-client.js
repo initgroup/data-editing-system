@@ -229,7 +229,8 @@
                     tableComment: payload.tableComment || "",
                     useYn: "Y",
                     sortOrder: payload.sortOrder || null,
-                    autoDesignYn: "N"
+                    autoDesignYn: "N",
+                    processType: payload.processType || "LEGACY"
                 }
             });
         }
@@ -240,13 +241,29 @@
                 body: {
                     projectId: payload.projectId,
                     scenarioId: payload.scenarioId,
-                    scenarioTableId: payload.scenarioTableId
+                    scenarioTableId: payload.scenarioTableId,
+                    processType: payload.processType || "LEGACY"
                 }
             });
         }
 
         getFlow(flowId) {
             return this.request(`/M04001/flow/${encodeURIComponent(flowId)}`);
+        }
+
+        getMixedXaiResults(flowRunId, targetOwner, targetTable) {
+            return this.request(this.buildPath("/mlAnalysis/mixed-xai-results", { flowRunId, targetOwner, targetTable }));
+        }
+
+        getMixedFormulaSample(params, options = {}) {
+            return this.request(this.buildPath("/M04002/mixed-formula-sample", {
+                flowRunId: params.flowRunId,
+                targetOwner: params.targetOwner,
+                targetTable: params.targetTable,
+                modelName: params.modelName,
+                ruleId: params.ruleId,
+                sampleLimit: params.sampleLimit || 300
+            }), { signal: options.signal });
         }
 
         runFlow(flowPayload) {
@@ -303,6 +320,12 @@
                 projectId,
                 scenarioId
             }));
+        }
+
+        controlQuickEditRun(flowRunId, action) {
+            return this.request(`/M04001/quick-edit/history/${flowRunId}/control`, {
+                method: "POST", body: { action }
+            });
         }
 
         getQuickEditHistory(page = 1, pageSize = 20) {
@@ -402,17 +425,27 @@
             }));
         }
 
-        getSymbolicRuleSample(params) {
+        getSymbolicRuleSample(params, options = {}) {
             return this.request(this.buildPath("/M04002/symbolic-rule-sample", {
                 owner: params.owner,
                 ruleId: params.ruleId,
                 runSourceType: "FLOW_WORK",
                 runId: params.flowRunId,
                 sampleLimit: params.sampleLimit || 200
-            }));
+            }), { signal: options.signal });
         }
 
         getViolationRows(params) {
+            if (params.objectName === "INIT$_TB_RULEVIOL_XAI" || params.mixedPattern) {
+                return this.getMixedXaiResults(params.flowRunId, params.targetOwner, params.targetTable).then((response) => {
+                    const rows = window.RuleResultCommon.candidateRows(response.data, params.ruleId);
+                    const pageSize = Number(params.pageSize) || 20;
+                    const page = Math.max(1, Math.min(Number(params.page) || 1, Math.ceil(rows.length / pageSize) || 1));
+                    const pattern = window.RuleResultCommon.isPattern(response.data);
+                    return { status: "success", mixedXai: !pattern, mixedPattern: pattern, data: rows.slice((page - 1) * pageSize, page * pageSize),
+                        columns: [...new Set(rows.flatMap(Object.keys))], page, pageSize, total: rows.length };
+                });
+            }
             return this.request(this.buildPath("/M04002/result-table", {
                 owner: params.owner,
                 objectName: params.objectName,

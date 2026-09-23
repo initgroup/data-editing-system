@@ -2,6 +2,11 @@
   "version": 1,
   "description": "Typed input/output contracts for FLOW model validation and result navigation.",
   "artifacts": {
+    "MIXED_XAI_PROFILE": { "label": "Mixed basic statistics", "kind": "TABLE", "shape": "square" },
+    "MIXED_XAI_RELATION": { "label": "Mixed relationships and quality", "kind": "TABLE", "shape": "triangle" },
+    "MIXED_XAI_RULES": { "label": "Mixed actual-value pattern rules", "kind": "TABLE", "shape": "circle" },
+    "MIXED_XAI_DIAGNOSTICS": { "label": "Mixed pattern validation diagnostics", "kind": "TABLE", "shape": "triangle" },
+    "MIXED_XAI_CANDIDATES": { "label": "Mixed pattern violations", "kind": "TABLE", "shape": "diamond" },
     "TARGET_TABLE": { "label": "Target table", "kind": "TABLE", "shape": "square" },
     "PREDICTED_TYPE_RUN": { "label": "Profile types (run)", "kind": "TABLE", "shape": "square" },
     "PREDICTED_TYPE_FINAL": { "label": "Profile types (final)", "kind": "TABLE", "shape": "square" },
@@ -17,6 +22,93 @@
     "SYMBOLIC_RULE_VIOLATION": { "label": "Continuous violations", "kind": "TABLE", "shape": "diamond" }
   },
   "models": {
+    "MIXED_XAI_PROFILE": {
+      "stage": 1,
+      "scenario": "MIXED_XAI",
+      "inputs": [
+        {
+          "port": "target",
+          "artifact": "TARGET_TABLE",
+          "required": false,
+          "runScope": "STATIC_OR_INDEPENDENT"
+        }
+      ],
+      "outputs": [
+        {
+          "port": "mixed-profile",
+          "artifact": "MIXED_XAI_PROFILE",
+          "objectName": "INIT$_TB_XAI_RUN",
+          "runScope": "SAME_RUN"
+        }
+      ]
+    },
+    "MIXED_XAI_RELATION": {
+      "stage": 2,
+      "scenario": "MIXED_XAI",
+      "inputs": [
+        {
+          "port": "mixed-profile",
+          "artifact": "MIXED_XAI_PROFILE",
+          "required": false,
+          "runScope": "SAME_RUN"
+        }
+      ],
+      "outputs": [
+        {
+          "port": "mixed-relation",
+          "artifact": "MIXED_XAI_RELATION",
+          "objectName": "INIT$_TB_XAI_RUN",
+          "runScope": "SAME_RUN"
+        }
+      ]
+    },
+    "MIXED_XAI_RULE_DISCOVER": {
+      "stage": 3,
+      "scenario": "MIXED_XAI",
+      "inputs": [
+        { "port": "mixed-relation", "artifact": "MIXED_XAI_RELATION", "required": false, "runScope": "SAME_RUN" },
+        {
+          "port": "target",
+          "artifact": "TARGET_TABLE",
+          "required": false,
+          "runScope": "STATIC_OR_INDEPENDENT"
+        }
+      ],
+      "outputs": [
+        {
+          "port": "xai-rules",
+          "artifact": "MIXED_XAI_RULES",
+          "objectName": "INIT$_TB_RULEDISC_ASSOC_SUM",
+          "runScope": "SAME_RUN"
+        },
+        {
+          "port": "xai-diagnostics",
+          "artifact": "MIXED_XAI_DIAGNOSTICS",
+          "objectName": "INIT$_TB_XAI_RUN",
+          "runScope": "SAME_RUN"
+        }
+      ]
+    },
+    "MIXED_XAI_RULE_DETECT": {
+      "stage": 4,
+      "scenario": "MIXED_XAI",
+      "inputs": [
+        {
+          "port": "xai-rules",
+          "artifact": "MIXED_XAI_RULES",
+          "required": true,
+          "runScope": "SAME_RUN"
+        }
+      ],
+      "outputs": [
+        {
+          "port": "xai-candidates",
+          "artifact": "MIXED_XAI_CANDIDATES",
+          "objectName": "INIT$_TB_RULEVIOL_ASSOC",
+          "runScope": "SAME_RUN"
+        }
+      ]
+    },
     "INIT$_SP_PREDICTED_TYPE": {
       "stage": 1,
       "inputs": [

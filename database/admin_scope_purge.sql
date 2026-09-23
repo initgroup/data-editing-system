@@ -314,7 +314,46 @@ SELECT (
 ;
 
 -- [ADMIN_PURGE_RUN_RESULTS_DELETE]
+DECLARE
+    v_xai_sql VARCHAR2(4000);
 BEGIN
+    -- Optional XAI tables are absent before the additive migration is applied.
+    FOR xai_table IN
+    (
+     SELECT TABLE_NAME
+       FROM USER_TABLES
+      WHERE TABLE_NAME IN ('INIT$_TB_RULEVIOL_XAI', 'INIT$_TB_RULEDISC_XAI', 'INIT$_TB_XAI_RUN')
+      ORDER BY CASE TABLE_NAME
+                   WHEN 'INIT$_TB_RULEVIOL_XAI' THEN 1
+                   WHEN 'INIT$_TB_RULEDISC_XAI' THEN 2
+                   ELSE 3
+               END
+    ) LOOP
+        v_xai_sql := q'~DELETE /*+ NO_PARALLEL */ FROM /*XAI_TABLE*/ T
+ WHERE (T.RUN_SOURCE_TYPE = 'DATA_WORK' AND T.RUN_ID IN
+        (
+         SELECT R.DATA_RUN_ID
+           FROM INIT$_TB_DATA_WORK_RUN R
+           JOIN INIT$_TB_DATA_WORK_JOB J
+             ON J.WORK_JOB_ID = R.WORK_JOB_ID
+          WHERE J.PROJECT_ID = :1
+            AND (:2 IS NULL OR J.SCENARIO_ID = :3)
+            AND R.DATA_RUN_ID > 0
+        ))
+    OR (T.RUN_SOURCE_TYPE = 'FLOW_WORK' AND T.RUN_ID IN
+        (
+         SELECT R.FLOW_RUN_ID
+           FROM INIT$_TB_FLOW_WORK_RUN R
+           JOIN INIT$_TB_FLOW_WORK F
+             ON F.FLOW_ID = R.FLOW_ID
+          WHERE F.PROJECT_ID = :4
+            AND (:5 IS NULL OR F.SCENARIO_ID = :6)
+        ))~';
+        v_xai_sql := REPLACE(v_xai_sql, '/*XAI_TABLE*/', '"' || xai_table.TABLE_NAME || '"');
+        EXECUTE IMMEDIATE v_xai_sql
+            USING :projectId, :scenarioId, :scenarioId, :projectId, :scenarioId, :scenarioId;
+    END LOOP;
+
     DELETE FROM INIT$_TB_RULEVIOL_SYMBOLIC T
      WHERE (T.RUN_SOURCE_TYPE = 'DATA_WORK' AND T.RUN_ID IN (
                SELECT DISTINCT R.DATA_RUN_ID
@@ -515,7 +554,27 @@ END;
 /
 
 -- [ADMIN_PURGE_MANAGED_OBJECT_DATA_DELETE]
+DECLARE
+    v_xai_sql VARCHAR2(1000);
 BEGIN
+    FOR xai_table IN
+    (
+     SELECT TABLE_NAME
+       FROM USER_TABLES
+      WHERE TABLE_NAME IN ('INIT$_TB_RULEVIOL_XAI', 'INIT$_TB_RULEDISC_XAI', 'INIT$_TB_XAI_RUN')
+      ORDER BY CASE TABLE_NAME
+                   WHEN 'INIT$_TB_RULEVIOL_XAI' THEN 1
+                   WHEN 'INIT$_TB_RULEDISC_XAI' THEN 2
+                   ELSE 3
+               END
+    ) LOOP
+        v_xai_sql := q'~DELETE /*+ NO_PARALLEL */ FROM /*XAI_TABLE*/ T
+ WHERE T.TARGET_OWNER = :1
+   AND T.TARGET_TABLE = :2~';
+        v_xai_sql := REPLACE(v_xai_sql, '/*XAI_TABLE*/', '"' || xai_table.TABLE_NAME || '"');
+        EXECUTE IMMEDIATE v_xai_sql USING :ownerName, :tableName;
+    END LOOP;
+
     DELETE FROM INIT$_TB_COLTYPE_LABEL_HIST
      WHERE OWNER = :ownerName
        AND TABLE_NAME = :tableName;

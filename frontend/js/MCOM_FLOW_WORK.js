@@ -737,15 +737,18 @@
             },
 
             getFlowModelName(data = {}, refJob = null) {
-                return String(
-                    data.execObjectName
-                    || data.EXEC_OBJECT_NAME
-                    || data.execMethod
-                    || data.EXEC_METHOD
-                    || refJob?.EXEC_OBJECT_NAME
-                    || refJob?.EXEC_METHOD
-                    || ""
-                ).trim().toUpperCase();
+                const candidates = [
+                    data.execObjectName,
+                    data.EXEC_OBJECT_NAME,
+                    data.execMethod,
+                    data.EXEC_METHOD,
+                    refJob?.EXEC_OBJECT_NAME,
+                    refJob?.EXEC_METHOD
+                ].map((value) => String(value || "").trim().toUpperCase()).filter(Boolean);
+                const models = this.flowContractCatalog?.models || {};
+                return candidates.find((name) => Object.prototype.hasOwnProperty.call(models, name))
+                    || candidates[0]
+                    || "";
             },
 
             getFlowModelContract(data = {}, refJob = null) {
@@ -2123,7 +2126,13 @@
             },
 
             getFirstRegisteredJobsByGroup() {
-                const preferredModels = {
+                const isMixed = this.flowType === "MIXED_XAI_SCENARIO";
+                const preferredModels = isMixed ? {
+                    M03001: "MIXED_XAI_PROFILE",
+                    M03002: "MIXED_XAI_RELATION",
+                    M03003: "MIXED_XAI_RULE_DISCOVER",
+                    M03004: "MIXED_XAI_RULE_DETECT"
+                } : {
                     M03001: "INIT$_SP_PREDICTED_TYPE",
                     M03002: "INTEGRATED_RELATION_CLUSTER",
                     M03003: "INTEGRATED_RULE_DISCOVER",
@@ -2132,11 +2141,51 @@
                 return this.groupRegisteredJobs()
                     .map((group) => {
                         const preferred = preferredModels[String(group.key || "").toUpperCase()];
-                        return group.jobs.find((job) => (
-                            String(job.EXEC_OBJECT_NAME || job.EXEC_METHOD || "").toUpperCase() === preferred
-                        )) || group.jobs[0];
+                        if (isMixed && !preferred) return null;
+                        const jobs = group.jobs.filter((job) => (
+                            [job.EXEC_OBJECT_NAME, job.EXEC_METHOD].some((name) => String(name || "").toUpperCase().startsWith("MIXED_XAI_")) === isMixed
+                        ));
+                        return jobs.find((job) => (
+                            [job.EXEC_OBJECT_NAME, job.EXEC_METHOD].some((name) => String(name || "").toUpperCase() === preferred)
+                        )) || (isMixed ? null : jobs[0]);
                     })
                     .filter(Boolean);
+            },
+
+            async prepareProcessTemplate() {
+                if (this.isFlowRunActive() || this.isFlowSaving || this.isProcessTemplatePreparing) return;
+                if (!this.selectedProjectId || !this.selectedScenarioId) {
+                    alert("프로젝트와 시나리오를 먼저 선택하세요.");
+                    return;
+                }
+                const source = this.getSelectedScenarioTable()
+                    || (this.scenarioTables.length === 1 ? this.scenarioTables[0] : null);
+                if (!source?.SCENARIO_TABLE_ID) {
+                    alert("대상 테이블 목록에서 기본 FLOW를 만들 테이블을 선택하세요.");
+                    return;
+                }
+                const processType = this.getValue(`#flowProcessTemplate-${PAGE_CODE}`) === "MIXED_XAI" ? "MIXED_XAI" : "LEGACY";
+                const projectId = Number(this.selectedProjectId);
+                const scenarioId = Number(this.selectedScenarioId);
+                const button = getContainerEl(`#prepareProcessTemplate-${PAGE_CODE}`);
+                this.isProcessTemplatePreparing = true;
+                if (button) button.disabled = true;
+                try {
+                    const response = await CommonUtils.request(`${API_BASE_URL}/M02002/scenario-table/provision-default-design`, {
+                        method: "POST",
+                        body: { projectId, scenarioId, scenarioTableId: Number(source.SCENARIO_TABLE_ID), processType }
+                    });
+                    const flowId = Number(response.automation?.flowId || 0);
+                    if (!flowId) throw new Error("기본 FLOW 저장 결과를 확인할 수 없습니다.");
+                    if (projectId !== Number(this.selectedProjectId) || scenarioId !== Number(this.selectedScenarioId)) return;
+                    await this.refreshRegisteredJobs();
+                    await this.loadFlowVersions(true, { preferredFlowId: flowId, refreshHistory: true });
+                } catch (error) {
+                    alert(error.message || "선택한 시나리오 FLOW를 준비하지 못했습니다.");
+                } finally {
+                    this.isProcessTemplatePreparing = false;
+                    if (button) button.disabled = false;
+                }
             },
 
             getJobTemplateInsertPoint() {
@@ -5166,6 +5215,8 @@
             },
 
             applyFlowData(flow, options = {}) {
+                this.flowType = flow.FLOW_TYPE || config.flowType || PAGE_CODE;
+                this.setValue(`#flowProcessTemplate-${PAGE_CODE}`, this.flowType === "MIXED_XAI_SCENARIO" ? "MIXED_XAI" : "LEGACY");
                 this.setValue(`#flowId-${PAGE_CODE}`, flow.FLOW_ID || "NEW");
                 this.flowLayoutGrid = null;
                 this.setValue(`#flowGroup-${PAGE_CODE}`, flow.FLOW_GROUP || config.defaultFlowGroup || PAGE_CODE);
@@ -5981,7 +6032,7 @@
                 );
             },
             hasActiveFlowRun(rows = this.flowRunHistoryRows) {
-                const activeStatuses = new Set(["PENDING", "QUEUED", "STARTED", "RUNNING", "IN_PROGRESS", "SUBMITTED"]);
+                const activeStatuses = new Set(["PENDING", "QUEUED", "STARTED", "RUNNING", "IN_PROGRESS", "SUBMITTED", "PAUSE_REQUESTED", "STOP_REQUESTED"]);
                 return (Array.isArray(rows) ? rows : []).some((row) => activeStatuses.has(String(row?.STATUS || "").trim().toUpperCase()));
             },
             isFlowRunAutoRefreshEligible(flowRunId) {
@@ -7862,6 +7913,8 @@
             },
 
             newFlow(clearCanvas = true) {
+                this.flowType = this.getValue(`#flowProcessTemplate-${PAGE_CODE}`) === "MIXED_XAI"
+                    ? "MIXED_XAI_SCENARIO" : (config.flowType || PAGE_CODE);
                 this.setValue(`#flowId-${PAGE_CODE}`, "NEW");
                 this.dashedConnectionMode = false;
                 this.renderDashedConnectionMode();

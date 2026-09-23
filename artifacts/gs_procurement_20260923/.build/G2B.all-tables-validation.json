@@ -1,0 +1,23 @@
+{
+  "finding_count": 0,
+  "findings": [],
+  "font_policy": {
+    "checked_text_script_count": 1643,
+    "native_font_rendering_verified": false,
+    "observed_font_families": [
+      "Malgun Gothic"
+    ],
+    "observed_font_use_counts": {
+      "Malgun Gothic": 1643
+    },
+    "passed": true,
+    "performed": true
+  },
+  "slide_count": 51,
+  "slide_size_in": [
+    16.6667,
+    9.375
+  ],
+  "warning_count": 0,
+  "warnings": []
+}

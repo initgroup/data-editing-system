@@ -1,0 +1,432 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/oozr32",
+    "id": "oozr32",
+    "slide": 1,
+    "layoutId": "6cba7aae-3bac-442d-849e-d1b490cfac31",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "65fd5194-cb02-440c-9a6f-5baf223783c9",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1600,
+      "height": 900
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Malgun Gothic"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "6cba7aae-3bac-442d-849e-d1b490cfac31",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "65fd5194-cb02-440c-9a6f-5baf223783c9",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "65fd5194-cb02-440c-9a6f-5baf223783c9",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7a5on6pk",
+      "id": "1",
+      "bbox": [
+        70,
+        92,
+        1460,
+        60
+      ],
+      "geometry": "rect",
+      "text": "INIT Data Editing System  인뎁스",
+      "textPreview": "INIT Data Editing System  인뎁스",
+      "resolvedFontSize": 30,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 30,
+        "typeface": "Malgun Gothic",
+        "color": "#0D6E75",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "INIT Data Editing System  인뎁스"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "INIT Data Editing System  인뎁스",
+          "resolvedTextStyle": {
+            "fontSize": 30,
+            "typeface": "Malgun Gothic",
+            "color": "#0D6E75",
+            "bold": true
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "INIT Data Editing System  인뎁스",
+              "fontSize": 30,
+              "typeface": "Malgun Gothic",
+              "color": "#0D6E75",
+              "bold": true
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8bepgbq5",
+      "id": "2",
+      "bbox": [
+        70,
+        225,
+        1460,
+        120
+      ],
+      "geometry": "rect",
+      "text": "나라장터 상품화·등록 매뉴얼",
+      "textPreview": "나라장터 상품화·등록 매뉴얼",
+      "resolvedFontSize": 66,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 66,
+        "typeface": "Malgun Gothic",
+        "color": "#152F43",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "나라장터 상품화·등록 매뉴얼"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "나라장터 상품화·등록 매뉴얼",
+          "resolvedTextStyle": {
+            "fontSize": 66,
+            "typeface": "Malgun Gothic",
+            "color": "#152F43",
+            "bold": true
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "나라장터 상품화·등록 매뉴얼",
+              "fontSize": 66,
+              "typeface": "Malgun Gothic",
+              "color": "#152F43",
+              "bold": true
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tcn6pw7q",
+      "id": "3",
+      "bbox": [
+        74,
+        390,
+        1450,
+        150
+      ],
+      "geometry": "rect",
+      "text": "INIT Data Editing System (인뎁스)\n서비스 형태, 가격, 라이선스, 계약·납품 실행안",
+      "textPreview": "INIT Data Editing System (인뎁스) | 서비스 형태, 가격, 라이선스, 계약·납품 실행안",
+      "resolvedFontSize": 32,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 32,
+        "typeface": "Malgun Gothic",
+        "color": "#152F43",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "INIT Data Editing System (인뎁스)"
+          },
+          {
+            "index": 2,
+            "text": "서비스 형태, 가격, 라이선스, 계약·납품 실행안"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "INIT Data Editing System (인뎁스)",
+          "resolvedTextStyle": {
+            "fontSize": 32,
+            "typeface": "Malgun Gothic",
+            "color": "#152F43"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "INIT Data Editing System (인뎁스)",
+              "fontSize": 32,
+              "typeface": "Malgun Gothic",
+              "color": "#152F43"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "서비스 형태, 가격, 라이선스, 계약·납품 실행안",
+          "resolvedTextStyle": {
+            "fontSize": 32,
+            "typeface": "Malgun Gothic",
+            "color": "#152F43"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "서비스 형태, 가격, 라이선스, 계약·납품 실행안",
+              "fontSize": 32,
+              "typeface": "Malgun Gothic",
+              "color": "#152F43"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ylc7ah83",
+      "id": "4",
+      "bbox": [
+        74,
+        655,
+        1450,
+        130
+      ],
+      "geometry": "rect",
+      "text": "30명 규모 소기업 · 첫 출시 · 가격 미정\n내부망 설치형 영구 라이선스 · 작성 기준 2026.09.23",
+      "textPreview": "30명 규모 소기업 · 첫 출시 · 가격 미정 | 내부망 설치형 영구 라이선스 · 작성 기준 2026.09.23",
+      "resolvedFontSize": 25,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 25,
+        "typeface": "Malgun Gothic",
+        "color": "#526676",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "30명 규모 소기업 · 첫 출시 · 가격 미정"
+          },
+          {
+            "index": 2,
+            "text": "내부망 설치형 영구 라이선스 · 작성 기준 2026.09.23"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "30명 규모 소기업 · 첫 출시 · 가격 미정",
+          "resolvedTextStyle": {
+            "fontSize": 25,
+            "typeface": "Malgun Gothic",
+            "color": "#526676"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "30명 규모 소기업 · 첫 출시 · 가격 미정",
+              "fontSize": 25,
+              "typeface": "Malgun Gothic",
+              "color": "#526676"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "내부망 설치형 영구 라이선스 · 작성 기준 2026.09.23",
+          "resolvedTextStyle": {
+            "fontSize": 25,
+            "typeface": "Malgun Gothic",
+            "color": "#526676"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "내부망 설치형 영구 라이선스 · 작성 기준 2026.09.23",
+              "fontSize": 25,
+              "typeface": "Malgun Gothic",
+              "color": "#526676"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/jmlojmpo",
+      "id": "5",
+      "bbox": [
+        74,
+        810,
+        1400,
+        38
+      ],
+      "geometry": "rect",
+      "text": "실행 작업 · 담당 역할 · 산출물 · 완료 기준",
+      "textPreview": "실행 작업 · 담당 역할 · 산출물 · 완료 기준",
+      "resolvedFontSize": 23,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 23,
+        "typeface": "Malgun Gothic",
+        "color": "#0D6E75",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "autoFit": "none",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "실행 작업 · 담당 역할 · 산출물 · 완료 기준"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "실행 작업 · 담당 역할 · 산출물 · 완료 기준",
+          "resolvedTextStyle": {
+            "fontSize": 23,
+            "typeface": "Malgun Gothic",
+            "color": "#0D6E75"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "실행 작업 · 담당 역할 · 산출물 · 완료 기준",
+              "fontSize": 23,
+              "typeface": "Malgun Gothic",
+              "color": "#0D6E75"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

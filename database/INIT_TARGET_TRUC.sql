@@ -28,6 +28,9 @@ BEGIN
     DBMS_OUTPUT.PUT_LINE('=== INIT_TARGET TRUNCATE START ===');
 
     truncate_table_if_exists('INIT$_TB_OBJECT_DEPLOY');
+    truncate_table_if_exists('INIT$_TB_RULEVIOL_XAI');
+    truncate_table_if_exists('INIT$_TB_RULEDISC_XAI');
+    truncate_table_if_exists('INIT$_TB_XAI_RUN');
     truncate_table_if_exists('INIT$_TB_EDIT_EVENT');
     truncate_table_if_exists('INIT$_TB_EDIT_DML');
     truncate_table_if_exists('INIT$_TB_EDIT_CHANGE');

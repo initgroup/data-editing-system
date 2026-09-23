@@ -119,6 +119,10 @@
             summaryKey: "violationSummary",
             summaryRenderer: "renderViolationSummary"
         }),
+        "INIT$_TB_RULEVIOL_XAI": Object.freeze({
+            kind: "TABLE", key: "TABLE:INIT$_TB_RULEVIOL_XAI", title: "Result Table",
+            summaryKey: "violationSummary", summaryRenderer: "renderViolationSummary"
+        }),
         "INIT$_TB_RULEVIOL_SYMBOLIC": Object.freeze({
             kind: "TABLE",
             key: "TABLE:INIT$_TB_RULEVIOL_SYMBOLIC",
@@ -205,6 +209,8 @@
         symbolicRuleChart: null,
         symbolicRuleChartState: null,
         symbolicRuleSampleRequestId: 0,
+        mixedFormulaPopupState: null,
+        mixedFormulaChartView: null,
         pendingRunId: "",
         isRunDeleteInProgress: false,
         currentExport: { filename: "integrated-result.csv", columns: [], rows: [] },
@@ -415,6 +421,7 @@
                 predictedTypeFilter: this.predictedTypeFilter,
                 predictedTypeViewMode: this.predictedTypeViewMode,
                 ruleSummaryFilters: this.cloneCacheValue(this.ruleSummaryFilters),
+                mixedRuleFamily: this.mixedRuleFamily || "VALUE",
                 violationRuleFilters: this.cloneCacheValue(this.violationRuleFilters),
                 symbolicRuleFilters: this.cloneCacheValue(this.symbolicRuleFilters),
                 symbolicViolationFilters: this.cloneCacheValue(this.symbolicViolationFilters),
@@ -448,6 +455,7 @@
             this.lassoPairFilter = cached.lassoPairFilter || { targetColumn: "", featureName: "" };
             this.predictedTypeFilter = cached.predictedTypeFilter || "ALL";
             this.predictedTypeViewMode = cached.predictedTypeViewMode === "SOURCE" ? "SOURCE" : "TYPE";
+            this.mixedRuleFamily = cached.mixedRuleFamily === "FORMULA" ? "FORMULA" : "VALUE";
             this.ruleSummaryFilters = {
                 conditionCount: "ALL",
                 confidenceScope: "ALL",
@@ -558,6 +566,7 @@
         },
 
         async loadRuns(page = this.runPage, options = {}) {
+            this.closeSymbolicRulePopup();
             if (page === 1 && !options.preservePending) this.pendingRunId = "";
             const projectId = getContainerEl("#projectId-${PAGE_CODE}")?.value || "";
             this.persistWorkContext();
@@ -672,6 +681,7 @@
         },
 
         async loadBootstrap(preferredProjectId = "", preferredScenarioId = "") {
+            this.closeSymbolicRulePopup();
             const pageSize = Number(getContainerEl("#pageSize-${PAGE_CODE}")?.value || 20);
             const params = new URLSearchParams({
                 pageSize: String(pageSize),
@@ -833,7 +843,7 @@
                         <small>${this.escapeHtml(run.FLOW_NAME || "-")}</small>
                         <em>${this.escapeHtml(this.formatDateTime(run.STARTED_AT || run.CREATED_AT))}</em>
                     </span>
-                    <b class="${this.getStatusClass(run.STATUS)}">${this.escapeHtml(run.STATUS || "-")}</b>
+                    <b class="${this.getStatusClass(run.STATUS)}">${this.escapeHtml(getText(run.STATUS || "-"))}</b>
                 </button>
             `;
             }).join("");
@@ -851,6 +861,7 @@
         },
 
         async selectRun(flowRunId) {
+            this.closeSymbolicRulePopup();
             this.selectedRun = this.runs.find((run) => Number(run.FLOW_RUN_ID) === Number(flowRunId)) || null;
             this.selectedNode = null;
             this.updateDescriptiveStatisticsButton();
@@ -867,7 +878,7 @@
             this.renderRunSummary();
             const nodeList = getContainerEl("#nodeList-${PAGE_CODE}");
             const resultPanel = getContainerEl("#resultPanel-${PAGE_CODE}");
-            if (nodeList) nodeList.innerHTML = `<div class="table-empty">Loading nodes...</div>`;
+            if (nodeList) nodeList.innerHTML = `<div class="table-empty">${this.escapeHtml(getText("Loading nodes..."))}</div>`;
             if (resultPanel) resultPanel.innerHTML = emptyState("selectNodeForResult", "Select a node to view result details.");
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/runs/${flowRunId}/nodes`, { method: "GET", showLoading: false });
@@ -893,18 +904,18 @@
             el.innerHTML = `
                 <article class="is-selected-run">
                     <div>
-                        <span>Selected Run</span>
+                        <span>${this.escapeHtml(getText("Selected Run"))}</span>
                         <strong>${this.escapeHtml(run.FLOW_NAME || "-")}</strong>
-                        <small>Run #${this.escapeHtml(run.FLOW_RUN_ID)} · ${this.escapeHtml(run.STATUS || "-")} · ${this.escapeHtml(this.formatElapsedTime(run.STARTED_AT, run.FINISHED_AT, run.STATUS))}</small>
+                        <small>Run #${this.escapeHtml(run.FLOW_RUN_ID)} · ${this.escapeHtml(getText(run.STATUS || "-"))} · ${this.escapeHtml(this.formatElapsedTime(run.STARTED_AT, run.FINISHED_AT, run.STATUS))}</small>
                     </div>
                     <button type="button" class="anly-work-run-delete-btn" title="${this.escapeHtml(getLabel("deleteSelectedRunTitle", "Delete selected run history"))}" onclick="${PAGE_CODE}.deleteSelectedRun()">
                         <i class="far fa-trash-alt"></i>
                         <span>${this.escapeHtml(getLabel("delete", "Delete"))}</span>
                     </button>
                 </article>
-                <article><span>Nodes</span><strong>${this.formatNumber(run.NODE_COUNT)}</strong><small>${this.formatNumber(run.SUCCESS_NODE_COUNT)} success / ${this.formatNumber(run.FAILED_NODE_COUNT)} failed</small></article>
+                <article><span>${this.escapeHtml(getText("Nodes"))}</span><strong>${this.formatNumber(run.NODE_COUNT)}</strong><small>${this.formatNumber(run.SUCCESS_NODE_COUNT)} ${this.escapeHtml(getText("Success"))} / ${this.formatNumber(run.FAILED_NODE_COUNT)} ${this.escapeHtml(getText("Failed"))}</small></article>
                 <article>
-                    <span>Started</span>
+                    <span>${this.escapeHtml(getText("Started"))}</span>
                     <strong>${this.escapeHtml(this.formatDateTime(run.STARTED_AT))}</strong>
                     <span class="anly-work-summary-message">
                         <small title="${this.escapeHtml(runMessage)}">${this.escapeHtml(runMessage || "-")}</small>
@@ -936,7 +947,7 @@
 
             let forceDelete = false;
             const runStatus = String(run.STATUS || "").trim().toUpperCase();
-            const isActiveRun = ["RUNNING", "STARTED", "QUEUED", "PENDING"].includes(runStatus);
+            const isActiveRun = ["RUNNING", "STARTED", "QUEUED", "PENDING", "PAUSE_REQUESTED", "STOP_REQUESTED"].includes(runStatus);
             if (CommonUtils.isAdminUser?.() && isActiveRun) {
                 const forceMessage = [
                     "Running or pending run history cannot be deleted.",
@@ -1027,7 +1038,7 @@
                 <section class="anly-work-node-group">
                     <header class="anly-work-node-group-header">
                         <strong>${this.escapeHtml(group.label)}</strong>
-                        <small>${this.formatNumber(entries.length)} nodes</small>
+                        <small>${this.formatNumber(entries.length)} ${this.escapeHtml(getText("Nodes"))}</small>
                     </header>
                     ${entries.length
                         ? entries.map(({ node, index }) => this.renderNodeCard(node, index)).join("")
@@ -1050,7 +1061,7 @@
                         <small>${this.escapeHtml(node.RESULT_KIND || "NONE")} ${node.RESULT_OBJECT_NAME ? `· ${this.escapeHtml(node.RESULT_OBJECT_NAME)}` : ""}</small>
                         ${this.renderNodeJobDesc(node)}
                     </span>
-                    <b class="${this.getStatusClass(node.STATUS)}">${this.escapeHtml(node.STATUS || "-")}</b>
+                    <b class="${this.getStatusClass(node.STATUS)}">${this.escapeHtml(getText(node.STATUS || "-"))}</b>
                 </button>
             `;
         },
@@ -1126,6 +1137,7 @@
         },
 
         async selectNode(nodeRunId, page = 1, options = {}) {
+            this.closeSymbolicRulePopup();
             this.selectedNode = this.nodes.find((node) => Number(node.FLOW_NODE_RUN_ID) === Number(nodeRunId)) || null;
             this.updateDescriptiveStatisticsButton();
             const restoredResult = this.applyRememberedNodeResult(this.selectedNode);
@@ -1156,7 +1168,6 @@
             this.lastViolationSummary = null;
             this.lastSymbolicRuleSummary = null;
             this.lastSymbolicViolationSummary = null;
-            this.closeSymbolicRulePopup();
             const resultLayout = this.getNodeResultLayout(this.selectedNode);
             if (resultLayout.kind === "NONE") {
                 panel.innerHTML = `<div class="table-empty">${this.escapeHtml(getText("This node has no saved result table or model."))}</div>`;
@@ -1428,6 +1439,7 @@
 
         async selectNodeResultObject(selected) {
             if (!selected || !this.selectedNode) return;
+            this.closeSymbolicRulePopup();
             this.selectedNode.RESULT_KIND = String(selected.kind || "TABLE").toUpperCase();
             this.selectedNode.RESULT_OWNER = String(selected.owner || this.selectedNode.RESULT_OWNER || "").toUpperCase();
             this.selectedNode.RESULT_OBJECT_NAME = String(selected.objectName || "").toUpperCase();
@@ -1469,9 +1481,12 @@
         },
 
         async openViolationForRule(ruleId, conditionCount = "ALL") {
+            const mixed = Boolean(this.currentModelDetail?.mixedXai) && !window.RuleResultCommon.isPattern(this.currentModelDetail.mixedXai);
             const normalizedRuleId = String(ruleId || "").trim();
-            if (!normalizedRuleId) return;
-            const violationNode = this.findViolationNode();
+            const mixedRule = this.currentModelDetail?.mixedXai?.ruleSummary?.rules?.find((r) => String(r.RULE_ID) === normalizedRuleId);
+            if (mixedRule && window.RuleResultCommon.isPattern(mixedRule)) this.mixedRuleFamily = window.RuleResultCommon.isFormula(mixedRule) ? "FORMULA" : "VALUE";
+            if (!normalizedRuleId && !mixed) return;
+            const violationNode = mixed ? (this.nodes || []).find((n) => this.getNodeResultObject(n, "INIT$_TB_RULEVIOL_XAI") || n.RESULT_OBJECT_NAME === "INIT$_TB_RULEVIOL_XAI") : this.findViolationNode();
             if (!violationNode) {
                 alert(getText("No rule violation detection node was found in the current flow."));
                 return;
@@ -1483,14 +1498,14 @@
                 ...(this.violationRuleFilters || {}),
                 ruleId: normalizedRuleId,
                 conditionCount: normalizedConditionCount,
-                confidenceScope: "NON_PERFECT",
+                confidenceScope: this.currentModelDetail?.mixedXai ? "ALL" : "NON_PERFECT",
                 resultScope: "CANDIDATE",
                 page: 1,
                 pageSize: 20
             };
             const activated = await this.activateNodeResultObject(
                 violationNode,
-                "INIT$_TB_RULEVIOL_ASSOC",
+                mixed || violationNode.RESULT_OBJECT_NAME === "INIT$_TB_RULEVIOL_XAI" ? "INIT$_TB_RULEVIOL_XAI" : "INIT$_TB_RULEVIOL_ASSOC",
                 { preserveViolationRuleFilter: true, forceRefresh: true }
             );
             if (activated) return;
@@ -1633,9 +1648,159 @@
             return params;
         },
 
+        async loadMixedXaiAnalysis(node, page = 1) {
+            this.showResultLoading(getText("Loading rule summary..."));
+            const params = new URLSearchParams({ flowRunId: this.selectedRun?.FLOW_RUN_ID || "",
+                targetOwner: node.TARGET_OWNER || "", targetTable: node.TARGET_TABLE || "" });
+            try {
+                const response = await CommonUtils.request(`${API_BASE_URL}/mlAnalysis/mixed-xai-results?${params}`, { method: "GET", showLoading: false });
+                if (this.selectedNode !== node) return;
+                const payload = response.data || {};
+                const stage = this.mixedEarlyStageKind(node);
+                if (stage) {
+                    this.currentModelDetail = { mixedXai: payload, owner: node.RESULT_OWNER, modelName: node.RESULT_OBJECT_NAME };
+                    this.renderMixedEarlyStage(payload, stage);
+                    this.snapshotNodeResultCache();
+                    return;
+                }
+                const summary = payload.ruleSummary;
+                if (!summary) throw new Error(getText("Rule summary load failed."));
+                const pattern = window.RuleResultCommon.isPattern(payload);
+                if (!pattern) summary.columnComments = { ...summary.columnComments, ANOMALY_CANDIDATE: getText("Anomaly candidate") };
+                this.currentModelDetail = { owner: node.RESULT_OWNER, modelName: node.RESULT_OBJECT_NAME,
+                    mixedXai: payload, ruleSummary: summary, columnComments: summary.columnComments,
+                    metadata: { ALGORITHM: pattern ? "MIXED_PATTERN_TREE" : "Isolation Forest / Decision Tree" }, candidatePage: 1 };
+                this.currentModelDetail.ruleSummary = window.RuleResultCommon.filterSummary(pattern ? window.RuleResultCommon.patternSummary(summary, this.mixedRuleFamily || "VALUE") : summary, this.ruleSummaryFilters, 1);
+                this.currentExport = this.buildRuleSummaryExport(node, this.currentModelDetail.ruleSummary);
+                if (this.isMixedXaiViolationNode(node)) {
+                    if (!this.lastViolationSummary?.mixedXai && !this.lastViolationSummary?.mixedPattern) this.violationRuleFilters.confidenceScope = "ALL";
+                    this.renderMixedXaiViolationResult(payload, page);
+                    return;
+                }
+
+                this.renderModelAnalysis(this.currentModelDetail, node.RESULT_OBJECT_NAME === "INIT$_TB_RULEVIOL_XAI" ? "detail" : "readable");
+                this.snapshotNodeResultCache();
+            } catch (error) {
+                if (this.selectedNode === node) this.renderResultError(error.message);
+            }
+        },
+
+        isMixedXaiViolationNode(node = this.selectedNode) {
+            return String(node?.RESULT_OBJECT_NAME || "").toUpperCase() === "INIT$_TB_RULEVIOL_XAI"
+                || (this.isMixedScenarioNode(node) && /RULEVIOL_ASSOC$/.test(String(node?.RESULT_OBJECT_NAME || "").toUpperCase()));
+        },
+
+        isMixedScenarioNode(node = this.selectedNode) {
+            return /MIXED_XAI_(?:RULE_|PROFILE|RELATION)|MIXED_PATTERN_TREE/.test([node?.EXEC_METHOD, node?.EXEC_OBJECT_NAME, node?.MODEL_CODE, node?.MODEL_NAME].filter(Boolean).join(" ").toUpperCase());
+        },
+
+        mixedEarlyStageKind(node = this.selectedNode) {
+            const method = [node?.EXEC_METHOD, node?.EXEC_OBJECT_NAME].filter(Boolean).join(" ").toUpperCase();
+            return method.includes("MIXED_XAI_PROFILE") ? "PROFILE" : method.includes("MIXED_XAI_RELATION") ? "RELATION" : "";
+        },
+
+        renderMixedEarlyStage(payload, kind) {
+            const stage = window.RuleResultCommon.stageSummary(payload.summary, kind, getText);
+            const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
+            if (!panel) return;
+            panel.classList.remove("is-loading");
+            panel.innerHTML = `<section class="anly-work-readable-stats"><div class="anly-work-readable-stat-block">
+                <strong>${this.escapeHtml(stage.title)}</strong>
+                <div class="anly-work-readable-stat-metrics">${stage.metrics.map((m) => `<span><b>${this.escapeHtml(m.value)}</b><small>${this.escapeHtml(m.label)}</small></span>`).join("")}</div>
+                <p>${this.escapeHtml(stage.notes)}</p></div></section>
+                ${stage.sections.map((section) => `<h4>${this.escapeHtml(section.title)}</h4>${this.renderGrid(section.columns, section.rows, { columnLabels: section.columnLabels, columnComments: payload.ruleSummary?.columnComments })}`).join("")}`;
+            const first = stage.sections[0] || {};
+            this.currentExport = { filename: `mixed-${kind.toLowerCase()}.csv`, columns: first.columns || [], rows: first.rows || [] };
+            this.prependNodeResultSwitcher();
+        },
+
+        renderMixedXaiViolationResult(payload, page = 1) {
+            const common = window.RuleResultCommon;
+            const familySummary = common.patternSummary(payload.ruleSummary, this.mixedRuleFamily || "VALUE");
+            const scopedPayload = common.isPattern(payload) ? { ...payload, summary: { ...payload.summary,
+                uniqueViolationCount: familySummary.total === payload.ruleSummary?.rules?.length ? payload.summary?.uniqueViolationCount : null }, ruleSummary: familySummary } : payload;
+            const summary = common.violationSummary(scopedPayload, this.violationRuleFilters);
+            summary.topRulePage = summary.rulePage;
+            summary.topRulePageSize = summary.rulePageSize;
+            summary.topRuleTotal = summary.ruleTotal;
+            summary.targetOwner = this.selectedNode.TARGET_OWNER;
+            summary.targetTable = this.selectedNode.TARGET_TABLE;
+            const allowed = new Set(summary.ruleIds);
+            const rows = common.candidateRows(payload).filter((row) => allowed.has(String(row.RULE_ID)));
+            const size = this.resultPageSize || 50;
+            const totalPages = Math.ceil(rows.length / size) || 1;
+            page = Math.min(Math.max(1, Number(page) || 1), totalPages);
+            const data = rows.slice((page - 1) * size, page * size);
+            const json = { status: "success", owner: this.selectedNode.RESULT_OWNER, objectName: this.selectedNode.RESULT_OBJECT_NAME,
+                targetOwner: summary.targetOwner, targetTable: summary.targetTable, filteredByTarget: true,
+                data, columns: [...new Set(data.flatMap(Object.keys))], columnComments: summary.columnComments,
+                total: rows.length, page, pageSize: size, columnLabels: common.candidateColumnLabels(getText), violationSummary: summary };
+            this.lastResultTableJson = json;
+            this.lastViolationSummary = summary;
+            this.currentExport = { filename: "xai-violations.csv", columns: json.columns, rows: data };
+            this.renderResultTable(json, "Result Table", "TABLE");
+            if (common.isPattern(payload)) getContainerEl("#resultPanel-${PAGE_CODE}")?.insertAdjacentHTML("afterbegin", this.renderMixedFamilyControls(payload));
+            this.snapshotNodeResultCache();
+        },
+
+        renderMixedFamilyControls(payload) {
+            const common = window.RuleResultCommon;
+            if (!common.isPattern(payload)) return "";
+            const family = this.mixedRuleFamily || "VALUE";
+            const value = common.patternSummary(payload.ruleSummary, "VALUE"), formula = common.patternSummary(payload.ruleSummary, "FORMULA");
+            const active = family === "FORMULA" ? formula : value;
+            const diagnostic = common.continuousDiagnostic(payload, getText);
+            const ratio = (v) => v == null ? "-" : this.formatPercentMetric(v);
+            const decimal = (v) => v == null ? "-" : this.formatDecimal(v);
+            const metrics = family === "FORMULA" ? [
+                { label: getText("Average within-tolerance rate"), value: ratio(active.overview.AVG_CONFIDENCE) },
+                { label: getText("Average validation within-tolerance rate"), value: ratio(active.overview.AVG_VALIDATION_CONFIDENCE) },
+                { label: getText("Average validation R²"), value: decimal(active.overview.AVG_VALIDATION_R2) }
+            ] : [
+                { label: getText("Average confidence"), value: ratio(active.overview.AVG_CONFIDENCE) },
+                { label: getText("Average lift"), value: decimal(active.overview.AVG_LIFT) }
+            ];
+            const violation = this.isMixedXaiViolationNode();
+            return `<section data-mixed-rule-family><nav class="anly-work-rule-family-switcher" aria-label="${this.escapeHtml(getText("Automatic rule details"))}">
+                <strong>${this.escapeHtml(getText("Automatic rule details"))}</strong><div>
+                ${[["VALUE", violation ? "Value and range violations" : "Value and range rules", value.total, "fa-tags"], ["FORMULA", violation ? "Continuous violations" : "Continuous formula rules", formula.total, "fa-wave-square"]].map(([key, label, count, icon]) => `<button type="button" class="${family === key ? "is-active" : ""}" aria-pressed="${family === key}" onclick="${PAGE_CODE}.selectMixedRuleFamily('${key}')"><i class="fas ${icon}" aria-hidden="true"></i><span>${this.escapeHtml(getText(label))} · ${this.formatNumber(count)}</span></button>`).join("")}
+                </div></nav><section class="anly-work-readable-stats"><div class="anly-work-readable-stat-block">
+                <div class="anly-work-readable-stat-metrics">${[...metrics, ...(family === "FORMULA" ? diagnostic.metrics : [])].map((m) => `<span><b>${this.escapeHtml(m.value)}</b><small>${this.escapeHtml(m.label)}</small></span>`).join("")}</div>
+                ${family === "FORMULA" ? `<p>${this.escapeHtml(diagnostic.message)}</p>${diagnostic.reasons.length ? `<details><summary>${this.escapeHtml(getText("Continuous discovery reasons"))}</summary><p>${this.escapeHtml(getText("Reason counts refer to excluded columns or rejected candidates, not source rows."))}</p><ul>${diagnostic.reasons.map((r) => `<li>${this.escapeHtml(r.label)}: ${this.escapeHtml(r.count)}</li>`).join("")}</ul></details>` : ""}` : ""}</div></section></section>`;
+        },
+
+        selectMixedRuleFamily(family) {
+            this.mixedRuleFamily = family === "FORMULA" ? "FORMULA" : "VALUE";
+            this.ruleSummaryFilters = { ...this.ruleSummaryFilters, conditionCount: "ALL", resultColumn: "ALL", conditionColumn: "", confidenceScope: "ALL", page: 1 };
+            this.violationRuleFilters = { ...this.violationRuleFilters, conditionCount: "ALL", confidenceScope: "ALL", ruleId: "", page: 1 };
+            const payload = this.currentModelDetail?.mixedXai;
+            if (!payload) return;
+            if (this.isMixedXaiViolationNode()) this.renderMixedXaiViolationResult(payload);
+            else this.loadModelRuleSummary(1);
+        },
+
+        renderMixedXaiDetail(json) {
+            const common = window.RuleResultCommon;
+            const payload = json.mixedXai;
+            const summary = json.ruleSummary || {};
+            const pattern = common.isPattern(payload);
+            const ruleRows = (summary.rules || []).map((r) => ({ ...r, RESULT_TEXT: pattern ? r.RESULT_TEXT : getText("Anomaly candidate"),
+                VALIDATION_STATUS: common.validationStatus(r.VALIDATION_STATUS, getText) }));
+            return `<section class="anly-work-readable-stats"><div class="anly-work-readable-stat-block">
+                <strong>${this.escapeHtml(getText("Validation diagnostics"))}</strong>
+                <div class="anly-work-readable-stat-metrics">${common.diagnostics(payload.summary, getText).map((m) => `<span><b>${this.escapeHtml(m.value)}</b><small>${this.escapeHtml(m.label)}</small></span>`).join("")}</div>
+                <p>${this.escapeHtml(common.notes(payload.summary, getText))}</p>
+                </div></section>
+                <h4>${this.escapeHtml(getText("Rule summary table"))}</h4>
+                ${this.renderGrid(pattern ? common.patternColumns : common.columns, ruleRows, { ...summary, mixedFormulaGraphActions: pattern, columnLabels: pattern ? common.patternColumnLabels(getText) : common.columnLabels(getText) })}`;
+        },
+
         async loadResultTable(page = 1) {
             const node = this.selectedNode;
             if (!node) return;
+            if (this.isMixedScenarioNode(node) || ["INIT$_TB_RULEDISC_XAI", "INIT$_TB_XAI_RUN", "INIT$_TB_RULEVIOL_XAI"].includes(String(node.RESULT_OBJECT_NAME || "").toUpperCase())) {
+                return this.loadMixedXaiAnalysis(node, page);
+            }
             this.resultPage = Math.max(1, Number(page || 1));
             this.showResultLoading(getText("Loading result table..."));
             const params = this.buildResultTableParams(node, this.resultPage);
@@ -1652,6 +1817,7 @@
         },
 
         async refreshResultGridOnly(page = 1) {
+            if (this.isMixedXaiViolationNode()) return this.loadResultTable(page);
             const node = this.selectedNode;
             const body = getContainerEl(`#tableResultBody-${PAGE_CODE}`);
             if (!node || !body) {
@@ -1781,6 +1947,17 @@
         async loadModelRuleSummary(page = 1) {
             const node = this.selectedNode;
             if (!node || !this.currentModelDetail) return;
+            if (this.currentModelDetail.mixedXai) {
+                const common = window.RuleResultCommon;
+                const source = this.currentModelDetail.mixedXai.ruleSummary;
+                const summary = common.filterSummary(common.isPattern(this.currentModelDetail.mixedXai) ? common.patternSummary(source, this.mixedRuleFamily || "VALUE") : source, this.ruleSummaryFilters, page);
+                this.currentModelDetail.ruleSummary = summary;
+                this.ruleSummaryFilters.page = summary.page;
+                this.currentExport = this.buildRuleSummaryExport(node, summary);
+                this.renderModelAnalysis(this.currentModelDetail, "readable");
+                this.snapshotNodeResultCache();
+                return;
+            }
             const filters = this.ruleSummaryFilters || {};
             this.currentModelDetail.ruleSummaryLoading = true;
             this.currentModelDetail.ruleSummaryError = "";
@@ -1877,6 +2054,13 @@
         },
 
         renderModelAnalysis(json = this.currentModelDetail, activeTab = "readable") {
+            if (json?.mixedXai) {
+                if (window.RuleResultCommon.isPattern(json.mixedXai)) json.ruleSummary = window.RuleResultCommon.filterSummary(
+                    window.RuleResultCommon.patternSummary(json.mixedXai.ruleSummary, this.mixedRuleFamily || "VALUE"), this.ruleSummaryFilters, json.ruleSummary?.page || 1);
+                this.renderAssociationModelAnalysis(json, activeTab);
+                this.prependNodeResultSwitcher();
+                return;
+            }
             const resultLayout = this.getModelResultLayout(this.selectedNode, json);
             const renderer = typeof this[resultLayout.renderer] === "function" ? resultLayout.renderer : "renderAssociationModelAnalysis";
             this[renderer](json, activeTab, resultLayout);
@@ -1893,19 +2077,20 @@
             const modelName = json.modelName || this.selectedNode?.RESULT_OBJECT_NAME || "";
             const executionTitle = this.getNodeExecutionTitle(this.selectedNode, `${modelOwner}.${modelName}`);
             panel.innerHTML = `
+                ${json.mixedXai ? this.renderMixedFamilyControls(json.mixedXai) : ""}
                 <header class="anly-work-result-header">
                     <div>
-                        <span>${this.escapeHtml(this.selectedNode?.NODE_NAME || "Oracle ML Model View")}</span>
+                        <span>${this.escapeHtml(this.selectedNode?.NODE_NAME || (json.mixedXai ? getText("IF–THEN rules") : "Oracle ML Model View"))}</span>
                         <strong class="anly-work-result-exec-object">${this.escapeHtml(executionTitle)}</strong>
-                        <small>Result Model ${this.escapeHtml(modelOwner)}.${this.escapeHtml(modelName)}</small>
+                        <small>${this.escapeHtml(getText(json.mixedXai ? "Result Table" : "Result Model"))} ${this.escapeHtml(modelOwner)}.${this.escapeHtml(modelName)}</small>
                         ${this.renderSelectedNodeJobDesc()}
                     </div>
                     <em>${this.escapeHtml(modelHeaderLabel)}</em>
                     ${this.renderSelectedNodeExecutionMeta()}
                 </header>
                 <div class="anly-work-model-tabs">
-                    <button type="button" class="${readableActive ? "is-active" : ""}" onclick="${PAGE_CODE}.switchModelAnalysisTab('readable')">Readable Rules</button>
-                    <button type="button" class="${!readableActive ? "is-active" : ""}" onclick="${PAGE_CODE}.switchModelAnalysisTab('detail')">Detail Views</button>
+                    <button type="button" class="${readableActive ? "is-active" : ""}" onclick="${PAGE_CODE}.switchModelAnalysisTab('readable')">${this.escapeHtml(getText("Readable Rules"))}</button>
+                    <button type="button" class="${!readableActive ? "is-active" : ""}" onclick="${PAGE_CODE}.switchModelAnalysisTab('detail')">${this.escapeHtml(getText("Detail Views"))}</button>
                 </div>
                 <div class="anly-work-model-tab-panel ${readableActive ? "is-active" : ""}" data-model-tab="readable">
                     ${this.renderReadableRuleSummary(json)}
@@ -1922,8 +2107,8 @@
         },
 
         getActiveModelAnalysisTab() {
-            const active = getContainerEl("#resultPanel-${PAGE_CODE} .anly-work-model-tabs button.is-active");
-            return /Detail/i.test(active?.textContent || "") ? "detail" : "readable";
+            const active = getContainerEl("#resultPanel-${PAGE_CODE} .anly-work-model-tab-panel.is-active");
+            return active?.dataset.modelTab === "detail" ? "detail" : "readable";
         },
 
         getModelDetailView(viewType, json = this.currentModelDetail) {
@@ -2048,7 +2233,7 @@
                     ${this.renderFallbackReadableRuleGrid(fallbackRules)}
                 `;
             }
-            if (!summary || Number(summary.overview?.TOTAL_RULES || 0) <= 0) {
+            if (!summary || (Number(summary.overview?.TOTAL_RULES || 0) <= 0 && !json?.mixedXai)) {
                 const message = error || getText("No saved rule summary exists. Run this model job again to create the summary table.");
                 return `
                     <div class="anly-work-readable-rule-intro">
@@ -2085,13 +2270,13 @@
                         <span>${this.escapeHtml(getText("{basis} Select a condition count or result column to update the detail rules below.", { basis: this.describeRuleSummaryBasis(overview) }))}</span>
                     </div>
                     <div class="anly-work-sample-controls">
-                        <button type="button" class="table-btn" onclick="${PAGE_CODE}.openEditingRuleDecision('M05001')">
+                        <button type="button" class="table-btn" onclick="${json.mixedXai && !window.RuleResultCommon.isPattern(json.mixedXai) ? `${PAGE_CODE}.openViolationForRule('')` : `${PAGE_CODE}.openEditingRuleDecision('M05001')`}">
                             <i class="fas fa-list-check"></i>
-                            ${this.escapeHtml(getLabel("reviewEditingRules", "Review editing rules"))}
+                            ${this.escapeHtml(json.mixedXai && !window.RuleResultCommon.isPattern(json.mixedXai) ? getText("View candidates") : getLabel("reviewEditingRules", "Review editing rules"))}
                         </button>
                         <button type="button" class="table-btn" onclick="${PAGE_CODE}.exportCurrent()">
                             <i class="fas fa-file-export"></i>
-                            Export
+                            ${this.escapeHtml(getText("Export"))}
                         </button>
                         ${this.renderSamplePageJump("ruleSummaryPage-${PAGE_CODE}", { page: summary.page, pageSize: summary.pageSize, total: summary.total }, "${PAGE_CODE}.goRuleSummaryPage()", "${PAGE_CODE}.loadModelRuleSummary", {
                             pageSizeId: "ruleSummaryPageSize-${PAGE_CODE}",
@@ -2140,12 +2325,12 @@
                         <header>
                             <strong>${this.escapeHtml(getText("Condition Column ID Search"))}</strong>
                             <div class="anly-work-rule-facet-actions">
-                                <button type="button" onclick="${PAGE_CODE}.searchRuleSummaryConditionColumn()">Search</button>
-                                <button type="button" class="${this.ruleSummaryFilters.conditionColumn === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.resetRuleSummaryConditionColumn()">Reset</button>
+                                <button type="button" onclick="${PAGE_CODE}.searchRuleSummaryConditionColumn()">${this.escapeHtml(getText("Search"))}</button>
+                                <button type="button" class="${this.ruleSummaryFilters.conditionColumn === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.resetRuleSummaryConditionColumn()">${this.escapeHtml(getText("Reset"))}</button>
                             </div>
                         </header>
                         <label class="anly-work-rule-condition-search">
-                            <span>Condition Column</span>
+                            <span>${this.escapeHtml(getText("Condition Column"))}</span>
                             <input id="ruleConditionColumnInput-${PAGE_CODE}" type="search" value="${this.escapeHtml(conditionColumnFilter)}" placeholder="${this.escapeHtml(getText("e.g. COL001"))}" onkeydown="${PAGE_CODE}.handleRuleSummaryConditionColumnKeydown(event)">
                         </label>
                     </div>
@@ -2214,7 +2399,7 @@
                         <div class="anly-work-condition-count-buttons">${renderButtons("total", "ALL")}</div>
                     </div>
                     <div class="anly-work-condition-count-row">
-                        <span>${this.escapeHtml(getText("Violation candidate rule count"))}</span>
+                        <span>${this.escapeHtml(getText(this.currentModelDetail?.mixedXai && !window.RuleResultCommon.isPattern(this.currentModelDetail.mixedXai) ? "Rules with candidates" : "Violation candidate rule count"))}</span>
                         <div class="anly-work-condition-count-buttons">${renderButtons("nonPerfect", "NON_PERFECT")}</div>
                     </div>
                 </div>
@@ -2369,6 +2554,15 @@
 
         buildSummaryRuleCards(rows = [], summary = {}) {
             return (rows || []).map((row, index) => {
+                if (window.RuleResultCommon?.isXai(row)) {
+                    const rawRuleId = String(row.RULE_ID || index + 1);
+                    return { ruleId: `Rule #${rawRuleId}`, rawRuleId, isMixedXai: true,
+                        canOpenViolation: Number(row.MATCH_COUNT) > 0, mappingLevel: "mapped",
+                        mappingLabel: getText("Candidate rule"), ifText: row.CONDITION_TEXT,
+                        thenText: getText("Anomaly candidate"), conditionCount: Number(row.CONDITION_COUNT || 0),
+                        note: getText(row.VALIDATION_STATUS === "HOLDOUT_OBSERVED" ? "Holdout observed" : "Insufficient holdout support"),
+                        metrics: window.RuleResultCommon.metrics(row, getText) };
+                }
                 const conditionText = this.resolveRuleSideText(row.CONDITION_TEXT || "");
                 const resultText = this.resolveRuleSideText(row.RESULT_TEXT || "");
                 const hasResultValue = row.RESULT_HAS_VALUE_YN === "Y";
@@ -2392,7 +2586,7 @@
                 const rawRuleId = String(row.RULE_ID || index + 1);
                 const conditionClusters = Array.isArray(row.CONDITION_CLUSTERS) ? row.CONDITION_CLUSTERS : [];
                 const resultClusters = Array.isArray(row.RESULT_CLUSTERS) ? row.RESULT_CLUSTERS : [];
-                const note = this.describeReadableRuleSentence({
+                const note = window.RuleResultCommon.isFormula(row) ? window.RuleResultCommon.ruleNotes(row, this.currentModelDetail?.mixedXai?.summary, getText) : this.describeReadableRuleSentence({
                     conditionText,
                     thenText,
                     supportCount,
@@ -2405,16 +2599,18 @@
                 return {
                     ruleId: `Rule #${rawRuleId}`,
                     rawRuleId,
+                    isFormula: window.RuleResultCommon.isFormula(row),
+                    formulaRule: window.RuleResultCommon.isFormula(row) ? row : null,
                     confidenceValue: row.RULE_CONFIDENCE,
-                    canOpenViolation: this.isRuleViolationCandidate(row.RULE_CONFIDENCE),
+                    canOpenViolation: window.RuleResultCommon.isPattern(row) ? Number(row.VIOLATION_COUNT) > 0 : this.isRuleViolationCandidate(row.RULE_CONFIDENCE),
                     mappingLevel: mapped ? "mapped" : "limited",
                     mappingLabel: mapped
-                        ? (isDecisionTree ? getText("Decision Tree target rule") : (isConditional ? getText("Conditional probability rule") : getText("Condition/result mapped")))
+                        ? (window.RuleResultCommon.isFormula(row) ? window.RuleResultCommon.formulaMethod(row, getText) : window.RuleResultCommon.isPattern(row) ? getText("Pattern rules") : isDecisionTree ? getText("Decision Tree target rule") : (isConditional ? getText("Conditional probability rule") : getText("Condition/result mapped")))
                         : getText("ID/metric focused"),
                     ifText: conditionText || getText("Review the condition item combination in Detail Views."),
                     thenText,
                     note,
-                    metrics: [
+                    metrics: window.RuleResultCommon.isPattern(row) ? window.RuleResultCommon.metrics(row, getText) : [
                         { label: "count", value: frequencyLabel },
                         { label: "support", value: supportText },
                         { label: "confidence", value: confidenceText },
@@ -2465,6 +2661,12 @@
         },
 
         buildRuleSummaryExport(node = {}, json = {}) {
+            if (window.RuleResultCommon.isPattern(json)) return { filename: `${node.RESULT_OBJECT_NAME || "rule-summary"}_readable.csv`, columns: window.RuleResultCommon.patternColumns, rows: json.rules || [] };
+            if (json.overview?.RULE_SOURCE === "MIXED_XAI") {
+                return { filename: `${node.RESULT_OBJECT_NAME || "rule-summary"}_readable.csv`,
+                    columns: window.RuleResultCommon.columns,
+                    rows: (json.rules || []).map((row) => ({ ...row, RESULT_TEXT: getText("Anomaly candidate") })) };
+            }
             const cards = this.buildSummaryRuleCards(json.rules || [], json);
             const rows = cards.map((card) => {
                 const metricMap = {};
@@ -2496,6 +2698,7 @@
         describeRuleSummaryBasis(overview = {}) {
             const modelType = String(overview.MODEL_TYPE || "").toUpperCase();
             const source = String(overview.RULE_SOURCE || "").toUpperCase();
+            if (["MIXED_XAI", "MIXED_PATTERN_TREE"].includes(source)) return window.RuleResultCommon.notes(this.currentModelDetail?.mixedXai?.summary, getText);
             if (modelType.includes("DECISION_TREE")) {
                 return getText("Shows conditional frequency/probability rules saved by target column for the Decision Tree classification model.");
             }
@@ -2509,6 +2712,7 @@
         },
 
         getModelHeaderLabel(json = {}) {
+            if (json.mixedXai) return window.RuleResultCommon.isPattern(json.mixedXai) ? getText((json.mixedXai.ruleSummary?.rules || []).some(window.RuleResultCommon.isFormula) ? "Pattern rules and numeric formulas" : "Pattern decision tree") : "Isolation Forest / Decision Tree";
             const metadata = json.modelMetadata || {};
             const miningFunction = String(metadata.MINING_FUNCTION || "").trim();
             const algorithm = String(metadata.ALGORITHM || "").trim();
@@ -2536,13 +2740,14 @@
         },
 
         renderReadableRuleCard(rule) {
+            if (rule.isFormula && rule.formulaRule) return this.renderMixedFormulaRuleCard(rule);
             const qualityClass = rule.mappingLevel === "mapped" ? "is-mapped" : "is-limited";
             const plainRuleId = rule.rawRuleId || this.getPlainRuleId(rule.ruleId);
             return `
                 <article class="anly-work-readable-rule-card ${qualityClass}">
                     <header>
                         <span class="anly-work-rule-title">
-                            <small>Rule #</small>
+                            <small>${this.escapeHtml(getText("Rule"))} #</small>
                             <code title="${this.escapeHtml(plainRuleId)}">${this.escapeHtml(plainRuleId)}</code>
                             <button type="button" class="anly-work-rule-copy-btn" title="${this.escapeHtml(getText("Copy RULE ID"))}" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(plainRuleId)}', event)">
                                 <i class="far fa-copy"></i>
@@ -2551,28 +2756,72 @@
                         <span class="anly-work-rule-card-actions">
                             <em>${this.escapeHtml(rule.mappingLabel)}</em>
                             ${this.renderAprioriClusterReference(rule)}
+                            ${rule.isFormula ? `<button type="button" class="anly-work-rule-open-link" onclick="${PAGE_CODE}.openMixedFormulaPopup('${this.escapeJs(plainRuleId)}')">${this.escapeHtml(getText("View formula graph"))}</button>` : ""}
                             ${rule.canOpenViolation
-                                ? `<button type="button" class="anly-work-rule-open-link" title="${this.escapeHtml(getText("Search violation detection results with this RULE ID"))}" onclick="${PAGE_CODE}.openViolationForRule('${this.escapeJs(plainRuleId)}', '${this.escapeJs(rule.conditionCount)}')">${this.escapeHtml(getText("View violations"))}</button>`
+                                ? `<button type="button" class="anly-work-rule-open-link" title="${this.escapeHtml(getText(rule.isMixedXai ? "View candidates" : "Search violation detection results with this RULE ID"))}" onclick="${PAGE_CODE}.openViolationForRule('${this.escapeJs(plainRuleId)}', '${this.escapeJs(rule.conditionCount)}')">${this.escapeHtml(getText(rule.isMixedXai ? "View candidates" : "View violations"))}</button>`
                                 : ""}
                         </span>
                     </header>
                     <div class="anly-work-readable-rule-sentence">
-                        <b>IF</b>
-                        <strong>${this.renderColumnAwareText(rule.ifText)}</strong>
-                        <b>THEN</b>
-                        <strong>${this.renderColumnAwareText(rule.thenText)}</strong>
+                        ${(rule.isFormula ? [["THEN", rule.thenText], ["IF", rule.ifText]] : [["IF", rule.ifText], ["THEN", rule.thenText]])
+                            .map(([label, text]) => `<b>${label}</b><strong>${this.renderColumnAwareText(text)}</strong>`).join("")}
                     </div>
                     <p>${this.renderColumnAwareText(rule.note)}</p>
                     <footer>
                         ${rule.metrics.map((metric) => `
                             <span>
-                                <small>${this.escapeHtml(metric.label)}</small>
+                                <small>${this.escapeHtml(getText(metric.label))}</small>
                                 <strong>${this.escapeHtml(metric.value)}</strong>
                             </span>
                         `).join("")}
                     </footer>
                 </article>
             `;
+        },
+
+        renderMixedFormulaRuleCard(rule) {
+            const saved = rule.formulaRule;
+            const ruleId = rule.rawRuleId || this.getPlainRuleId(rule.ruleId);
+            const features = this.getMixedFormulaFeatureColumns(saved);
+            return `<article class="anly-work-symbolic-rule-card">
+                <header><span class="anly-work-symbolic-rule-id-inline">
+                    <small class="anly-work-symbolic-rule-id-label">Rule ID</small>
+                    <span class="anly-work-symbolic-rule-id-row"><code title="${this.escapeHtml(ruleId)}">${this.escapeHtml(ruleId)}</code>
+                        <button type="button" class="anly-work-rule-copy-btn" title="${this.escapeHtml(getText("Copy RULE ID"))}" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(ruleId)}', event)"><i class="far fa-copy"></i></button>
+                    </span></span>
+                    <span class="anly-work-symbolic-rule-actions">
+                        <button type="button" title="${this.escapeHtml(getText("View formula graph"))}" aria-label="${this.escapeHtml(getText("View formula graph"))}" onclick="${PAGE_CODE}.openMixedFormulaPopup('${this.escapeJs(ruleId)}')"><i class="fas fa-chart-line" aria-hidden="true"></i></button>
+                        <button type="button" onclick="${PAGE_CODE}.openViolationForRule('${this.escapeJs(ruleId)}', '${this.escapeJs(rule.conditionCount)}')">${this.escapeHtml(getText("View violations"))}</button>
+                    </span>
+                </header>
+                <div class="anly-work-symbolic-y-panel"><small>${this.escapeHtml(getText("Y result value"))}</small><strong>${this.renderColumnAwareCell(saved.RESULT_COLUMN)}</strong></div>
+                ${this.renderMixedFormulaSentence(saved)}
+                <div class="anly-work-symbolic-x-panel"><small>${this.escapeHtml(getText("X arguments"))}</small><div class="anly-work-corr-tags">${features.map((column) => this.renderColumnChip(column)).join("") || "-"}</div></div>
+                <p class="anly-work-violation-scope-note">${this.escapeHtml(rule.note)}</p>
+                <footer>${rule.metrics.map((metric) => `<span title="${this.escapeHtml(metric.label)}"><small>${this.escapeHtml(metric.label)}</small><b>${this.escapeHtml(metric.value)}</b></span>`).join("")}</footer>
+            </article>`;
+        },
+
+        getMixedFormulaFeatureColumns(rule) {
+            const columns = new Set();
+            const visit = (node, depth = 0) => {
+                if (!node || depth > 12) return;
+                if (typeof node.column === "string") columns.add(node.column);
+                visit(node.left, depth + 1);
+                visit(node.right, depth + 1);
+            };
+            let ast = rule.RESULT_AST;
+            if (typeof ast === "string") { try { ast = JSON.parse(ast); } catch (_) { ast = null; } }
+            visit(ast?.expression);
+            return [...columns];
+        },
+
+        renderMixedFormulaSentence(rule, source = this.currentModelDetail) {
+            const formulaText = String(rule.RESULT_TEXT || "");
+            return `<div class="anly-work-symbolic-formula-row anly-work-violation-formula-row">
+                <code><b>THEN</b> ${this.escapeHtml(formulaText)}</code>
+                <button type="button" class="anly-work-rule-copy-btn" title="${this.escapeHtml(getText("Copy formula"))}" onclick="${PAGE_CODE}.copySymbolicFormula('${this.escapeJs(formulaText)}', event)"><i class="far fa-copy"></i></button>
+                </div><div class="anly-work-readable-rule-sentence"><b>IF</b><strong>${this.renderColumnAwareText(rule.CONDITION_TEXT || "", source)}</strong></div>`;
         },
 
         getPlainRuleId(ruleId) {
@@ -2659,6 +2908,7 @@
         },
 
         renderModelDetailViews(json) {
+            if (json?.mixedXai) return this.renderMixedXaiDetail(json);
             const vi = this.getModelDetailView("VI", json) || {};
             const vr = this.getModelDetailView("VR", json) || {};
             const vg = this.getModelDetailView("VG", json) || {};
@@ -2795,11 +3045,11 @@
                 <div class="anly-work-page-jump">
                     <button type="button" ${page <= 1 ? "disabled" : ""} onclick="${callPage(page - 1)}"><i class="fas fa-chevron-left"></i></button>
                     <label>
-                        <span>Page</span>
+                        <span>${this.escapeHtml(getText("Page"))}</span>
                         <input id="${this.escapeHtml(inputId)}" type="number" min="1" max="${this.escapeHtml(totalPages)}" value="${this.escapeHtml(page)}" onkeydown="if(event.key==='Enter'){${goOnclick}}">
                         <small>/ ${this.formatNumber(totalPages)}</small>
                     </label>
-                    <button type="button" onclick="${goOnclick}">Go</button>
+                    <button type="button" onclick="${goOnclick}">${this.escapeHtml(getText("Go"))}</button>
                     <button type="button" ${page >= totalPages ? "disabled" : ""} onclick="${callPage(page + 1)}"><i class="fas fa-chevron-right"></i></button>
                     ${pageSizeSelect}
                 </div>
@@ -2980,6 +3230,7 @@
         renderViolationSummary(summary) {
             if (!summary) return "";
             this.lastViolationSummary = summary;
+            const mixedFormula = summary.mixedPattern && this.mixedRuleFamily === "FORMULA";
             const overview = summary.overview || {};
             const candidateOverview = summary.candidateOverview || {};
             const candidateItems = [
@@ -3011,7 +3262,7 @@
             const violatedRuleCount = Number(overview.VIOLATED_RULE_COUNT || 0);
             const noViolationRuleCount = Math.max(0, detectionEligibleCount - violatedRuleCount);
             const noViolationAfterDetectionCount = Math.max(0, detectionEligibleCount - violatedRuleCount);
-            const activeScopeLabel = this.violationRuleFilters?.confidenceScope === "ALL" ? getText("All rules") : getText("Rules below 100%");
+            const activeScopeLabel = summary.mixedXai ? getText(this.violationRuleFilters?.confidenceScope === "ALL" ? "All rules" : "Rules with candidates") : this.violationRuleFilters?.confidenceScope === "ALL" ? getText("All rules") : getText("Rules below 100%");
             const resultScope = summary.resultScope || this.violationRuleFilters?.resultScope || "HIT";
             const resultScopeMessage = resultScope === "CANDIDATE"
                 ? getText("Displays all selected candidate rules.")
@@ -3021,14 +3272,14 @@
                     ? getText("Displays selected candidates with no actual violation rows.")
                     : getText("Displays rules with actual violation rows.");
             return `
-                <section class="anly-work-violation-summary">
-                    <div class="anly-work-violation-intro">
+                <section class="${mixedFormula ? "anly-work-symbolic-violation-summary" : "anly-work-violation-summary"}">
+                    <${mixedFormula ? "header" : "div"} class="${mixedFormula ? "" : "anly-work-violation-intro"}">
                         <div>
-                            <strong>${this.escapeHtml(getText("Rule Violation Detection Summary"))}</strong>
+                            <strong>${this.escapeHtml(getText(mixedFormula ? "Continuous violations" : "Rule Violation Detection Summary"))}</strong>
                             <span>${this.escapeHtml(getText("Target {target} · {scope} basis", { target: `${summary.targetOwner || "-"}.${summary.targetTable || "-"}`, scope: activeScopeLabel }))}${summary.ruleModelName ? ` · Rule Model ${this.escapeHtml(summary.ruleModelName)}` : ""}</span>
                         </div>
                         ${this.renderViolationRulePager(summary)}
-                    </div>
+                    </${mixedFormula ? "header" : "div"}>
                     <section class="anly-work-violation-condition-panel">
                         <strong>${this.escapeHtml(getText("Condition Count"))}</strong>
                         ${this.renderRuleConditionMatrix(candidateItems, this.violationRuleFilters?.conditionCount || "ALL", this.violationRuleFilters?.confidenceScope || "NON_PERFECT", "${PAGE_CODE}.selectViolationCondition")}
@@ -3041,7 +3292,7 @@
                             <button type="button" disabled>
                                 <small>${this.escapeHtml(getText("Detection targets"))}</small>
                                 <b>${this.formatNumber(detectionEligibleCount)}</b>
-                                <em>${this.escapeHtml(getText("min/conf/lift/max applied"))}</em>
+                                <em>${this.escapeHtml(getText(summary.mixedXai ? "Candidate rule" : summary.mixedPattern ? "Validated patterns" : "min/conf/lift/max applied"))}</em>
                             </button>
                             <button type="button" class="is-hit ${resultScope === "HIT" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectViolationResultScope('HIT')">
                                 <small>${this.escapeHtml(getText("Violation found"))}</small>
@@ -3053,28 +3304,28 @@
                                 <b>${this.formatNumber(noViolationRuleCount)}</b>
                                 <em>${this.escapeHtml(getText("Show no violation"))}</em>
                             </button>
-                            <button type="button" class="is-muted ${resultScope === "MAX_RULES" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectViolationResultScope('MAX_RULES')">
+                            ${summary.mixedXai || summary.mixedPattern ? "" : `<button type="button" class="is-muted ${resultScope === "MAX_RULES" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectViolationResultScope('MAX_RULES')">
                                 <small>${this.escapeHtml(getText("Excluded by max rules"))}</small>
                                 <b>${this.formatNumber(maxRulesCutoffCount)}</b>
                                 <em>${this.escapeHtml(getText("Outside top 100"))}</em>
-                            </button>
+                            </button>`}
                             <button type="button" disabled>
                                 <small>${this.escapeHtml(getText("Violation rows / count"))}</small>
-                                <b>${this.formatNumber(overview.VIOLATED_ROW_COUNT)} / ${this.formatNumber(overview.VIOLATION_COUNT)}</b>
+                                <b>${overview.VIOLATED_ROW_COUNT == null ? "-" : this.formatNumber(overview.VIOLATED_ROW_COUNT)} / ${this.formatNumber(overview.VIOLATION_COUNT)}</b>
                                 <em>${this.escapeHtml(getText("Actual detection result"))}</em>
                             </button>
                             ${ruleFilterDisplay ? `<b>${this.escapeHtml(getText("RULE ID search: {ruleId}", { ruleId: ruleFilterDisplay }))}</b>` : ""}
                         </div>
-                        <div class="anly-work-violation-reason-strip">
+                        ${summary.mixedXai || summary.mixedPattern ? "" : `<div class="anly-work-violation-reason-strip">
                             <span><small>${this.escapeHtml(getText("Below confidence"))}</small><b>${this.formatNumber(confidenceCutoffCount)}</b></span>
                             <span><small>${this.escapeHtml(getText("Below lift"))}</small><b>${this.formatNumber(liftCutoffCount)}</b></span>
                             <span><small>${this.escapeHtml(getText("Excluded by max rules"))}</small><b>${this.formatNumber(maxRulesCutoffCount)}</b></span>
                             <span><small>${this.escapeHtml(getText("No violation after detection"))}</small><b>${this.formatNumber(noViolationAfterDetectionCount)}</b></span>
                             <em>${this.escapeHtml(getText("Detection criteria: confidence >= {confidence}, lift >= {lift}, max rules {maxRules}", { confidence: this.formatPercentMetric(detectionCriteria.minConfidence), lift: this.formatDecimal(detectionCriteria.minLift), maxRules: this.formatNumber(detectionCriteria.maxRules) }))}</em>
-                        </div>
-                        <div class="anly-work-violation-scope-note">${this.escapeHtml(resultScopeMessage)}</div>
+                        </div>`}
+                        <div class="anly-work-violation-scope-note">${this.escapeHtml(summary.mixedXai || summary.mixedPattern ? window.RuleResultCommon.notes(summary.diagnostics, getText) : resultScopeMessage)}</div>
                     </section>
-                    <section class="anly-work-rule-facet-panel is-violation">
+                    <section class="anly-work-rule-facet-panel ${mixedFormula ? "is-symbolic" : "is-violation"}">
                         <div class="anly-work-rule-facet-block">
                             <header>
                                 <strong>${this.escapeHtml(getText("Top Violation Result Columns"))}</strong>
@@ -3092,8 +3343,8 @@
                             <header>
                                 <strong>${this.escapeHtml(getText("RULE ID Search"))}</strong>
                                 <div class="anly-work-rule-facet-actions">
-                                    <button type="button" onclick="${PAGE_CODE}.searchViolationRule()">Search</button>
-                                    <button type="button" onclick="${PAGE_CODE}.resetViolationRuleSearch()">Reset</button>
+                                    <button type="button" onclick="${PAGE_CODE}.searchViolationRule()">${this.escapeHtml(getText("Search"))}</button>
+                                    <button type="button" onclick="${PAGE_CODE}.resetViolationRuleSearch()">${this.escapeHtml(getText("Reset"))}</button>
                                 </div>
                             </header>
                             <label class="anly-work-rule-condition-search">
@@ -3118,23 +3369,27 @@
                                                 </button>
                                             ` : ""}
                                         </span>
+                                        <span class="anly-work-violation-rule-actions">
+                                        ${window.RuleResultCommon.isFormula(rule) ? `<button type="button" title="${this.escapeHtml(getText("View formula graph"))}" aria-label="${this.escapeHtml(getText("View formula graph"))}" onclick="${PAGE_CODE}.openMixedFormulaPopup('${this.escapeJs(ruleId)}')"><i class="fas fa-chart-line" aria-hidden="true"></i></button>` : ""}
                                         <button type="button" class="${hasViolation ? "" : "is-muted"}" onclick="${PAGE_CODE}.openViolationSqlPopup('rule', '${this.escapeJs(rule.RULE_ID)}')">
-                                            ${hasViolation ? this.escapeHtml(getText("{count} rows", { count: this.formatNumber(rule.VIOLATION_COUNT) })) : (rule.DETECTION_SCANNED_YN === "N" ? this.escapeHtml(getText("Excluded by max rules")) : this.escapeHtml(getText("No violation")))}
+                                            ${hasViolation ? this.escapeHtml(getText("{count} rows", { count: this.formatNumber(rule.VIOLATION_COUNT) })) : (rule.DETECTION_SCANNED_YN === "N" ? this.escapeHtml(getText(summary.mixedXai ? "Not evaluated" : "Excluded by max rules")) : this.escapeHtml(getText("No violation")))}
                                         </button>
+                                        </span>
                                     </header>
-                                    <p>
+                                    ${window.RuleResultCommon.isFormula(rule) ? this.renderMixedFormulaSentence(rule, summary) : `<p>
                                         <b>IF</b>
                                         ${this.renderColumnAwareText(rule.CONDITION_TEXT || "", summary)}
                                         <b>THEN</b>
-                                        ${this.renderColumnAwareCell(rule.RESULT_COLUMN, summary)} = ${this.escapeHtml(rule.EXPECTED_VALUE || "")}
-                                    </p>
+                                        ${summary.mixedXai ? this.escapeHtml(getText("Anomaly candidate")) : `${window.RuleResultCommon.isPattern(rule) ? this.renderColumnAwareText(rule.RESULT_TEXT || "", summary) : `${this.renderColumnAwareCell(rule.RESULT_COLUMN, summary)} = ${this.escapeHtml(rule.EXPECTED_VALUE ?? "")}`}`}
+                                    </p>`}
                                     <footer>
+                                        ${summary.mixedXai || summary.mixedPattern ? window.RuleResultCommon.metrics(rule, getText).map((m) => `<span><small>${this.escapeHtml(m.label)}</small><b>${this.escapeHtml(m.value)}</b></span>`).join("") : `
                                         <span><small>confidence</small><b>${this.formatPercentMetric(rule.RULE_CONFIDENCE)}</b></span>
                                         <span><small>${this.escapeHtml(getText("Expected violation"))}</small><b>${this.formatExpectedViolationRate(rule.RULE_CONFIDENCE)}</b></span>
                                         <span><small>lift</small><b>${this.formatDecimal(rule.RULE_LIFT)}</b></span>
                                         <span><small>support</small><b>${this.formatPercentMetric(rule.RULE_SUPPORT)}</b></span>
                                         <span><small>${this.escapeHtml(getText("Detection rank"))}</small><b>${rule.DETECTION_RN ? this.formatNumber(rule.DETECTION_RN) : "-"}</b></span>
-                                        <span><small>score</small><b>${this.formatDecimal(rule.AVG_VIOLATION_SCORE)}</b></span>
+                                        <span><small>score</small><b>${this.formatDecimal(rule.AVG_VIOLATION_SCORE)}</b></span>`}
                                     </footer>
                                 </article>
                             `;
@@ -3354,6 +3609,14 @@
         getViolationRuleColumnRoles(kind = "all", value = "") {
             const conditionColumns = new Set();
             const resultColumns = new Set();
+            if (this.isMixedXaiViolationNode()) {
+                const rules = this.currentModelDetail?.mixedXai?.ruleSummary?.rules || [];
+                rules.filter((r) => (kind !== "rule" || String(r.RULE_ID) === String(value)) && (kind !== "column" || r.RESULT_COLUMN === value)).forEach((r) => {
+                    (r.CONDITION_COLUMNS || []).forEach((column) => conditionColumns.add(column));
+                    if (window.RuleResultCommon.isPattern(r) && r.RESULT_COLUMN) resultColumns.add(r.RESULT_COLUMN);
+                });
+                return { conditionColumns: [...conditionColumns], resultColumns: [...resultColumns] };
+            }
             if (this.isSymbolicViolationNode(this.selectedNode)) {
                 const summary = this.lastSymbolicViolationSummary || {};
                 if (kind === "column" && value) {
@@ -3404,7 +3667,58 @@
             return [...new Set(matches.map((item) => item.trim().toUpperCase()).filter(Boolean))];
         },
 
+        createMixedXaiViolationSql(kind, value, live = false) {
+            const node = this.selectedNode;
+            const target = `${this.quoteSqlName(node.TARGET_OWNER)}.${this.quoteSqlName(node.TARGET_TABLE)}`;
+            const rule = this.getViolationRuleDetail(kind, value);
+            const payload = this.currentModelDetail?.mixedXai || {};
+            const pattern = window.RuleResultCommon.isPattern(payload);
+            const caseExpression = pattern && payload.summary?.caseIdColumn === "FILE_ROW_NO"
+                ? 'COALESCE(TO_CHAR(T."FILE_ROW_NO"), ROWIDTOCHAR(T.ROWID))' : "ROWIDTOCHAR(T.ROWID)";
+            const scope = pattern ? { ...payload, ruleSummary: window.RuleResultCommon.patternSummary(payload.ruleSummary, this.mixedRuleFamily || "VALUE") } : payload;
+            const allowed = new Set(window.RuleResultCommon.violationSummary(scope, this.violationRuleFilters).ruleIds);
+            const rules = (payload.ruleSummary?.rules || []).filter((r) => kind === "rule"
+                ? String(r.RULE_ID) === String(value) : allowed.has(String(r.RULE_ID)) && (kind !== "column" || r.RESULT_COLUMN === value));
+            if (live) {
+                if (rules.some((r) => !r.CONDITION_AST || (pattern && !r.RESULT_AST))) return "";
+                if (pattern) return rules.length ? rules.map((r) => `SELECT ${this.sqlLiteral(r.RULE_ID)} AS V_RULE_ID
+     , ${caseExpression} AS V_CASE_ID
+     , ${this.sqlLiteral(r.RESULT_COLUMN)} AS V_RESULT_COLUMN
+     , ${window.RuleResultCommon.isFormula(r) ? `TO_CHAR(${window.RuleResultCommon.expressionSql(r.RESULT_AST.expression)})` : this.sqlLiteral(r.RESULT_VALUE ?? r.RESULT_TEXT)} AS V_EXPECTED_VALUE
+     , TO_CHAR(T.${this.quoteSqlName(r.RESULT_COLUMN)}) AS V_ACTUAL_VALUE
+     , T.*
+  FROM ${target} T
+ WHERE (${window.RuleResultCommon.predicateSql(r.CONDITION_AST)})
+   AND CASE WHEN (${window.RuleResultCommon.predicateSql(r.RESULT_AST)}) THEN 0 ELSE 1 END = 1`).join("\nUNION ALL\n") : `SELECT T.* FROM ${target} T WHERE 1 = 0`;
+                return `SELECT ROWIDTOCHAR(T.ROWID) AS V_CASE_ID
+     , T.*
+  FROM ${target} T
+ WHERE ${rules.length ? rules.map((r) => `(${window.RuleResultCommon.predicateSql(r.CONDITION_AST)})`).join(" OR ") : "1 = 0"}`;
+            }
+            if (pattern) {
+                const result = `${this.quoteSqlName(node.RESULT_OWNER)}.${this.quoteSqlName("INIT$_TB_RULEVIOL_ASSOC")}`;
+                const modelName = payload.ruleSummary?.rules?.[0]?.MODEL_NAME || payload.summary?.modelName || `XAI_PATTERN_${Number(this.selectedRun.FLOW_RUN_ID)}`;
+                return ["SELECT V.RULE_ID AS V_RULE_ID", "     , V.CASE_ID AS V_CASE_ID", "     , V.RESULT_COLUMN AS V_RESULT_COLUMN",
+                    "     , V.EXPECTED_VALUE AS V_EXPECTED_VALUE", "     , V.ACTUAL_VALUE AS V_ACTUAL_VALUE",
+                    "     , V.RULE_CONFIDENCE AS V_CONFIDENCE", "     , V.RULE_LIFT AS V_LIFT", "     , V.VIOLATION_REASON AS V_VIOLATION_REASON", "     , T.*",
+                    `  FROM ${result} V`, `  LEFT JOIN ${target} T ON ROWIDTOCHAR(T.ROWID) = V.CASE_ROWID`,
+                    " WHERE V.RUN_SOURCE_TYPE = 'FLOW_WORK'", `   AND V.RUN_ID = ${Number(this.selectedRun.FLOW_RUN_ID)}`,
+                    `   AND V.TARGET_OWNER = ${this.sqlLiteral(node.TARGET_OWNER)}`, `   AND V.TARGET_TABLE = ${this.sqlLiteral(node.TARGET_TABLE)}`,
+                    `   AND V.MODEL_NAME = ${this.sqlLiteral(modelName)}`,
+                    rules.length ? `   AND V.RULE_ID IN (${rules.map((r) => this.sqlLiteral(r.RULE_ID)).join(", ")})` : "   AND 1 = 0",
+                    " ORDER BY V.RULE_ID, V.CASE_ID"].join("\n");
+            }
+            const result = `${this.quoteSqlName(node.RESULT_OWNER)}.${this.quoteSqlName("INIT$_TB_RULEVIOL_XAI")}`;
+            return ["SELECT V.RULE_ID AS V_RULE_ID", "     , V.CASE_ID AS V_CASE_ID",
+                "     , V.RULE_PURITY AS V_MODEL_AGREEMENT", "     , V.ANOMALY_SCORE AS V_VIOLATION_SCORE", "     , T.*",
+                `  FROM ${result} V`, `  LEFT JOIN ${target} T ON ROWIDTOCHAR(T.ROWID) = V.CASE_ID`,
+                " WHERE V.RUN_SOURCE_TYPE = 'FLOW_WORK'", `   AND V.RUN_ID = ${Number(this.selectedRun.FLOW_RUN_ID)}`,
+                `   AND V.TARGET_OWNER = ${this.sqlLiteral(node.TARGET_OWNER)}`, `   AND V.TARGET_TABLE = ${this.sqlLiteral(node.TARGET_TABLE)}`,
+                rules.length ? `   AND V.RULE_ID IN (${rules.map((r) => this.sqlLiteral(r.RULE_ID)).join(", ")})` : "   AND 1 = 0", " ORDER BY V.RULE_ID, V.CASE_ID"].filter(Boolean).join("\n");
+        },
+
         createViolationSql(kind = "all", value = "") {
+            if (this.isMixedXaiViolationNode()) return this.createMixedXaiViolationSql(kind, value);
             const node = this.selectedNode;
             if (!node) {
                 alert(getText("No node is selected."));
@@ -3531,6 +3845,7 @@
         },
 
         createRealtimeViolationSqlLookup(kind = "all", value = "") {
+            if (this.isMixedXaiViolationNode()) return this.createMixedXaiViolationSql(kind, value, true);
             if (kind !== "rule" || !String(value || "").trim()) {
                 alert(getText("Realtime lookup is available only for RULE ID based queries."));
                 return "";
@@ -3823,8 +4138,8 @@
                             <span>${this.formatNumber(state.total || 0)} rows</span>
                             <div class="anly-work-page-jump">
                                 <button type="button" ${Number(state.page || 1) <= 1 ? "disabled" : ""} onclick="${PAGE_CODE}.executeViolationSql(${Math.max(1, Number(state.page || 1) - 1)})"><i class="fas fa-chevron-left"></i></button>
-                                <label><span>Page</span><input id="${PAGE_ID_PREFIX}ViolationSqlPage" type="number" min="1" max="${totalPages}" value="${this.escapeHtml(state.page || 1)}" onkeydown="if(event.key==='Enter'){${PAGE_CODE}.goViolationSqlPage()}"><small>/ ${this.formatNumber(totalPages)}</small></label>
-                                <button type="button" onclick="${PAGE_CODE}.goViolationSqlPage()">Go</button>
+                                <label><span>${this.escapeHtml(getText("Page"))}</span><input id="${PAGE_ID_PREFIX}ViolationSqlPage" type="number" min="1" max="${totalPages}" value="${this.escapeHtml(state.page || 1)}" onkeydown="if(event.key==='Enter'){${PAGE_CODE}.goViolationSqlPage()}"><small>/ ${this.formatNumber(totalPages)}</small></label>
+                                <button type="button" onclick="${PAGE_CODE}.goViolationSqlPage()">${this.escapeHtml(getText("Go"))}</button>
                                 <button type="button" ${Number(state.page || 1) >= totalPages ? "disabled" : ""} onclick="${PAGE_CODE}.executeViolationSql(${Number(state.page || 1) + 1})"><i class="fas fa-chevron-right"></i></button>
                             </div>
                         </div>
@@ -3886,18 +4201,19 @@
                     </section>
                 `;
             }
-            const savedStatus = this.getSavedCategoricalViolationStatus(rule);
+            const mixed = window.RuleResultCommon.isXai(rule);
+            const savedStatus = mixed || window.RuleResultCommon.isPattern(rule) ? window.RuleResultCommon.ruleNotes(rule, this.lastViolationSummary?.diagnostics, getText) : this.getSavedCategoricalViolationStatus(rule);
             return `
                 <section class="anly-work-violation-rule-context">
                     <header>
                         <strong>${this.escapeHtml(rule.RULE_ID || "")}</strong>
-                        <span>${this.escapeHtml(getText("{count} rows", { count: this.formatNumber(rule.VIOLATION_COUNT) }))} · confidence ${this.formatPercentMetric(rule.RULE_CONFIDENCE)} · lift ${this.formatDecimal(rule.RULE_LIFT)}</span>
+                        <span>${this.escapeHtml(getText("{count} rows", { count: this.formatNumber(rule.VIOLATION_COUNT) }))}${mixed ? ` · ${this.escapeHtml(getText("Model agreement"))} ${this.formatPercentMetric(rule.MODEL_AGREEMENT)}` : ` · ${this.escapeHtml(getText(window.RuleResultCommon.isFormula(rule) ? "Within-tolerance rate" : "Confidence"))} ${this.formatPercentMetric(rule.RULE_CONFIDENCE)}${window.RuleResultCommon.isFormula(rule) ? "" : ` · ${this.escapeHtml(getText("Lift"))} ${this.formatDecimal(rule.RULE_LIFT)}`}`}</span>
                     </header>
                     <p>
                         <b>IF</b>
                         ${this.renderColumnAwareText(rule.CONDITION_TEXT || "", this.lastViolationSummary || {})}
                         <b>THEN</b>
-                        ${this.renderColumnAwareCell(rule.RESULT_COLUMN, this.lastViolationSummary || {})} = ${this.escapeHtml(rule.EXPECTED_VALUE || "")}
+                        ${mixed ? this.escapeHtml(getText("Anomaly candidate")) : `${window.RuleResultCommon.isPattern(rule) ? this.renderColumnAwareText(rule.RESULT_TEXT || "", this.lastViolationSummary || {}) : `${this.renderColumnAwareCell(rule.RESULT_COLUMN, this.lastViolationSummary || {})} = ${this.escapeHtml(rule.EXPECTED_VALUE ?? "")}`}`}
                     </p>
                     ${savedStatus ? `<small>${this.escapeHtml(savedStatus)}</small>` : ""}
                 </section>
@@ -3980,7 +4296,8 @@
                             ${(rows || []).map((row) => `
                                 <tr>
                                     ${columnMeta.map((meta) => {
-                                    const value = row?.[meta.column] ?? "";
+                                    const raw = row?.[meta.column];
+                                    const value = ["V_ACTUAL_VALUE", "ACTUAL_VALUE"].includes(meta.column) ? window.RuleResultCommon.actualValue(raw, getText) : /VIOLATION_REASON$/.test(meta.column) ? window.RuleResultCommon.violationReason(raw, row, getText) : raw ?? "";
                                     return `<td class="${meta.frozen ? "is-frozen-col" : ""} ${this.getViolationSqlColumnClass(meta.column, keyColumns, ruleColumnSet, conditionColumnSet, resultColumnSet)}" data-col-index="${meta.index}" style="${meta.stickyStyle}" title="${this.escapeHtml(value)}">${this.renderColumnAwareCell(value, awareSummary)}</td>`;
                                 }).join("")}</tr>
                             `).join("")}
@@ -6903,7 +7220,7 @@
                         <div class="anly-work-rule-facet-block">
                             <header>
                                 <strong>${this.escapeHtml(getText("Method Type"))}</strong>
-                                <button type="button" onclick="${PAGE_CODE}.resetSymbolicRuleFilters()">Reset</button>
+                                <button type="button" onclick="${PAGE_CODE}.resetSymbolicRuleFilters()">${this.escapeHtml(getText("Reset"))}</button>
                             </header>
                             <div class="anly-work-rule-facet-list">
                                 <button type="button" class="${methodFilter === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicRuleFilter('method', 'ALL')">
@@ -7054,7 +7371,7 @@
                         <div class="anly-work-rule-facet-block">
                             <header>
                                 <strong>${this.escapeHtml(getText("Method Type"))}</strong>
-                                <button type="button" onclick="${PAGE_CODE}.resetSymbolicViolationFilters()">Reset</button>
+                                <button type="button" onclick="${PAGE_CODE}.resetSymbolicViolationFilters()">${this.escapeHtml(getText("Reset"))}</button>
                             </header>
                             <div class="anly-work-rule-facet-list">
                                 <button type="button" class="${methodFilter === "ALL" ? "is-active" : ""}" onclick="${PAGE_CODE}.selectSymbolicViolationFilter('method', 'ALL')">
@@ -7111,8 +7428,8 @@
                             <header>
                                 <strong>${this.escapeHtml(getText("RULE ID Search"))}</strong>
                                 <div class="anly-work-rule-facet-actions">
-                                    <button type="button" onclick="${PAGE_CODE}.searchViolationRule()">Search</button>
-                                    <button type="button" onclick="${PAGE_CODE}.resetViolationRuleSearch()">Reset</button>
+                                    <button type="button" onclick="${PAGE_CODE}.searchViolationRule()">${this.escapeHtml(getText("Search"))}</button>
+                                    <button type="button" onclick="${PAGE_CODE}.resetViolationRuleSearch()">${this.escapeHtml(getText("Reset"))}</button>
                                 </div>
                             </header>
                             <label class="anly-work-rule-condition-search">
@@ -7233,6 +7550,60 @@
                 .filter(Boolean);
         },
 
+        async openMixedFormulaPopup(ruleId) {
+            const rule = (this.currentModelDetail?.mixedXai?.ruleSummary?.rules || [])
+                .find((item) => String(item.RULE_ID) === String(ruleId) && window.RuleResultCommon.isFormula(item));
+            if (!rule) return;
+            this.closeSymbolicRulePopup();
+            const state = { rule, node: this.selectedNode, runId: this.selectedRun?.FLOW_RUN_ID,
+                columnComments: this.currentModelDetail?.mixedXai?.ruleSummary?.columnComments || {},
+                targetOwner: this.selectedNode?.TARGET_OWNER, targetTable: this.selectedNode?.TARGET_TABLE };
+            this.mixedFormulaPopupState = state;
+            const popup = document.createElement("div");
+            popup.id = `${PAGE_ID_PREFIX}SymbolicRulePopup`;
+            popup.className = "anly-work-symbolic-popup anly-work-symbolic-visual-popup";
+            popup.setAttribute("role", "dialog");
+            popup.setAttribute("aria-label", getText("Formula graph"));
+            popup.innerHTML = `<section>
+                <header class="anly-work-sql-popup-title" onmousedown="${PAGE_CODE}.startSymbolicRulePopupDrag(event)">
+                    <div><span class="anly-work-symbolic-rule-id-inline"><small class="anly-work-symbolic-rule-id-label">Rule ID</small><span class="anly-work-symbolic-rule-id-row"><code>${this.escapeHtml(rule.RULE_ID)}</code><button type="button" class="anly-work-rule-copy-btn" title="${this.escapeHtml(getText("Copy RULE ID"))}" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(rule.RULE_ID)}', event)"><i class="far fa-copy" aria-hidden="true"></i></button></span></span><span>${this.escapeHtml(getText("Formula graph"))}</span></div>
+                    <button type="button" title="${this.escapeHtml(getText("Close"))}" aria-label="${this.escapeHtml(getText("Close"))}" onclick="${PAGE_CODE}.closeSymbolicRulePopup()"><span aria-hidden="true">×</span></button>
+                </header>
+                <div class="anly-work-symbolic-popup-body">
+                    <div id="${PAGE_ID_PREFIX}MixedFormulaChart"></div>
+                </div></section>`;
+            document.body.appendChild(popup);
+            this.bindSymbolicRulePopup(popup);
+            return this.loadMixedFormulaSample(state);
+        },
+
+        async loadMixedFormulaSample(state = this.mixedFormulaPopupState) {
+            if (!state || state !== this.mixedFormulaPopupState) return;
+            const container = document.getElementById(`${PAGE_ID_PREFIX}MixedFormulaChart`);
+            if (!container) return;
+            this.mixedFormulaChartView?.destroy?.();
+            this.mixedFormulaChartView = null;
+            const requestId = ++this.symbolicRuleSampleRequestId;
+            container.innerHTML = `<div class="table-empty">${this.escapeHtml(getText("Loading current source sample..."))}</div>`;
+            const isCurrent = () => requestId === this.symbolicRuleSampleRequestId && state === this.mixedFormulaPopupState
+                && state.node === this.selectedNode && String(state.runId) === String(this.selectedRun?.FLOW_RUN_ID) && container.isConnected;
+            try {
+                if (!state.runId || !state.targetOwner || !state.targetTable || !state.rule.MODEL_NAME) throw new Error(getText("Formula sample query context is missing."));
+                if (!window.FormulaRuleChart?.mount) throw new Error(getText("Formula chart resources are unavailable. Refresh the page and try again."));
+                const params = new URLSearchParams({flowRunId: String(state.runId), targetOwner: state.targetOwner,
+                    targetTable: state.targetTable, modelName: state.rule.MODEL_NAME, ruleId: state.rule.RULE_ID, sampleLimit: "300"});
+                const response = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/mixed-formula-sample?${params}`, {method: "GET", showLoading: false});
+                if (!isCurrent()) return;
+                if (response?.status && response.status !== "success") throw new Error(response.message || getText("Current source sample could not be loaded."));
+                const payload = response?.data || response;
+                if (!payload || !Array.isArray(payload.points)) throw new Error(getText("Current source sample could not be loaded."));
+                this.mixedFormulaChartView = window.FormulaRuleChart.mount(container, payload, {translate: getText, columnComments: state.columnComments});
+            } catch (error) {
+                if (!isCurrent()) return;
+                container.innerHTML = `<div class="table-error">${this.escapeHtml(error?.message || getText("Current source sample could not be loaded."))}</div><button type="button" class="anly-work-rule-open-link" onclick="${PAGE_CODE}.loadMixedFormulaSample()">${this.escapeHtml(getText("Retry"))}</button>`;
+            }
+        },
+
         openSymbolicRulePopup(key) {
             const rule = this.findSymbolicRuleByKey(String(key || ""));
             if (!rule) {
@@ -7247,7 +7618,9 @@
             popup.className = "anly-work-symbolic-popup anly-work-symbolic-visual-popup";
             popup.innerHTML = this.renderSymbolicRulePopup(rule, summary);
             document.body.appendChild(popup);
-            setTimeout(() => this.initializeSymbolicRuleVisualization(), 0);
+            this.bindSymbolicRulePopup(popup);
+            const state = this.symbolicRuleChartState;
+            setTimeout(() => { if (state === this.symbolicRuleChartState) this.initializeSymbolicRuleVisualization(); }, 0);
         },
 
         openSymbolicViolationRulePopup(ruleId) {
@@ -7265,7 +7638,23 @@
             popup.className = "anly-work-symbolic-popup anly-work-symbolic-visual-popup";
             popup.innerHTML = this.renderSymbolicRulePopup(rule, summary);
             document.body.appendChild(popup);
-            setTimeout(() => this.initializeSymbolicRuleVisualization(), 0);
+            this.bindSymbolicRulePopup(popup);
+            const state = this.symbolicRuleChartState;
+            setTimeout(() => { if (state === this.symbolicRuleChartState) this.initializeSymbolicRuleVisualization(); }, 0);
+        },
+
+        bindSymbolicRulePopup(popup) {
+            this.symbolicRulePopupReturnFocus = document.activeElement;
+            popup.setAttribute("role", "dialog");
+            popup.setAttribute("aria-label", getText("Formula graph"));
+            popup.addEventListener("keydown", (event) => {
+                if (event.key !== "Escape" || event.defaultPrevented) return;
+                event.preventDefault();
+                event.stopPropagation();
+                if (this.symbolicRuleChartState?.maximized) this.toggleSymbolicRuleChartMaximize(false);
+                else this.closeSymbolicRulePopup();
+            });
+            popup.querySelector("header > button")?.focus({ preventScroll: true });
         },
 
         renderSymbolicRulePopup(rule, sourceSummary = this.lastSymbolicRuleSummary || {}) {
@@ -7299,12 +7688,12 @@
                             </span>
                             <span>Symbolic regression rule</span>
                         </div>
-                        <button type="button" title="Close" onclick="${PAGE_CODE}.closeSymbolicRulePopup()"><i class="fas fa-times"></i></button>
+                        <button type="button" title="${this.escapeHtml(getText("Close"))}" aria-label="${this.escapeHtml(getText("Close"))}" onclick="${PAGE_CODE}.closeSymbolicRulePopup()"><i class="fas fa-times" aria-hidden="true"></i></button>
                     </header>
-                    <div class="anly-work-symbolic-formula-banner">
-                        <span>F(X) = Y</span>
-                        <div class="anly-work-symbolic-formula-text"><strong id="${PAGE_ID_PREFIX}SymbolicFormulaText" title="${this.escapeHtml(formulaText)}">f(${featureLabel}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${targetCell}</strong></div>
-                        <button type="button" class="anly-work-symbolic-formula-copy" title="${this.escapeHtml(getText("Copy formula"))}" onclick="${PAGE_CODE}.copyActiveSymbolicFormula(event)"><i class="far fa-copy"></i></button>
+                    <div class="anly-work-symbolic-formula-banner rule-chart-formula-banner">
+                        <span class="rule-chart-formula-label">F(X) = Y</span>
+                        <div class="anly-work-symbolic-formula-text rule-chart-formula-text"><strong class="rule-chart-formula-expression" id="${PAGE_ID_PREFIX}SymbolicFormulaText" title="${this.escapeHtml(formulaText)}">f(${featureLabel}) = ${this.escapeHtml(rule.EXPRESSION || "")} = ${targetCell}</strong></div>
+                        <button type="button" class="anly-work-symbolic-formula-copy rule-chart-formula-copy" title="${this.escapeHtml(getText("Copy formula"))}" onclick="${PAGE_CODE}.copyActiveSymbolicFormula(event)"><i class="far fa-copy"></i></button>
                     </div>
                     <div class="anly-work-symbolic-popup-body">
                         <div class="anly-work-symbolic-diagnostic-metrics">
@@ -7350,7 +7739,7 @@
                             <span class="anly-work-symbolic-expression-note">${this.escapeHtml(getText("{method} formulas may include polynomial fallback and inverse transformation from standardized values. Calculation retains up to 12 significant digits; rounding is applied only to labels and tooltips.", { method }))}</span>
                         </div>
                         <div class="anly-work-symbolic-visual-shell">
-                            <div class="anly-work-symbolic-chart-toolbar">
+                            <div class="anly-work-symbolic-chart-toolbar rule-chart-toolbar">
                                 <label>
                                     <span>${this.escapeHtml(getText("Graph type"))}</span>
                                     <select id="${PAGE_ID_PREFIX}SymbolicChartMode" onchange="${PAGE_CODE}.changeSymbolicRuleChartMode(this.value)">
@@ -7366,17 +7755,18 @@
                                         ${features.map((feature) => `<option value="${this.escapeHtml(feature)}">${this.escapeHtml(this.getSymbolicFeatureOptionLabel(feature, sourceSummary))}</option>`).join("")}
                                     </select>
                                 </label>
-                                <div class="anly-work-symbolic-chart-tools">
-                                    <button type="button" onclick="${PAGE_CODE}.zoomSymbolicRuleChart(1.25)" title="${this.escapeHtml(getText("Zoom in"))}"><i class="fas fa-search-plus"></i></button>
-                                    <button type="button" onclick="${PAGE_CODE}.zoomSymbolicRuleChart(0.8)" title="${this.escapeHtml(getText("Zoom out"))}"><i class="fas fa-search-minus"></i></button>
+                                <div class="anly-work-symbolic-chart-tools rule-chart-tools">
+                                    <button type="button" onclick="${PAGE_CODE}.zoomSymbolicRuleChart(1.25)" title="${this.escapeHtml(getText("Zoom in"))}" aria-label="${this.escapeHtml(getText("Zoom in"))}"><i class="fas fa-search-plus" aria-hidden="true"></i></button>
+                                    <button type="button" onclick="${PAGE_CODE}.zoomSymbolicRuleChart(0.8)" title="${this.escapeHtml(getText("Zoom out"))}" aria-label="${this.escapeHtml(getText("Zoom out"))}"><i class="fas fa-search-minus" aria-hidden="true"></i></button>
                                     <button type="button" class="is-active" id="${PAGE_ID_PREFIX}SymbolicWheelZoomToggle" onclick="${PAGE_CODE}.toggleSymbolicRuleWheelZoom()" title="${this.escapeHtml(getText("Disable mouse wheel zoom"))}" aria-label="${this.escapeHtml(getText("Disable mouse wheel zoom"))}" aria-pressed="true"><i class="fas fa-mouse"></i></button>
-                                    <button type="button" onclick="${PAGE_CODE}.resetSymbolicRuleChartZoom()" title="${this.escapeHtml(getText("Reset view"))}"><i class="fas fa-compress-arrows-alt"></i></button>
-                                    <button type="button" data-anly-symbolic-maximize-btn onclick="${PAGE_CODE}.toggleSymbolicRuleChartMaximize()" title="${this.escapeHtml(getText("Maximize graph"))}" aria-pressed="false"><i class="fas fa-expand"></i></button>
+                                    <button type="button" onclick="${PAGE_CODE}.resetSymbolicRuleChartZoom()" title="${this.escapeHtml(getText("Reset view"))}" aria-label="${this.escapeHtml(getText("Reset view"))}"><i class="fas fa-compress-arrows-alt" aria-hidden="true"></i></button>
+                                    <button type="button" data-anly-symbolic-maximize-btn onclick="${PAGE_CODE}.toggleSymbolicRuleChartMaximize()" title="${this.escapeHtml(getText("Maximize graph"))}" aria-label="${this.escapeHtml(getText("Maximize graph"))}" aria-pressed="false"><i class="fas fa-expand" aria-hidden="true"></i></button>
                                     <em id="${PAGE_ID_PREFIX}SymbolicZoomLabel">100%</em>
                                 </div>
                             </div>
                             <div class="anly-work-symbolic-chart-wrap">
-                                <canvas id="${PAGE_ID_PREFIX}SymbolicRuleChart" height="300" tabindex="0"></canvas>
+                                <div class="anly-work-symbolic-chart-canvas"><canvas id="${PAGE_ID_PREFIX}SymbolicRuleChart" height="300" tabindex="0"></canvas></div>
+                                <div id="${PAGE_ID_PREFIX}SymbolicRuleChartLegend" class="anly-work-symbolic-chart-legend" role="group" aria-label="${this.escapeHtml(getText("Legend"))}"></div>
                                 <div id="${PAGE_ID_PREFIX}SymbolicRuleChartMessage" class="table-empty">${this.escapeHtml(getText("Loading sample rows..."))}</div>
                             </div>
                         </div>
@@ -7394,6 +7784,13 @@
 
         closeSymbolicRulePopup() {
             this.symbolicRuleSampleRequestId += 1;
+            this.symbolicRulePopupDragCleanup?.();
+            this.symbolicRulePopupDragCleanup = null;
+            this.stopSymbolicRuleChartPan();
+            this.unbindSymbolicRuleChartInteractions(this.symbolicRuleChart?.canvas);
+            this.mixedFormulaChartView?.destroy?.();
+            this.mixedFormulaChartView = null;
+            this.mixedFormulaPopupState = null;
             if (this.symbolicRuleChart && typeof this.symbolicRuleChart.destroy === "function") {
                 this.symbolicRuleChart.destroy();
             }
@@ -7401,11 +7798,15 @@
             this.symbolicRuleChartState = null;
             const popup = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRulePopup`);
             if (popup) popup.remove();
+            const returnFocus = this.symbolicRulePopupReturnFocus;
+            this.symbolicRulePopupReturnFocus = null;
+            if (returnFocus?.isConnected) returnFocus.focus?.({ preventScroll: true });
         },
 
         startSymbolicRulePopupDrag(event) {
             const popup = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRulePopup`);
             if (!popup || popup.classList.contains("is-symbolic-chart-maximized") || event.target.closest("button")) return;
+            this.symbolicRulePopupDragCleanup?.();
             event.preventDefault();
             const rect = popup.getBoundingClientRect();
             const startX = event.clientX;
@@ -7420,7 +7821,9 @@
             const stop = () => {
                 document.removeEventListener("mousemove", move);
                 document.removeEventListener("mouseup", stop);
+                if (this.symbolicRulePopupDragCleanup === stop) this.symbolicRulePopupDragCleanup = null;
             };
+            this.symbolicRulePopupDragCleanup = stop;
             document.addEventListener("mousemove", move);
             document.addEventListener("mouseup", stop);
         },
@@ -7942,13 +8345,13 @@
         focusSymbolicRuleChartSample(rowIndex) {
             const chart = this.symbolicRuleChart;
             if (!chart) return;
-            const point = chart.data.datasets
-                .flatMap((dataset) => dataset.data || [])
-                .find((item) => Number(item?.sampleIndex) === rowIndex);
+            const datasetIndex = chart.data.datasets.findIndex((dataset) => (dataset.data || []).some((item) => Number(item?.sampleIndex) === rowIndex));
+            const point = chart.data.datasets[datasetIndex]?.data.find((item) => Number(item?.sampleIndex) === rowIndex);
             if (!point || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y))) {
                 chart.update("none");
                 return;
             }
+            if (!chart.isDatasetVisible(datasetIndex)) this.toggleSymbolicRuleChartLegend(datasetIndex);
             [["x", Number(point.x)], ["y", Number(point.y)]].forEach(([axis, value]) => {
                 const scale = chart.scales?.[axis];
                 if (!scale || !Number.isFinite(scale.min) || !Number.isFinite(scale.max)) return;
@@ -7970,28 +8373,26 @@
         getSymbolicSamplePointColor(context, color) {
             const selectedRowIndex = this.symbolicRuleChartState?.selectedRowIndex;
             return Number.isInteger(selectedRowIndex) && Number(context?.raw?.sampleIndex) === selectedRowIndex
-                ? "#f59e0b"
+                ? window.RegressionDiagnostics.chartStyle.selected.fill
                 : color;
         },
 
-        getSymbolicDiagnosticPointColor(context, normalColor, attentionColor) {
+        getSymbolicDiagnosticPointStyle(context) {
             const selectedRowIndex = this.symbolicRuleChartState?.selectedRowIndex;
-            if (Number.isInteger(selectedRowIndex) && Number(context?.raw?.sampleIndex) === selectedRowIndex) {
-                return "#f59e0b";
-            }
-            return context?.raw?.isAttention ? attentionColor : normalColor;
+            const selected = Number.isInteger(selectedRowIndex) && Number(context?.raw?.sampleIndex) === selectedRowIndex;
+            return window.RegressionDiagnostics.pointStyle(Boolean(context?.raw?.isAttention), selected);
         },
 
         getSymbolicDiagnosticPointRadius(context) {
-            const selectedRowIndex = this.symbolicRuleChartState?.selectedRowIndex;
-            if (Number.isInteger(selectedRowIndex) && Number(context?.raw?.sampleIndex) === selectedRowIndex) return 6;
-            return context?.raw?.isAttention ? 4 : 3;
+            return this.getSymbolicDiagnosticPointStyle(context).radius;
         },
 
         toggleSymbolicRuleChartMaximize(force = null) {
             const state = this.symbolicRuleChartState;
             const popup = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRulePopup`);
             if (!state || !popup) return;
+            this.stopSymbolicRuleChartPan();
+            this.symbolicRulePopupDragCleanup?.();
             const nextMaximized = typeof force === "boolean" ? force : !state.maximized;
             if (nextMaximized && !state.maximized) {
                 state.popupInlinePosition = {
@@ -8019,6 +8420,7 @@
             if (button) {
                 button.setAttribute("aria-pressed", state.maximized ? "true" : "false");
                 button.title = getText(state.maximized ? "Restore graph" : "Maximize graph");
+                button.setAttribute("aria-label", button.title);
                 const icon = button.querySelector("i");
                 if (icon) icon.className = state.maximized ? "fas fa-compress" : "fas fa-expand";
             }
@@ -8072,11 +8474,14 @@
                 message.textContent = [state?.error, chartData.message].filter(Boolean).join(" ");
             }
             if (this.symbolicRuleChart && typeof this.symbolicRuleChart.destroy === "function") {
+                this.stopSymbolicRuleChartPan();
+                this.unbindSymbolicRuleChartInteractions(this.symbolicRuleChart.canvas);
                 this.symbolicRuleChart.destroy();
             }
             try {
                 this.symbolicRuleChart = new Chart(canvas.getContext("2d"), {
                     type: chartData.type || "scatter",
+                    plugins: [{id: "rulePlotFrame", afterDraw: (chart) => this.drawSymbolicRuleChartOverlay(chart)}],
                     data: {
                         datasets: chartData.datasets
                     },
@@ -8087,7 +8492,25 @@
                         interaction: { mode: "nearest", intersect: false },
                         onClick: (event, elements, chart) => this.handleSymbolicRuleChartClick(event, elements, chart),
                         plugins: {
-                            legend: { position: "bottom" },
+                            legend: {
+                                display: false,
+                                position: "bottom",
+                                labels: {
+                                    usePointStyle: true,
+                                    filter: (item, data) => !data.datasets[item.datasetIndex]?.diagnosticAuxiliary
+                                },
+                                onClick: (_event, item, legend) => {
+                                    const chart = legend.chart;
+                                    const group = chart.data.datasets[item.datasetIndex]?.diagnosticGroup;
+                                    const visible = chart.isDatasetVisible(item.datasetIndex);
+                                    chart.data.datasets.forEach((dataset, index) => {
+                                        if (index === item.datasetIndex || (group && dataset.diagnosticGroup === group)) {
+                                            chart.setDatasetVisibility(index, !visible);
+                                        }
+                                    });
+                                    chart.update();
+                                }
+                            },
                             tooltip: {
                                 callbacks: {
                                     label: (ctx) => `${ctx.dataset.label}: (${this.formatSymbolicDiagnosticNumber(ctx.parsed.x)}, ${this.formatSymbolicDiagnosticNumber(ctx.parsed.y)})`
@@ -8108,6 +8531,8 @@
                 });
                 if (state) state.zoomPercent = 100;
                 this.updateSymbolicRuleZoomLabel();
+                this.renderSymbolicRuleChartLegend();
+                canvas.setAttribute("aria-label", `${chartData.xLabel} / ${chartData.yLabel}`);
                 this.bindSymbolicRuleChartInteractions(canvas);
                 requestAnimationFrame(() => {
                     if (this.symbolicRuleChart && typeof this.symbolicRuleChart.resize === "function") {
@@ -8120,13 +8545,44 @@
             }
         },
 
+        drawSymbolicRuleChartOverlay(chart) {
+            const area = chart?.chartArea;
+            window.RegressionDiagnostics.drawPlotFrame(chart?.ctx, area);
+            const selected = this.symbolicRuleChartState?.selectedRowIndex;
+            if (!area || !Number.isInteger(selected)) return;
+            chart.data.datasets.forEach((dataset, datasetIndex) => {
+                if (!chart.isDatasetVisible(datasetIndex)) return;
+                const index = (dataset.data || []).findIndex(point => point?.sampleIndex === selected);
+                const marker = chart.getDatasetMeta(datasetIndex).data[index];
+                if (!marker || marker.skip || marker.x < area.left || marker.x > area.right || marker.y < area.top || marker.y > area.bottom) return;
+                // Draw the selected observation last, including duplicate coordinates.
+                window.RegressionDiagnostics.drawPoint(chart.ctx, marker.x, marker.y, Boolean(dataset.data[index].isAttention), true);
+            });
+        },
+
         handleSymbolicRuleChartClick(event, elements, chart) {
             const state = this.symbolicRuleChartState;
             if (!state || Date.now() - Number(state.chartPanEndAt || 0) < 180) return;
-            const target = (elements || []).find((item) => Number.isInteger(Number(chart?.data?.datasets?.[item.datasetIndex]?.data?.[item.index]?.sampleIndex)));
-            if (!target) return;
-            const sampleIndex = chart.data.datasets[target.datasetIndex].data[target.index].sampleIndex;
-            this.selectSymbolicSampleRow(sampleIndex, false);
+            const source = event?.native || event;
+            const position = Number.isFinite(source?.clientX) ? this.getSymbolicRuleChartPosition(source) : {x: event?.x, y: event?.y};
+            const area = chart?.chartArea, rect = chart?.canvas?.getBoundingClientRect();
+            if (!area || !rect?.width || !rect.height || !Number.isFinite(position?.x) || !Number.isFinite(position?.y)
+                || position.x < area.left || position.x > area.right || position.y < area.top || position.y > area.bottom) return;
+            let nearest = null, distance = window.RegressionDiagnostics.chartInteraction.hitRadius;
+            // CI/PI/reference lines have no source row. Hit-test visible sample
+            // points directly instead of letting a nearer line consume clicks.
+            chart.data.datasets.forEach((dataset, datasetIndex) => {
+                if (!chart.isDatasetVisible(datasetIndex)) return;
+                const meta = chart.getDatasetMeta(datasetIndex);
+                (dataset.data || []).forEach((point, index) => {
+                    const marker = meta.data[index];
+                    if (!Number.isInteger(point?.sampleIndex) || !marker || marker.skip
+                        || marker.x < area.left || marker.x > area.right || marker.y < area.top || marker.y > area.bottom) return;
+                    const candidate = Math.hypot((marker.x - position.x) * rect.width / chart.width, (marker.y - position.y) * rect.height / chart.height);
+                    if (candidate < distance) { nearest = point.sampleIndex; distance = candidate; }
+                });
+            });
+            if (nearest != null) this.selectSymbolicSampleRow(nearest, false);
         },
 
         bindSymbolicRuleChartInteractions(canvas) {
@@ -8137,26 +8593,99 @@
             canvas.onpointerup = (event) => this.stopSymbolicRuleChartPan(event);
             canvas.onpointercancel = (event) => this.stopSymbolicRuleChartPan(event);
             canvas.onlostpointercapture = () => this.stopSymbolicRuleChartPan();
+            canvas.onkeydown = (event) => this.handleSymbolicRuleChartKeydown(event);
+        },
+
+        unbindSymbolicRuleChartInteractions(canvas) {
+            if (!canvas) return;
+            ["onwheel", "onpointerdown", "onpointermove", "onpointerup", "onpointercancel", "onlostpointercapture", "onkeydown"].forEach((key) => { canvas[key] = null; });
+        },
+
+        renderSymbolicRuleChartLegend() {
+            const chart = this.symbolicRuleChart;
+            const container = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRuleChartLegend`);
+            if (!chart || !container) return;
+            const labels = chart.options.plugins.legend.labels.generateLabels(chart)
+                .filter((item) => !chart.data.datasets[item.datasetIndex]?.diagnosticAuxiliary);
+            container.innerHTML = labels.map((item) => {
+                const visible = chart.isDatasetVisible(item.datasetIndex);
+                const point = item.pointStyle === "triangle" ? "▲" : item.pointStyle === "line" || chart.data.datasets[item.datasetIndex].type === "line" ? "━" : "●";
+                return `<button type="button" data-symbolic-legend="${item.datasetIndex}" aria-pressed="${visible}" class="${visible ? "" : "is-hidden"}" onclick="${PAGE_CODE}.toggleSymbolicRuleChartLegend(${item.datasetIndex})"><span aria-hidden="true">${point}</span>${this.escapeHtml(item.text)}</button>`;
+            }).join("");
+            labels.forEach((item) => {
+                const marker = container.querySelector(`[data-symbolic-legend="${item.datasetIndex}"] span`);
+                if (marker && typeof item.strokeStyle === "string") marker.style.color = item.strokeStyle;
+            });
+        },
+
+        toggleSymbolicRuleChartLegend(index) {
+            const chart = this.symbolicRuleChart;
+            const dataset = chart?.data.datasets[index];
+            if (!dataset) return;
+            const visible = chart.isDatasetVisible(index);
+            const group = dataset.diagnosticGroup;
+            chart.data.datasets.forEach((item, itemIndex) => {
+                if (itemIndex === index || (group && item.diagnosticGroup === group)) chart.setDatasetVisibility(itemIndex, !visible);
+            });
+            chart.update("none");
+            const container = document.getElementById(`${PAGE_ID_PREFIX}SymbolicRuleChartLegend`);
+            container?.querySelectorAll("[data-symbolic-legend]").forEach((button) => {
+                const shown = chart.isDatasetVisible(Number(button.dataset.symbolicLegend));
+                button.setAttribute("aria-pressed", String(shown));
+                button.classList.toggle("is-hidden", !shown);
+            });
+        },
+
+        handleSymbolicRuleChartKeydown(event) {
+            if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+            const chart = this.symbolicRuleChart;
+            const state = this.symbolicRuleChartState;
+            if (!chart || !state) return;
+            const indices = [...new Set(chart.data.datasets.flatMap((dataset, index) => chart.isDatasetVisible(index)
+                ? (dataset.data || []).filter((point) => Number.isInteger(point?.sampleIndex) && Number.isFinite(point.x) && Number.isFinite(point.y)).map((point) => point.sampleIndex) : []))].sort((a, b) => a - b);
+            if (!indices.length) return;
+            event.preventDefault();
+            const current = indices.indexOf(state.selectedRowIndex);
+            const backward = ["ArrowLeft", "ArrowUp"].includes(event.key);
+            const next = event.key === "Home" ? 0 : event.key === "End" ? indices.length - 1
+                : current < 0 ? (backward ? indices.length - 1 : 0) : Math.max(0, Math.min(indices.length - 1, current + (backward ? -1 : 1)));
+            this.selectSymbolicSampleRow(indices[next], false);
+            const point = chart.data.datasets.flatMap((dataset, index) => chart.isDatasetVisible(index) ? dataset.data || [] : [])
+                .find((item) => item?.sampleIndex === indices[next]);
+            if (point && (point.x < chart.scales.x.min || point.x > chart.scales.x.max || point.y < chart.scales.y.min || point.y > chart.scales.y.max)) {
+                this.focusSymbolicRuleChartSample(indices[next]);
+            }
+            chart.canvas.focus({ preventScroll: true });
+        },
+
+        getSymbolicRuleChartPosition(event) {
+            const chart = this.symbolicRuleChart;
+            const rect = chart?.canvas?.getBoundingClientRect();
+            if (!chart || !rect?.width || !rect.height) return null;
+            return { x: (event.clientX - rect.left) * chart.width / rect.width, y: (event.clientY - rect.top) * chart.height / rect.height };
         },
 
         handleSymbolicRuleChartWheel(event) {
             const chart = this.symbolicRuleChart;
             const state = this.symbolicRuleChartState;
-            if (!chart || !state || !state.wheelZoomEnabled || !Number.isFinite(event.deltaY)) return;
+            if (!chart || !state || !state.wheelZoomEnabled || !Number.isFinite(event.deltaY) || event.deltaY === 0) return;
+            const position = this.getSymbolicRuleChartPosition(event);
+            const area = chart.chartArea;
+            if (!position || !area || position.x < area.left || position.x > area.right || position.y < area.top || position.y > area.bottom) return;
             event.preventDefault();
-            const factor = event.deltaY < 0 ? 0.82 : 1.22;
-            const rect = chart.canvas.getBoundingClientRect();
-            const pixelX = event.clientX - rect.left;
-            const pixelY = event.clientY - rect.top;
+            const currentPercent = Number(state.zoomPercent || 100);
+            const nextPercent = Math.min(800, Math.max(50, currentPercent / (event.deltaY < 0 ? 0.82 : 1.22)));
+            if (nextPercent === currentPercent) return;
+            const factor = currentPercent / nextPercent;
             ["x", "y"].forEach((axis) => {
                 const scale = chart.scales?.[axis];
                 if (!scale || !Number.isFinite(scale.min) || !Number.isFinite(scale.max)) return;
-                const center = scale.getValueForPixel(axis === "x" ? pixelX : pixelY);
+                const center = scale.getValueForPixel(position[axis]);
                 if (!Number.isFinite(center)) return;
                 chart.options.scales[axis].min = center + ((scale.min - center) * factor);
                 chart.options.scales[axis].max = center + ((scale.max - center) * factor);
             });
-            state.zoomPercent = Math.min(800, Math.max(50, Number(state.zoomPercent || 100) / factor));
+            state.zoomPercent = nextPercent;
             chart.update("none");
             this.updateSymbolicRuleZoomLabel();
         },
@@ -8186,22 +8715,25 @@
             const chart = this.symbolicRuleChart;
             const state = this.symbolicRuleChartState;
             if (!chart || !state || event.button !== 0 || !chart.chartArea) return;
-            const { x, y, width, height } = chart.chartArea;
-            if (event.offsetX < x || event.offsetX > x + width || event.offsetY < y || event.offsetY > y + height) return;
+            const position = this.getSymbolicRuleChartPosition(event);
+            const { left, top, right, bottom } = chart.chartArea;
+            if (!position || position.x < left || position.x > right || position.y < top || position.y > bottom) return;
             const xScale = chart.scales?.x;
             const yScale = chart.scales?.y;
             if (!xScale || !yScale || !Number.isFinite(xScale.min) || !Number.isFinite(xScale.max) || !Number.isFinite(yScale.min) || !Number.isFinite(yScale.max)) return;
             state.chartPan = {
                 pointerId: event.pointerId,
-                startX: event.clientX,
-                startY: event.clientY,
+                startX: position.x,
+                startY: position.y,
+                clientX: event.clientX,
+                clientY: event.clientY,
                 moved: false,
                 xMin: xScale.min,
                 xMax: xScale.max,
                 yMin: yScale.min,
                 yMax: yScale.max
             };
-            chart.canvas.setPointerCapture?.(event.pointerId);
+            try { chart.canvas.setPointerCapture?.(event.pointerId); } catch (_) { /* Pointer may already be released. */ }
             chart.canvas.classList.add("is-panning");
         },
 
@@ -8210,11 +8742,14 @@
             const state = this.symbolicRuleChartState;
             const pan = state?.chartPan;
             if (!chart || !pan || pan.pointerId !== event.pointerId || !chart.chartArea) return;
+            const position = this.getSymbolicRuleChartPosition(event);
+            if (!position) return;
             event.preventDefault();
-            if (Math.abs(event.clientX - pan.startX) > 2 || Math.abs(event.clientY - pan.startY) > 2) pan.moved = true;
+            if (Math.hypot(event.clientX - pan.clientX, event.clientY - pan.clientY) >= window.RegressionDiagnostics.chartInteraction.dragThreshold) pan.moved = true;
+            if (!pan.moved) return;
             const { width, height } = chart.chartArea;
-            const xOffset = ((event.clientX - pan.startX) / Math.max(1, width)) * (pan.xMax - pan.xMin);
-            const yOffset = ((event.clientY - pan.startY) / Math.max(1, height)) * (pan.yMax - pan.yMin);
+            const xOffset = ((position.x - pan.startX) / Math.max(1, width)) * (pan.xMax - pan.xMin);
+            const yOffset = ((position.y - pan.startY) / Math.max(1, height)) * (pan.yMax - pan.yMin);
             chart.options.scales.x.min = pan.xMin - xOffset;
             chart.options.scales.x.max = pan.xMax - xOffset;
             chart.options.scales.y.min = pan.yMin + yOffset;
@@ -8227,74 +8762,32 @@
             const chart = this.symbolicRuleChart;
             const pan = state?.chartPan;
             if (!state || !pan || (event && pan.pointerId !== event.pointerId)) return;
-            chart?.canvas?.releasePointerCapture?.(pan.pointerId);
-            chart?.canvas?.classList.remove("is-panning");
             state.chartPan = null;
             state.chartPanEndAt = pan.moved ? Date.now() : 0;
+            try { chart?.canvas?.releasePointerCapture?.(pan.pointerId); } catch (_) { /* Capture may end before popup teardown. */ }
+            chart?.canvas?.classList.remove("is-panning");
         },
 
         buildSymbolicActualPredictedChartData(state = this.symbolicRuleChartState) {
-            const attentionThreshold = Math.max(Number(state?.sampleMetrics?.mae || 0) * 2, Number.EPSILON);
-            const points = (state?.evaluatedRows || []).map((item) => ({
-                x: item.actual,
-                y: item.predicted,
-                residual: item.residual,
-                sampleIndex: item.rowIndex,
-                isAttention: Math.abs(item.residual) > attentionThreshold
-            }));
-            if (!points.length) {
-                return { ok: false, message: getText("No numeric actual/predicted sample pairs are available.") };
-            }
-            const values = points.flatMap((point) => [point.x, point.y]).filter(Number.isFinite);
-            let minValue = Math.min(...values);
-            let maxValue = Math.max(...values);
-            if (minValue === maxValue) {
-                const padding = Math.max(1, Math.abs(minValue) * 0.05);
-                minValue -= padding;
-                maxValue += padding;
-            }
-            return {
-                ok: true,
-                type: "scatter",
-                xLabel: this.getSymbolicAxisColumnLabel(state?.rule?.TARGET_COLUMN, state?.summary, getText("Actual value")),
-                yLabel: this.getSymbolicAxisColumnLabel(state?.rule?.TARGET_COLUMN, state?.summary, getText("Predicted value")),
-                datasets: [
-                    {
-                        label: getText("Sample observations"),
-                        data: points,
-                        backgroundColor: (context) => this.getSymbolicDiagnosticPointColor(context, "rgba(37, 99, 235, 0.58)", "rgba(220, 38, 38, 0.68)"),
-                        borderColor: (context) => this.getSymbolicDiagnosticPointColor(context, "#2563eb", "#b91c1c"),
-                        pointRadius: (context) => this.getSymbolicDiagnosticPointRadius(context),
-                        pointHoverRadius: 5
-                    },
-                    {
-                        type: "line",
-                        label: "y = x",
-                        data: [{ x: minValue, y: minValue }, { x: maxValue, y: maxValue }],
-                        borderColor: "#d97706",
-                        borderDash: [6, 5],
-                        borderWidth: 1.5,
-                        pointRadius: 0,
-                        showLine: true
-                    }
-                ],
-                message: `${getText("Points close to the y=x line have smaller prediction errors. Large vertical gaps indicate rows that need review.")} ${getText("Red points have an absolute residual greater than twice the sample MAE. Select a point to move to its row in the detail grid.")}`
-            };
+            return this.buildSymbolicDiagnosticChartData(state, false);
         },
 
         buildSymbolicResidualChartData(state = this.symbolicRuleChartState) {
-            const attentionThreshold = Math.max(Number(state?.sampleMetrics?.mae || 0) * 2, Number.EPSILON);
-            const points = (state?.evaluatedRows || []).map((item) => ({
-                x: item.predicted,
-                y: item.residual,
+            return this.buildSymbolicDiagnosticChartData(state, true);
+        },
+
+        buildSymbolicDiagnosticChartData(state, residualMode) {
+            const diagnostic = window.RegressionDiagnostics.fit((state?.evaluatedRows || []).map((item) => ({
+                x: residualMode ? item.predicted : item.actual,
+                y: residualMode ? item.residual : item.predicted,
                 residual: item.residual,
-                sampleIndex: item.rowIndex,
-                isAttention: Math.abs(item.residual) > attentionThreshold
-            }));
+                sampleIndex: item.rowIndex
+            })));
+            const points = diagnostic.points;
             if (!points.length) {
-                return { ok: false, message: getText("No numeric residual sample pairs are available.") };
+                return { ok: false, message: getText("No numeric actual/predicted sample pairs are available.") };
             }
-            const xValues = points.map((point) => point.x).filter(Number.isFinite);
+            const xValues = residualMode ? points.map((point) => point.x) : points.flatMap((point) => [point.x, point.y]);
             let minX = Math.min(...xValues);
             let maxX = Math.max(...xValues);
             if (minX === maxX) {
@@ -8302,32 +8795,48 @@
                 minX -= padding;
                 maxX += padding;
             }
+            const pointDataset = (data, attention) => ({
+                label: diagnostic.ok
+                    ? getText(attention ? "Outside 95% PI ({count})" : "Within 95% PI ({count})", { count: data.length })
+                    : getText("Sample observations ({count})", { count: data.length }),
+                data,
+                backgroundColor: (context) => this.getSymbolicDiagnosticPointStyle(context).fill,
+                borderColor: (context) => this.getSymbolicDiagnosticPointStyle(context).stroke,
+                borderWidth: (context) => this.getSymbolicDiagnosticPointStyle(context).borderWidth,
+                pointStyle: window.RegressionDiagnostics.pointStyle(attention).shape,
+                pointRadius: (context) => this.getSymbolicDiagnosticPointRadius(context),
+                pointHoverRadius: 6,
+                order: 0
+            });
+            const sampleDatasets = diagnostic.ok
+                ? [pointDataset(points.filter((point) => !point.isAttention), false), pointDataset(points.filter((point) => point.isAttention), true)]
+                : [pointDataset(points, false)];
+            const intervalMessage = diagnostic.ok
+                ? getText("CI shows the mean and PI an individual observation around the displayed sample's linear trend (95%; independent, normal, constant-variance errors assumed). Red triangles outside PI are review candidates, separate from saved-rule violations.")
+                : getText("At least three valid samples with varying X values are required to estimate the boundaries.");
             return {
                 ok: true,
                 type: "scatter",
-                xLabel: this.getSymbolicAxisColumnLabel(state?.rule?.TARGET_COLUMN, state?.summary, getText("Predicted value")),
-                yLabel: this.getSymbolicAxisColumnLabel(state?.rule?.TARGET_COLUMN, state?.summary, getText("Residual (actual - predicted)")),
+                xLabel: this.getSymbolicAxisColumnLabel(state?.rule?.TARGET_COLUMN, state?.summary, getText(residualMode ? "Predicted value" : "Actual value")),
+                yLabel: this.getSymbolicAxisColumnLabel(state?.rule?.TARGET_COLUMN, state?.summary, getText(residualMode ? "Residual (actual - predicted)" : "Predicted value")),
                 datasets: [
-                    {
-                        label: getText("Residual samples"),
-                        data: points,
-                        backgroundColor: (context) => this.getSymbolicDiagnosticPointColor(context, "rgba(124, 58, 237, 0.56)", "rgba(220, 38, 38, 0.68)"),
-                        borderColor: (context) => this.getSymbolicDiagnosticPointColor(context, "#7c3aed", "#b91c1c"),
-                        pointRadius: (context) => this.getSymbolicDiagnosticPointRadius(context),
-                        pointHoverRadius: 5
-                    },
+                    ...sampleDatasets,
+                    ...window.RegressionDiagnostics.chartDatasets(diagnostic, {
+                        ci: getText("95% CI (mean)"), pi: getText("95% PI (observation)"), fit: getText("Sample linear trend")
+                    }),
                     {
                         type: "line",
-                        label: "y = 0",
-                        data: [{ x: minX, y: 0 }, { x: maxX, y: 0 }],
-                        borderColor: "#d97706",
-                        borderDash: [6, 5],
-                        borderWidth: 1.5,
+                        label: residualMode ? "y = 0" : "y = x",
+                        pointStyle: "line",
+                        data: [{ x: minX, y: residualMode ? 0 : minX }, { x: maxX, y: residualMode ? 0 : maxX }],
+                        borderColor: window.RegressionDiagnostics.chartStyle.reference.stroke,
+                        borderDash: [...window.RegressionDiagnostics.chartStyle.reference.dash],
+                        borderWidth: window.RegressionDiagnostics.chartStyle.reference.width,
                         pointRadius: 0,
                         showLine: true
                     }
                 ],
-                message: `${getText("Residuals should be distributed around zero without a clear pattern. Curves or widening bands can indicate model bias or changing variance.")} ${getText("Red points have an absolute residual greater than twice the sample MAE. Select a point to move to its row in the detail grid.")}`
+                message: `${intervalMessage} ${getText("Select a point to move to its row in the detail grid.")}`
             };
         },
 
@@ -9118,7 +9627,7 @@
 
         renderNodeJobDesc(node) {
             const desc = this.getNodeJobDesc(node);
-            return desc ? `<em class="anly-work-node-desc" title="${this.escapeHtml(desc)}">Job Desc: ${this.escapeHtml(desc)}</em>` : "";
+            return desc ? `<em class="anly-work-node-desc" title="${this.escapeHtml(desc)}">${this.escapeHtml(getText("Job Description"))}: ${this.escapeHtml(desc)}</em>` : "";
         },
 
         getNodeExecutionTitle(node = this.selectedNode, fallback = "") {
@@ -9137,7 +9646,7 @@
             const parts = [];
             if (objectType) parts.push(objectType.toUpperCase());
             if (objectName) parts.push(objectName);
-            if (objectLabel && objectLabel !== objectName) parts.push(objectLabel);
+            if (objectLabel && objectLabel !== objectName) parts.push(getText(objectLabel));
             return parts.length ? parts.join(" · ") : String(fallback || "").trim();
         },
 
@@ -9148,12 +9657,13 @@
 
         renderSelectedNodeJobDesc() {
             const desc = this.getNodeJobDesc();
-            return desc ? `<p class="anly-work-result-job-desc" title="${this.escapeHtml(desc)}"><b>Job Desc</b> ${this.escapeHtml(desc)}</p>` : "";
+            return desc ? `<p class="anly-work-result-job-desc" title="${this.escapeHtml(desc)}"><b>${this.escapeHtml(getText("Job Description"))}</b> ${this.escapeHtml(desc)}</p>` : "";
         },
 
         renderSelectedNodeExecutionMeta() {
             const node = this.selectedNode;
             if (!node) return "";
+            if (window.RuleResultCommon.isPattern(this.currentModelDetail?.mixedXai)) return this.currentModelDetail.mixedXai.ruleSummary?.rules?.[0]?.MODEL_NAME || this.currentModelDetail.mixedXai.summary?.modelName || `XAI_PATTERN_${Number(this.selectedRun?.FLOW_RUN_ID)}`;
             const payload = this.normalizeObject(node.PAYLOAD);
             const params = this.normalizeObject(node.RUNTIME_PARAMS);
             const getValue = (...keys) => {
@@ -9185,7 +9695,7 @@
                     <div class="anly-work-execution-meta-grid">
                         ${metaRows.map(({ key, label, value }) => `
                             <span class="is-${this.escapeHtml(key)}">
-                                <small>${this.escapeHtml(label)}</small>
+                                <small>${this.escapeHtml(getText(label))}</small>
                                 <b title="${this.escapeHtml(value)}">${this.escapeHtml(value)}</b>
                             </span>
                         `).join("")}
@@ -9209,6 +9719,7 @@
 
         getSelectedNodeRuleModelName(node = this.selectedNode) {
             if (!node) return "";
+            if (window.RuleResultCommon.isPattern(this.currentModelDetail?.mixedXai)) return this.currentModelDetail.mixedXai.ruleSummary?.rules?.[0]?.MODEL_NAME || this.currentModelDetail.mixedXai.summary?.modelName || `XAI_PATTERN_${Number(this.selectedRun?.FLOW_RUN_ID)}`;
             const payload = this.normalizeObject(node.PAYLOAD);
             const params = this.normalizeObject(node.RUNTIME_PARAMS);
             const runOutput = this.normalizeObject(node.RUN_OUTPUT);
@@ -10027,15 +10538,19 @@
                     <table class="table-grid anly-work-grid" data-grid-row-offset="${rowOffset}" data-standard-grid-freeze-columns="0">
                         <thead>
                             <tr>
-                                ${safeColumns.map((column) => `<th>${this.renderColumnAwareCell(column, source)}</th>`).join("")}
+                                ${safeColumns.map((column) => `<th>${source?.columnLabels?.[column] ? this.escapeHtml(source.columnLabels[column]) : this.renderColumnAwareCell(column, source)}</th>`).join("")}
                             </tr>
                         </thead>
                         <tbody>
                             ${(rows || []).map((row) => `
                                 <tr>
                                     ${safeColumns.map((column) => {
-                                        const value = row?.[column] ?? "";
-                                        return `<td title="${this.escapeHtml(value)}">${this.renderColumnAwareCell(value, source)}</td>`;
+                                        const raw = row?.[column];
+                                        const value = column === "ACTUAL_VALUE" ? window.RuleResultCommon.actualValue(raw, getText) : column === "VIOLATION_REASON" ? window.RuleResultCommon.violationReason(raw, row, getText) : raw ?? "";
+                                        const expressionClass = column === "RESULT_TEXT" && window.RuleResultCommon.isFormula(row) ? ' class="is-rule-expression"' : "";
+                                        const graphButton = source?.mixedFormulaGraphActions && column === "RULE_ID" && window.RuleResultCommon.isFormula(row)
+                                            ? ` <button type="button" class="anly-work-rule-open-link" onclick="${PAGE_CODE}.openMixedFormulaPopup('${this.escapeJs(row.RULE_ID)}')">${this.escapeHtml(getText("View formula graph"))}</button>` : "";
+                                        return `<td${expressionClass} title="${this.escapeHtml(value)}">${this.renderColumnAwareCell(value, source)}${graphButton}</td>`;
                                     }).join("")}
                                 </tr>
                             `).join("")}
@@ -10210,7 +10725,7 @@
             const text = String(status || "").toUpperCase();
             if (text === "SUCCESS") return "is-success";
             if (["FAILED", "SKIPPED", "ERROR"].includes(text)) return "is-failed";
-            if (["RUNNING", "STARTED"].includes(text)) return "is-running";
+            if (["RUNNING", "STARTED", "PAUSE_REQUESTED", "STOP_REQUESTED"].includes(text)) return "is-running";
             return "is-neutral";
         },
 
@@ -10239,6 +10754,7 @@
         },
 
         isRuleViolationNode(node) {
+            if (this.isMixedXaiViolationNode(node)) return true;
             const resultObject = String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
             if (resultObject === "INIT$_TB_RULEVIOL_ASSOC") return true;
             if (resultObject === "INIT$_TB_RULEVIOL_SYMBOLIC") return false;

@@ -2,6 +2,9 @@
     "use strict";
 
     const STATUS_LABELS = {
+        PAUSE_REQUESTED: "일시 멈춤 요청 중",
+        STOP_REQUESTED: "중단 요청 중",
+        PAUSED: "일시 멈춤",
         PENDING: "대기",
         QUEUED: "대기열",
         SUBMITTED: "제출됨",
@@ -15,7 +18,7 @@
         CANCELLED: "취소"
     };
 
-    const ACTIVE_STATUSES = new Set(["PENDING", "QUEUED", "SUBMITTED", "STARTED", "RUNNING", "IN_PROGRESS"]);
+    const ACTIVE_STATUSES = new Set(["PENDING", "QUEUED", "SUBMITTED", "STARTED", "RUNNING", "IN_PROGRESS", "PAUSE_REQUESTED", "STOP_REQUESTED"]);
     const TERMINAL_STATUSES = new Set(["SUCCESS", "FAILED", "ERROR", "CANCELLED"]);
 
     function escapeHtml(value) {
@@ -34,12 +37,14 @@
     }
 
     function formatNumber(value, maximumFractionDigits = 2) {
+        if (value == null || value === "") return "-";
         const number = Number(value);
         if (!Number.isFinite(number)) return "-";
         return new Intl.NumberFormat("ko-KR", { maximumFractionDigits }).format(number);
     }
 
     function formatRatio(value, maximumFractionDigits = 1) {
+        if (value == null || value === "") return "-";
         const number = Number(value);
         if (!Number.isFinite(number)) return "-";
         const percent = Math.abs(number) <= 1 ? number * 100 : number;
@@ -161,6 +166,8 @@
     }
 
     function statusLabel(value) {
+        const control = { PAUSED: "Paused", PAUSE_REQUESTED: "Pause requested", STOP_REQUESTED: "Stop requested", CANCELLED: "Stopped" }[normalizeStatus(value)];
+        if (control && window.RuleResultCommon) return window.RuleResultCommon.t(control);
         const status = normalizeStatus(value);
         return STATUS_LABELS[status] || status;
     }
@@ -188,7 +195,7 @@
 
     function renderBars(items, options = {}) {
         const safeItems = (Array.isArray(items) ? items : []).filter((item) => Number.isFinite(Number(item.value)));
-        if (!safeItems.length) return '<p class="qe-empty">그래프로 표시할 데이터가 없습니다.</p>';
+        if (!safeItems.length) return `<p class="qe-empty">${escapeHtml(window.RuleResultCommon?.t("No data is available for this chart.") || "그래프로 표시할 데이터가 없습니다.")}</p>`;
         const maxValue = Math.max(...safeItems.map((item) => Math.abs(Number(item.value))), 1);
         const accentClass = options.accent === "mint" ? "is-mint" : "";
         const interactive = Boolean(options.interactive && options.filterKind && options.filterType);
@@ -203,9 +210,9 @@
                     data-rule-filter-kind="${escapeHtml(filterKind)}" data-rule-filter-type="ALL" data-rule-filter-value=""
                     data-rule-filter-label="전체" aria-pressed="${selectedType === "ALL" ? "true" : "false"}">
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M7 12h10M10 17h4" /></svg>
-                <span>전체</span>
+                <span>${escapeHtml(window.RuleResultCommon?.t("All") || "전체")}</span>
             </button>
-            <span>${clickIcon} 범례를 눌러 상위 규칙 필터</span>
+            <span>${clickIcon} ${escapeHtml(window.RuleResultCommon?.t("Click a legend to filter rules") || "범례를 눌러 상위 규칙 필터")}</span>
         </div>` : "";
         return `${allControl}<div class="qe-bar-chart ${accentClass}${interactive ? " is-interactive" : ""}" role="${interactive ? "group" : "img"}" aria-label="${escapeHtml(options.ariaLabel || "분포 그래프")}">${safeItems.map((item) => {
             const number = Number(item.value);
@@ -430,19 +437,22 @@
 
     function renderCategoricalRules(rules, options = {}) {
         const safeRules = Array.isArray(rules) ? rules : [];
-        if (!safeRules.length) return '<p class="qe-empty">발견된 범주형 규칙이 없습니다.</p>';
+        if (!safeRules.length) return `<p class="qe-empty">${escapeHtml(options.mixedPattern ? window.RuleResultCommon.t("No patterns passed the support, confidence and validation criteria. No rules were forced.") : options.mixedXai ? window.RuleResultCommon.t("No candidate rules were discovered.") : "발견된 IF–THEN 규칙이 없습니다.")}</p>`;
         return safeRules.map((rule, index) => {
+            const common = window.RuleResultCommon;
+            const mixed = common?.isXai(rule);
             const condition = annotateColumnText(rule.CONDITION_TEXT || rule.CONDITION_COLUMN || "조건 정보 없음", options.columnComments);
-            const result = annotateColumnText(rule.RESULT_TEXT || [rule.RESULT_COLUMN, rule.RESULT_VALUE].filter(Boolean).join(" = ") || "결과 정보 없음", options.columnComments);
+            const result = annotateColumnText(rule.RESULT_TEXT || [rule.RESULT_COLUMN, rule.RESULT_VALUE].filter((value) => value != null && value !== "").join(" = ") || "결과 정보 없음", options.columnComments);
             const violationCount = getViolationCount(rule, options);
             return `<button type="button" class="qe-rule-card" data-rule-kind="categorical" data-rule-index="${index}">
-                <span class="qe-rule-head"><strong>규칙 ${escapeHtml(rule.RULE_ID || index + 1)}</strong><span>${escapeHtml(getColumnLabel(rule.RESULT_COLUMN || "범주형", options.columnComments))}</span></span>
-                <span class="qe-rule-body"><span>${escapeHtml(condition)}</span><b aria-hidden="true">→</b><span>${escapeHtml(result)}</span></span>
+                <span class="qe-rule-head"><strong>${escapeHtml(common?.t("Rule") || "규칙")} ${escapeHtml(rule.RULE_ID || index + 1)}</strong><span>${escapeHtml(getColumnLabel(rule.RESULT_COLUMN || "범주형", options.columnComments))}</span></span>
+                <span class="qe-rule-body"><b>IF</b> <span>${escapeHtml(condition)}</span><b>THEN</b> <span>${escapeHtml(mixed ? common.t("Anomaly candidate") : result)}</span></span>
                 <span class="qe-rule-metrics">
+                    ${mixed || common?.isPattern(rule) ? common.metrics(rule).map((m) => `<span class="qe-metric">${escapeHtml(m.label)} <strong>${escapeHtml(m.value)}</strong></span>`).join("") : `
                     <span class="qe-metric">신뢰도 <strong>${escapeHtml(formatRatio(rule.RULE_CONFIDENCE))}</strong></span>
                     <span class="qe-metric">지지도 <strong>${escapeHtml(formatRatio(rule.RULE_SUPPORT))}</strong></span>
                     <span class="qe-metric">향상도 <strong>${escapeHtml(formatNumber(rule.RULE_LIFT, 2))}</strong></span>
-                    ${violationCount === null ? "" : `<span class="qe-metric is-warning">위반 <strong>${escapeHtml(formatNumber(violationCount, 0))}건</strong></span>`}
+                    ${violationCount === null ? "" : `<span class="qe-metric is-warning">위반 <strong>${escapeHtml(formatNumber(violationCount, 0))}건</strong></span>`}`}
                 </span>
             </button>`;
         }).join("");
@@ -450,8 +460,16 @@
 
     function renderContinuousRules(rules, options = {}) {
         const safeRules = Array.isArray(rules) ? rules : [];
-        if (!safeRules.length) return '<p class="qe-empty">발견된 연속형 규칙이 없습니다.</p>';
+        if (!safeRules.length) return `<p class="qe-empty">${escapeHtml(options.emptyMessage || "발견된 연속형 규칙이 없습니다.")}</p>`;
         return safeRules.map((rule, index) => {
+            if (window.RuleResultCommon?.isFormula(rule)) {
+                const common = window.RuleResultCommon;
+                return `<button type="button" class="qe-rule-card" data-rule-kind="continuous" data-rule-index="${index}">
+                    <span class="qe-rule-head"><strong>${escapeHtml(getColumnLabel(rule.RESULT_COLUMN, options.columnComments))}</strong><span>${escapeHtml(common.formulaMethod(rule))}</span></span>
+                    <span class="qe-rule-body"><b>THEN</b> <span>${escapeHtml(annotateColumnText(rule.RESULT_TEXT, options.columnComments))}</span><b>IF</b> <span>${escapeHtml(annotateColumnText(rule.CONDITION_TEXT, options.columnComments))}</span></span>
+                    <span class="qe-rule-metrics">${common.metrics(rule).map((m) => `<span class="qe-metric">${escapeHtml(m.label)} <strong>${escapeHtml(m.value)}</strong></span>`).join("")}</span>
+                </button>`;
+            }
             const features = Array.isArray(rule.FEATURE_LIST)
                 ? rule.FEATURE_LIST
                 : String(rule.FEATURE_COLUMNS || "").split(",").map((item) => item.trim()).filter(Boolean);
@@ -469,6 +487,67 @@
                 </span>
             </button>`;
         }).join("");
+    }
+
+    function buildRegressionDiagnostics(points) {
+        return window.RegressionDiagnostics.fit(points);
+    }
+
+    function drawRegressionBands(context, diagnostic, mapX, mapY) {
+        if (!diagnostic.ok) return;
+        const style = window.RegressionDiagnostics.chartStyle;
+        const bands = diagnostic.bands;
+        context.save();
+        context.beginPath();
+        bands.forEach((band, index) => context[index ? "lineTo" : "moveTo"](mapX(band.x), mapY(band.ciLower)));
+        bands.slice().reverse().forEach((band) => context.lineTo(mapX(band.x), mapY(band.ciUpper)));
+        context.closePath();
+        context.fillStyle = style.ci.fill;
+        context.fill();
+        [["piLower", style.pi], ["piUpper", style.pi],
+            ["ciLower", style.ci], ["ciUpper", style.ci], ["y", style.trend]]
+            .forEach(([key, boundary]) => {
+                context.beginPath();
+                context.strokeStyle = boundary.stroke;
+                context.lineWidth = boundary.width;
+                context.setLineDash(boundary.dash);
+                bands.forEach((band, index) => context[index ? "lineTo" : "moveTo"](mapX(band.x), mapY(band[key])));
+                context.stroke();
+            });
+        context.restore();
+    }
+
+    function drawRegressionLegend(context, diagnostic, plot, draw = true) {
+        const style = window.RegressionDiagnostics.chartStyle;
+        const items = diagnostic.ok ? [
+            [style.normal.stroke, `● PI 안 ${diagnostic.count - diagnostic.outsideCount}`],
+            [style.attention.stroke, `▲ PI 밖 ${diagnostic.outsideCount}`],
+            [style.ci.stroke, "━ 95% CI (평균)"],
+            [style.pi.stroke, "┄ 95% PI (관측값)"],
+            [style.trend.stroke, "━ 표본 추세"]
+        ] : [[style.normal.stroke, `● 표본 ${diagnostic.count} (경계 산정 불가)`]];
+        context.save();
+        context.font = "10px system-ui, sans-serif";
+        context.textAlign = "left";
+        context.textBaseline = "middle";
+        let x = plot.left;
+        let y = 12;
+        items.forEach(([color, label]) => {
+            const width = context.measureText(label).width + 16;
+            if (x + width > plot.right && x > plot.left) { x = plot.left; y += 16; }
+            if (draw) {
+                context.fillStyle = color;
+                context.fillText(label, x, y);
+            }
+            x += width;
+        });
+        context.restore();
+        return y + 8;
+    }
+
+    function getRegressionDiagnosticMessage(diagnostic) {
+        if (!diagnostic.ok) return "경계를 계산하려면 서로 다른 X값을 포함한 유효 표본이 3개 이상 필요합니다. 점을 선택하면 상세 행으로 이동합니다.";
+        return "표시 표본의 선형 추세를 기준으로 CI는 평균, PI는 개별 관측값의 95% 참고 범위입니다(독립·정규·등분산 오차 가정). 빨간 삼각형은 PI 밖의 검토 후보이며 저장 규칙의 위반 판정과는 별개입니다. 점을 선택하면 상세 행으로 이동합니다.";
     }
 
     function stringify(value) {
@@ -509,6 +588,10 @@
         renderContinuousRules,
         renderKpis,
         renderStatus,
+        buildRegressionDiagnostics,
+        drawRegressionBands,
+        drawRegressionLegend,
+        getRegressionDiagnosticMessage,
         statusClass,
         statusLabel,
         stringify

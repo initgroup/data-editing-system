@@ -4,6 +4,10 @@
   "pageCode": "MCOM_EDIT_WORK",
   "description": "Common English messages and dynamic labels for editing workflow pages.",
   "labels": {
+    "buttonSaveCorrection": "Save Correction",
+    "rangeReplacementHelp": "A range rule has no single replacement value. Enter a concrete value within the allowed range.",
+    "editReplacementHelp": "Replacement value to save to INITDN$",
+    "editRowidMissing": "The source ROWID is missing; this row cannot be edited.",
     "ruleDecisionTab": "Rule Decision",
     "ruleMasterTab": "Rule Master",
     "violationQueryTab": "Violation Query",
@@ -314,7 +318,15 @@
     "analysisReanalysisViolations": "Stored reanalysis violations",
     "analysisReanalysisMethod": "Flow reanalysis compares stored violation counts for selected target columns. Because rule IDs or formulas can change during rediscovery, review this together with the direct same-rule comparison.",
     "analysisNoData": "No data to display.",
-    "analysisReviewConfirm": "Some validation indicators require review. Have you reviewed the details and want to complete effect validation in this state?"
+    "analysisReviewConfirm": "Some validation indicators require review. Have you reviewed the details and want to complete effect validation in this state?",
+    "formulaReplacementHelp": "Formula predictions are not automatic correction values. Review the source value and tolerance, then enter the correction.",
+    "formulaRuleHelp": "When IF holds, the actual value must be within tolerance of the formula prediction. Predictions are not automatic corrections.",
+    "analysisTargetUnits": "target units",
+    "formulaCoverage": "Within-tolerance rate",
+    "formulaValidationCoverage": "Validation within-tolerance rate",
+    "formulaValidationR2": "Validation R²",
+    "formulaValidationMae": "Validation MAE (target units)",
+    "formulaAbsoluteTolerance": "Absolute tolerance (target units)"
   },
   "messages": {
     "Complete effect validation before operational DML execution.": "Complete effect validation before operational DML execution.",

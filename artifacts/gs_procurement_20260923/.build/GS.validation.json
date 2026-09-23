@@ -1,0 +1,455 @@
+{
+  "schemaVersion": "presentation-finalization.v1",
+  "finalSha256": "5d72dd219d0cc30239af94cd86ccbd4fdec83b4a0a1e431252a2725f5591bdb8",
+  "byteCount": 206840,
+  "packageIntegrity": {
+    "chart_count": 0,
+    "claim_boundary": "Structural package checks only; no slide text, notes, formulas, chart values, or native PowerPoint execution were inspected.",
+    "finding_count": 0,
+    "findings": [],
+    "notes_parts_skipped": 47,
+    "relationship_part_count": 99,
+    "slide_count": 47,
+    "status": "pass",
+    "exitCode": 0,
+    "findingCount": 0,
+    "warnings": []
+  },
+  "presentationLayout": {
+    "finding_count": 0,
+    "findings": [],
+    "font_policy": {
+      "checked_text_script_count": 1590,
+      "native_font_rendering_verified": false,
+      "observed_font_families": [
+        "Malgun Gothic"
+      ],
+      "observed_font_use_counts": {
+        "Malgun Gothic": 1590
+      },
+      "passed": true,
+      "performed": true
+    },
+    "slide_count": 47,
+    "slide_size_in": [
+      16.6667,
+      9.375
+    ],
+    "warning_count": 0,
+    "warnings": [],
+    "exitCode": 0,
+    "findingCount": 0,
+    "fontPolicy": {
+      "checked_text_script_count": 1590,
+      "native_font_rendering_verified": false,
+      "observed_font_families": [
+        "Malgun Gothic"
+      ],
+      "observed_font_use_counts": {
+        "Malgun Gothic": 1590
+      },
+      "passed": true,
+      "performed": true
+    }
+  },
+  "fontSelection": {
+    "basis": "design",
+    "approvedFamilies": [
+      "Malgun Gothic"
+    ],
+    "scriptFonts": {},
+    "referenceSha256": null,
+    "referenceFontsVerifiedInEncodedText": false,
+    "checked_text_script_count": 1590,
+    "native_font_rendering_verified": false,
+    "observed_font_families": [
+      "Malgun Gothic"
+    ],
+    "observed_font_use_counts": {
+      "Malgun Gothic": 1590
+    },
+    "passed": true,
+    "performed": true
+  },
+  "firstPartyImport": {
+    "performed": true,
+    "passed": true,
+    "slideCount": 47,
+    "sha256": "5d72dd219d0cc30239af94cd86ccbd4fdec83b4a0a1e431252a2725f5591bdb8",
+    "runtimeNodeModules": "C:\\Users\\kse\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\node_modules",
+    "nodeExecutable": "C:\\Users\\kse\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\bin\\node.exe"
+  },
+  "nativeTableArithmetic": {
+    "performed": true,
+    "checked_column_count": 0,
+    "checks": [],
+    "claim_boundary": "Displayed-value arithmetic with rounding tolerance; not source-data verification.",
+    "eligible_table_count": 0,
+    "finding_count": 0,
+    "findings": [],
+    "native_table_count": 46,
+    "passed": true,
+    "schema_version": "presentation-native-table-arithmetic.v1",
+    "skipped_tables": [
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 2,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 3,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 4,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 5,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 6,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 7,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 8,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 9,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 10,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 11,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 12,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 13,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 14,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 15,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 16,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 17,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 18,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 19,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 20,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 21,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 22,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 23,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 24,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 25,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 26,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 27,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 28,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 29,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 30,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 31,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 32,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 33,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 34,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 35,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 36,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 37,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 38,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 39,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 40,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 41,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 42,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 43,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 44,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 45,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 46,
+        "table": 1
+      },
+      {
+        "reason": "no_numeric_amounts",
+        "slide": 47,
+        "table": 1
+      }
+    ],
+    "slide_count": 47,
+    "warning_count": 0,
+    "warnings": []
+  },
+  "nativeChartTitles": {
+    "performed": true,
+    "checks": [],
+    "finding_count": 0,
+    "findings": [],
+    "native_chart_count": 0,
+    "native_powerpoint_verified": false,
+    "passed": true,
+    "presentation_sha256": "5d72dd219d0cc30239af94cd86ccbd4fdec83b4a0a1e431252a2725f5591bdb8",
+    "schema_version": "presentation-native-chart-titles.v1",
+    "slide_count": 47,
+    "source_text_emitted": false,
+    "unresolved_linked_title_count": 0
+  },
+  "sourceDerivedPolicyFlags": [
+    "--expected-slide-size-emu",
+    "15240000,8572500",
+    "--validate-bullet-geometry",
+    "--validate-heading-fit",
+    "--require-native-table-slide",
+    "2",
+    "--require-native-table-slide",
+    "3",
+    "--require-native-table-slide",
+    "4",
+    "--require-native-table-slide",
+    "5",
+    "--require-native-table-slide",
+    "6",
+    "--require-native-table-slide",
+    "7",
+    "--require-native-table-slide",
+    "8",
+    "--require-native-table-slide",
+    "9",
+    "--require-native-table-slide",
+    "10",
+    "--require-native-table-slide",
+    "11",
+    "--require-native-table-slide",
+    "12",
+    "--require-native-table-slide",
+    "13",
+    "--require-native-table-slide",
+    "14",
+    "--require-native-table-slide",
+    "15",
+    "--require-native-table-slide",
+    "16",
+    "--require-native-table-slide",
+    "17",
+    "--require-native-table-slide",
+    "18",
+    "--require-native-table-slide",
+    "19",
+    "--require-native-table-slide",
+    "20",
+    "--require-native-table-slide",
+    "21",
+    "--require-native-table-slide",
+    "22",
+    "--require-native-table-slide",
+    "23",
+    "--require-native-table-slide",
+    "24",
+    "--require-native-table-slide",
+    "25",
+    "--require-native-table-slide",
+    "26",
+    "--require-native-table-slide",
+    "27",
+    "--require-native-table-slide",
+    "28",
+    "--require-native-table-slide",
+    "29",
+    "--require-native-table-slide",
+    "30",
+    "--require-native-table-slide",
+    "31",
+    "--require-native-table-slide",
+    "32",
+    "--require-native-table-slide",
+    "33",
+    "--require-native-table-slide",
+    "34",
+    "--require-native-table-slide",
+    "35",
+    "--require-native-table-slide",
+    "36",
+    "--require-native-table-slide",
+    "37",
+    "--require-native-table-slide",
+    "38",
+    "--require-native-table-slide",
+    "39",
+    "--require-native-table-slide",
+    "40",
+    "--require-native-table-slide",
+    "41",
+    "--require-native-table-slide",
+    "42",
+    "--require-native-table-slide",
+    "43",
+    "--require-native-table-slide",
+    "44",
+    "--require-native-table-slide",
+    "45",
+    "--require-native-table-slide",
+    "46",
+    "--require-native-table-slide",
+    "47",
+    "--cover-role",
+    "none",
+    "--expected-slide-count",
+    "47",
+    "--approved-font-family",
+    "Malgun Gothic"
+  ],
+  "nativeChartValidation": {
+    "detectedOwnerSlides": [],
+    "detectedChartCount": 0,
+    "targetApplication": null,
+    "sourceChartOwnersExplicitlyDeclared": false,
+    "validatorRan": false,
+    "passed": true
+  }
+}

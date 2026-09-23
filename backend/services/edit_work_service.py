@@ -175,7 +175,11 @@ def _row_to_dict(columns: Iterable[str], row: Iterable[Any]) -> dict[str, Any]:
 def _fetch_all(cursor, sql_id: str, params: dict[str, Any]) -> list[dict[str, Any]]:
     cursor.execute(SqlLoader.get_sql(sql_id), params)
     columns = [item[0] for item in cursor.description or []]
-    return [_row_to_dict(columns, row) for row in cursor.fetchall()]
+    rows = [_row_to_dict(columns, row) for row in cursor.fetchall()]
+    if sql_id in {"MCOMMON_EDIT_RULE_SOURCE_PAGE", "MCOMMON_EDIT_RULE_SOURCE_ASSOC_LIST", "MCOMMON_EDIT_RULE_SELECTED_LIST", "MCOMMON_EDIT_RULE_MASTER_LIST", "MCOMMON_EDIT_SESSION_RULE_LIST"}:
+        for row in rows:
+            _pattern_rule_metadata(cursor, row)
+    return rows
 
 
 def _fetch_limited(
@@ -193,7 +197,10 @@ def _fetch_one(cursor, sql_id: str, params: dict[str, Any]) -> dict[str, Any] | 
     cursor.execute(SqlLoader.get_sql(sql_id), params)
     columns = [item[0] for item in cursor.description or []]
     row = cursor.fetchone()
-    return _row_to_dict(columns, row) if row else None
+    result = _row_to_dict(columns, row) if row else None
+    if result and sql_id in {"MCOMMON_EDIT_RULE_SOURCE_ASSOC_DETAIL", "MCOMMON_EDIT_RULE_SELECT"}:
+        _pattern_rule_metadata(cursor, result, params if sql_id == "MCOMMON_EDIT_RULE_SOURCE_ASSOC_DETAIL" else None)
+    return result
 
 
 def _column_comments_for_table(cursor, owner: str, table: str) -> dict[str, str]:
@@ -457,6 +464,155 @@ def _compile_discovered_association_expression(
             referenced.append(column_name)
 
     return " AND ".join(rendered), referenced
+
+
+def _pattern_rule_metadata(cursor, rule: dict[str, Any], source_params=None) -> dict[str, Any] | None:
+    """Load v2 metadata only after recognizing a persisted pattern rule.
+
+    Legacy installations never reference the new nullable columns. Source scope
+    comes from the server-resolved rule and its discovery run, not client AST.
+    """
+    if str(rule.get("USER_RULE_YN") or "N").upper() == "Y":
+        return None
+    params = dict(source_params or {})
+    model_name = str(params.get("sourceObjectName") or rule.get("SOURCE_OBJECT_NAME") or rule.get("MODEL_NAME") or "")
+    if str(rule.get("RULE_SOURCE") or "").upper() != "MIXED_PATTERN_TREE" and not model_name.startswith("XAI_PATTERN_"):
+        return None
+    if not rule.get("CONDITION_AST") or not rule.get("RESULT_AST"):
+        params = {
+            "runSourceType": params.get("runSourceType") or rule.get("SOURCE_RUN_SOURCE_TYPE") or rule.get("RUN_SOURCE_TYPE"),
+            "runId": params.get("runId") or rule.get("SOURCE_RUN_ID") or rule.get("RUN_ID"),
+            "sourceOwner": params.get("sourceOwner") or rule.get("SOURCE_OWNER") or rule.get("OWNER"),
+            "sourceObjectName": model_name,
+            "sourceRuleId": params.get("sourceRuleId") or rule.get("SOURCE_RULE_ID") or rule.get("RULE_ID"),
+            "targetOwner": params.get("targetOwner") or rule.get("DISCOVERY_TARGET_OWNER") or rule.get("TARGET_OWNER"),
+            "targetTable": params.get("targetTable") or rule.get("DISCOVERY_TARGET_TABLE") or rule.get("TARGET_TABLE"),
+            "targetColumn": params.get("targetColumn") or rule.get("TARGET_COLUMN") or rule.get("RESULT_COLUMN"),
+        }
+        if not all(params.values()):
+            raise HTTPException(409, "The saved pattern rule is missing its discovery scope. Reload the discovered rule.")
+        metadata = _fetch_one(cursor, "MCOMMON_EDIT_PATTERN_SOURCE_DETAIL", params)
+        # Reviewed INITDN$ reanalysis rules are attached to the INITUP$ editing
+        # track. Resolve only its corresponding edit table, never another run.
+        if not metadata and not rule.get("DISCOVERY_TARGET_TABLE") and str(params["targetTable"]).startswith(SOURCE_TABLE_PREFIX):
+            params["targetTable"] = _derive_edit_table_name(params["targetTable"])
+            metadata = _fetch_one(cursor, "MCOMMON_EDIT_PATTERN_SOURCE_DETAIL", params)
+        if not metadata:
+            raise HTTPException(409, "The saved pattern predicate was not found in its discovery run.")
+        from backend.services.mixed_xai_service import _json_object
+        rule.update(metadata)
+        rule["CONDITION_AST"] = _json_object(metadata.get("CONDITION_JSON"), "condition")
+        rule["RESULT_AST"] = _json_object(metadata.get("RESULT_JSON"), "result")
+    rule["AUTO_REPLACE_YN"] = "Y" if rule["RESULT_AST"].get("operator") in {"=", "IS_NULL"} else "N"
+    if rule["RESULT_AST"].get("operator") == "WITHIN_TOLERANCE":
+        def formula_columns(node, depth=0):
+            if not isinstance(node, dict) or depth > 12:
+                return set()
+            if "column" in node:
+                return {str(node["column"])}
+            return formula_columns(node.get("left"), depth + 1) | formula_columns(node.get("right"), depth + 1)
+        rule["RESULT_KIND"] = "FORMULA"
+        rule["FEATURE_COLUMNS"] = sorted(formula_columns(rule["RESULT_AST"].get("expression")))
+        rule["ABSOLUTE_TOLERANCE"] = rule["RESULT_AST"].get("absoluteTolerance")
+        rule["RELATIVE_TOLERANCE"] = rule["RESULT_AST"].get("relativeTolerance", 0)
+        from backend.services.mixed_xai_service import _json_object
+        validation = _json_object(rule.get("VALIDATION_JSON") or {}, "validation")
+        rule["VALIDATION_R2"] = validation.get("r2")
+        rule["VALIDATION_MAE"] = validation.get("mae")
+        rule["VALIDATION_CONFIDENCE"] = validation.get("confidence")
+    return rule
+
+
+def _compile_pattern_rule(cursor, rule, columns, *, prefix="pattern"):
+    pattern = _pattern_rule_metadata(cursor, rule)
+    if not pattern:
+        return None
+    from backend.services.mixed_xai_service import compile_predicate
+    metadata = [dict(column, COLUMN_NAME=name) for name, column in columns.items()]
+    condition_sql, condition_binds = compile_predicate(pattern["CONDITION_AST"], metadata, prefix=prefix + "a")
+    result_sql, result_binds = compile_predicate(pattern["RESULT_AST"], metadata, prefix=prefix + "b")
+
+    def referenced(node):
+        if node.get("operator") in {"AND", "OR"}:
+            return {name for child in node["conditions"] for name in referenced(child)}
+        return {node["column"]}
+
+    condition_columns = referenced(pattern["CONDITION_AST"])
+    target_column = str(rule.get("TARGET_COLUMN") or rule.get("RESULT_COLUMN") or "").upper()
+    if referenced(pattern["RESULT_AST"]) != {target_column} or target_column in condition_columns:
+        raise HTTPException(409, "A pattern must predict its actual result column without using that column in IF.")
+    return condition_sql, result_sql, {**condition_binds, **result_binds}, sorted(condition_columns)
+
+
+def _pattern_result_accepts_value(rule, value, *, expected_value=None):
+    """Compare a scalar with its real consequent, including NULL and ranges."""
+    from decimal import Decimal, InvalidOperation
+    target = str(rule.get("TARGET_COLUMN") or rule.get("RESULT_COLUMN") or "").upper()
+    if rule["RESULT_AST"].get("operator") == "WITHIN_TOLERANCE":
+        from backend.services.mixed_formula import accepts_expected
+        return accepts_expected(rule["RESULT_AST"], value, expected_value)
+
+    def accepts(node):
+        op = node.get("operator")
+        if op in {"AND", "OR"}:
+            values = [accepts(child) for child in node.get("conditions", [])]
+            return all(values) if op == "AND" else any(values)
+        if node.get("column") != target:
+            return False
+        missing = value is None or value == ""
+        if op == "IS_NULL":
+            return missing
+        if op == "NOT_NULL":
+            return not missing
+        if missing:
+            return False
+        expected = node.get("value")
+        actual = value
+        if node.get("valueType") in {"NUMBER", "BINARY_FLOAT"} or isinstance(expected, (int, float, Decimal)):
+            try:
+                actual, expected = Decimal(str(value)), Decimal(str(expected))
+                if not actual.is_finite() or not expected.is_finite():
+                    return False
+            except (InvalidOperation, TypeError, ValueError):
+                return False
+        else:
+            actual, expected = str(actual), str(expected)
+        return {"=": actual == expected, "!=": actual != expected, "<": actual < expected,
+                "<=": actual <= expected, ">": actual > expected, ">=": actual >= expected}.get(op, False)
+
+    return accepts(rule["RESULT_AST"])
+
+
+def _validate_pattern_replacement(cursor, rule, new_value, columns, *, owner=None, edit_table=None, source_rowid=None):
+    pattern = _pattern_rule_metadata(cursor, rule)
+    if not pattern or pattern.get("AUTO_REPLACE_YN") == "Y":
+        return
+    # A range describes acceptable values; it is not itself a value to write.
+    # Reject copying the display text, while permitting an explicit valid number.
+    _compile_pattern_rule(cursor, rule, columns)
+    if pattern["RESULT_AST"].get("operator") == "WITHIN_TOLERANCE":
+        if not all((owner, edit_table, source_rowid)):
+            raise HTTPException(400, "A formula replacement requires its current source-row predictors.")
+        from backend.services.mixed_formula import compile_expression
+        from backend.services.mixed_xai_service import compile_predicate
+        metadata = [dict(column, COLUMN_NAME=name) for name, column in columns.items()]
+        formula, binds, _ = compile_expression(pattern["RESULT_AST"]["expression"], metadata,
+            prefix="replacementf", forbidden_column=rule.get("TARGET_COLUMN") or rule.get("RESULT_COLUMN"))
+        condition, condition_binds = compile_predicate(pattern["CONDITION_AST"], metadata, prefix="replacementa")
+        sql = _render_dynamic_sql("MCOMMON_EDIT_PATTERN_REPLACEMENT", {
+            "targetObject": f"{_quote_identifier(owner)}.{_quote_identifier(edit_table)}",
+            "trackingColumn": _quote_identifier(TRACKING_COLUMN),
+            "formulaExpression": formula, "conditionExpression": condition})
+        cursor.execute(sql, {**binds, **condition_binds, "sourceRowid": source_rowid})
+        expected_row = cursor.fetchone()
+        if not expected_row or expected_row[0] is None:
+            raise HTTPException(409, "The current row no longer satisfies this formula's input conditions. Refresh the violations.")
+        expected_value = expected_row[0]
+        if not _pattern_result_accepts_value(rule, new_value, expected_value=expected_value):
+            raise HTTPException(400, "Enter a numeric value within this row's predicted tolerance band; formula text is not a replacement value.")
+        return str(expected_value)
+    if not _pattern_result_accepts_value(rule, new_value):
+        raise HTTPException(400, "A range rule has no single replacement value. Enter a concrete number within its allowed range.")
 
 
 def _normalize_tolerance(value: Any) -> float:
@@ -1196,7 +1352,10 @@ def _list_master_rules(
         },
     )
     columns = [item[0] for item in cursor.description or []]
-    return [_row_to_dict(columns, row) for row in cursor.fetchall()]
+    rows = [_row_to_dict(columns, row) for row in cursor.fetchall()]
+    for row in rows:
+        _pattern_rule_metadata(cursor, row)
+    return rows
 
 
 def _list_latest_selected_source_rules(
@@ -2263,8 +2422,9 @@ def _build_live_rule_violation_sql(
         raise HTTPException(status_code=409, detail="최종 규칙의 행 식별 컬럼이 INITUP$ 실제 테이블에 없습니다.")
     if source_rowid_column and source_rowid_column not in columns:
         raise HTTPException(status_code=409, detail="INITDN$ 수정테이블의 원본 행 추적 컬럼을 찾을 수 없습니다.")
+    pattern_compiled = _compile_pattern_rule(cursor, rule, columns) if source_type == "ASSOCIATION" else None
     expected_value = rule.get("EXPECTED_VALUE")
-    if source_type == "ASSOCIATION" and (
+    if source_type == "ASSOCIATION" and not pattern_compiled and (
         expected_value is None or not str(expected_value).strip()
     ):
         raise HTTPException(status_code=409, detail="최종 연관 규칙에 THEN 결과값이 없습니다.")
@@ -2273,7 +2433,9 @@ def _build_live_rule_violation_sql(
         and str(rule.get("USER_RULE_YN") or "N").upper() != "Y"
         and rule.get("SOURCE_RULE_ID")
     )
-    if discovered_association:
+    if pattern_compiled:
+        compiled_expression, result_expression, pattern_binds, referenced_columns = pattern_compiled
+    elif discovered_association:
         compiled_expression, referenced_columns = _compile_discovered_association_expression(
             rule.get("RULE_EXPRESSION"),
             columns=columns,
@@ -2315,6 +2477,25 @@ def _build_live_rule_violation_sql(
         params["expectedValue"] = expected_value
         params["violationReason"] = "최종 연관 규칙의 THEN 결과와 실제 값이 다릅니다."
         sql_id = "MCOMMON_EDIT_LIVE_VIOLATION_ASSOC"
+        if pattern_compiled:
+            replacements["resultExpression"] = result_expression
+            params.update(pattern_binds)
+            params["violationReason"] = "IF 조건을 만족하지만 THEN의 기대값 또는 허용 범위를 벗어났습니다."
+            sql_id = "MCOMMON_EDIT_LIVE_VIOLATION_PATTERN"
+            if rule["RESULT_AST"].get("operator") == "WITHIN_TOLERANCE":
+                from backend.services.mixed_formula import compile_expression
+                formula, formula_binds, _ = compile_expression(rule["RESULT_AST"]["expression"],
+                    [dict(column, COLUMN_NAME=name) for name, column in columns.items()],
+                    prefix="liveformula", forbidden_column=target_column)
+                replacements["formulaExpression"] = formula
+                replacements["actualNumericExpression"] = f"T.{_quote_identifier(target_column)}"
+                if rule["RESULT_AST"].get("numericText") is True:
+                    from backend.services.mixed_numeric import numeric_text_sql
+                    replacements["actualNumericExpression"] = numeric_text_sql(replacements["actualNumericExpression"])
+                params.update(formula_binds)
+                params.pop("expectedValue")
+                params["violationReason"] = "IF 조건을 만족하지만 실제 값이 수식의 예측값과 허용오차 범위를 벗어났거나 결측입니다."
+                sql_id = "MCOMMON_EDIT_LIVE_VIOLATION_FORMULA_PATTERN"
     else:
         replacements["formulaExpression"] = compiled_expression
         replacements["notNullFilter"] = "".join(
@@ -2967,6 +3148,9 @@ def list_violations(
                     "CHANGE_STATUS": violation.get("CHANGE_STATUS") or "UNEDITED",
                     "TARGET_COLUMN_COMMENT": violation_rule.get("TARGET_COLUMN_COMMENT") or "",
                     "COLUMN_COMMENTS": violation_rule.get("COLUMN_COMMENTS") or {},
+                    "AUTO_REPLACE_YN": violation_rule.get("AUTO_REPLACE_YN", "Y"),
+                    "RESULT_KIND": violation_rule.get("RESULT_KIND"),
+                    "RESULT_EXPRESSION": violation_rule.get("RESULT_EXPRESSION"),
                 }
             )
         return {
@@ -3794,6 +3978,9 @@ def _apply_edit_change(
     edit_table = _normalize_identifier(session["EDIT_TABLE"], "edit table")
     if column_name not in columns:
         raise HTTPException(status_code=400, detail="Column does not exist in the INITDN$ editing table.")
+    formula_expected = _validate_pattern_replacement(cursor, session_rule, payload.newValue, columns,
+        owner=owner, edit_table=edit_table, source_rowid=source_rowid)
+    expected_for_change = formula_expected if formula_expected is not None else payload.expectedValue
     select_sql = (
         f"SELECT {_quote_identifier(column_name)} "
         f"FROM {_quote_identifier(owner)}.{_quote_identifier(edit_table)} "
@@ -3822,7 +4009,7 @@ def _apply_edit_change(
             "columnName": column_name,
             "oldValue": None if old_value is None else str(old_value),
             "newValue": None if payload.newValue is None else str(payload.newValue),
-            "expectedValue": None if payload.expectedValue is None else str(payload.expectedValue),
+            "expectedValue": None if expected_for_change is None else str(expected_for_change),
             "editedBy": user_id,
         },
     )
@@ -3844,7 +4031,7 @@ def _apply_edit_change(
             "columnName": column_name,
             "oldValue": old_value,
             "newValue": payload.newValue,
-            "expectedValue": payload.expectedValue,
+            "expectedValue": expected_for_change,
             "violationId": payload.sourceViolationId,
         },
     )
@@ -4086,7 +4273,10 @@ def _evaluate_rules_on_table(
                 and str(rule.get("USER_RULE_YN") or "N").upper() != "Y"
                 and rule.get("SOURCE_RULE_ID")
             )
-            if discovered_association:
+            pattern_compiled = _compile_pattern_rule(cursor, rule, table_columns, prefix=f"pattern{index}_") if source_type == "ASSOCIATION" else None
+            if pattern_compiled:
+                compiled_expression, result_expression, pattern_binds, referenced_columns = pattern_compiled
+            elif discovered_association:
                 compiled_expression, referenced_columns = _compile_discovered_association_expression(
                     rule.get("RULE_EXPRESSION"),
                     columns=table_columns,
@@ -4101,7 +4291,10 @@ def _evaluate_rules_on_table(
 
             suffix = f"_{index}"
             target_expression = f'T.{_quote_identifier(target_column)}'
-            if source_type == "ASSOCIATION":
+            if pattern_compiled:
+                condition = f"({compiled_expression}) AND CASE WHEN ({result_expression}) THEN 0 ELSE 1 END = 1"
+                batch_params.update(pattern_binds)
+            elif source_type == "ASSOCIATION":
                 expected_value = rule.get("EXPECTED_VALUE")
                 if expected_value is None or not str(expected_value).strip():
                     raise HTTPException(status_code=409, detail="최종 연관 규칙에 THEN 결과값이 없습니다.")
@@ -4292,10 +4485,16 @@ def _build_edit_analysis(
 
     def normalized_rule_type(row: dict[str, Any]) -> str:
         rule = rule_map.get(int(row.get("EDIT_RULE_ID") or 0), {})
+        if (row.get("RESULT_KIND") or rule.get("RESULT_KIND")) == "FORMULA":
+            return "SYMBOLIC"
         value = str(row.get("SOURCE_RULE_TYPE") or rule.get("SOURCE_RULE_TYPE") or "ASSOCIATION").upper()
         return "SYMBOLIC" if value == "SYMBOLIC" else "ASSOCIATION"
 
     def value_matches(row: dict[str, Any]) -> bool:
+        rule = rule_map.get(int(row.get("EDIT_RULE_ID") or 0), {})
+        if rule.get("RESULT_AST"):
+            return _pattern_result_accepts_value(rule, _read_lob(row.get("NEW_VALUE")),
+                                                  expected_value=_read_lob(row.get("EXPECTED_VALUE")))
         return str(_read_lob(row.get("NEW_VALUE")) or "") == str(_read_lob(row.get("EXPECTED_VALUE")) or "")
 
     def row_identity(row: dict[str, Any]) -> str:
@@ -4368,13 +4567,19 @@ def _build_edit_analysis(
     continuous_records_by_rule: dict[int, list[dict[str, Any]]] = {}
     continuous_non_numeric_count = 0
     for row in symbolic_changes:
-        old_value = _finite_number(row.get("OLD_VALUE"))
-        new_value = _finite_number(row.get("NEW_VALUE"))
+        rule = rule_map.get(int(row.get("EDIT_RULE_ID") or 0), {})
+        result_ast = rule.get("RESULT_AST") or {}
+        if result_ast.get("operator") == "WITHIN_TOLERANCE" and result_ast.get("numericText") is True:
+            from backend.services.mixed_numeric import parse_numeric_text
+            old_value = parse_numeric_text(_read_lob(row.get("OLD_VALUE")))
+            new_value = parse_numeric_text(_read_lob(row.get("NEW_VALUE")))
+        else:
+            old_value = _finite_number(row.get("OLD_VALUE"))
+            new_value = _finite_number(row.get("NEW_VALUE"))
         expected_value = _finite_number(row.get("EXPECTED_VALUE"))
         if old_value is None or new_value is None or expected_value is None:
             continuous_non_numeric_count += 1
             continue
-        rule = rule_map.get(int(row.get("EDIT_RULE_ID") or 0), {})
         tolerance_pct = _finite_number(rule.get("RULE_TOLERANCE_PCT"))
         if tolerance_pct is None:
             tolerance_pct = _finite_number(rule.get("RULE_LIFT"))
@@ -4386,6 +4591,10 @@ def _build_edit_analysis(
         after_abs_error = abs(after_residual)
         epsilon = 0.000000001
         allowed_error = max(abs(new_value) * tolerance_pct / 100, epsilon)
+        formula_result = rule.get("RESULT_AST") or {}
+        if formula_result.get("operator") == "WITHIN_TOLERANCE":
+            tolerance_pct = float(formula_result.get("relativeTolerance", 0)) * 100
+            allowed_error = max(float(formula_result["absoluteTolerance"]), abs(expected_value) * tolerance_pct / 100)
         difference = after_abs_error - before_abs_error
         continuous_record = {
                 "EDIT_CHANGE_ID": row.get("EDIT_CHANGE_ID"),
@@ -4424,6 +4633,10 @@ def _build_edit_analysis(
         if effective_tolerance_pct is None:
             effective_tolerance_pct = 5.0
             tolerance_defaulted = True
+        formula_result = rule.get("RESULT_AST") or {}
+        if formula_result.get("operator") == "WITHIN_TOLERANCE":
+            effective_tolerance_pct = float(formula_result.get("relativeTolerance", 0)) * 100
+            tolerance_defaulted = False
         source_result = source_eval_map.get(edit_rule_id, {})
         edit_result = edit_eval_map.get(edit_rule_id, {})
         source_count = int(source_result.get("VIOLATION_COUNT") or 0) if source_evaluation is not None else None
@@ -4437,6 +4650,9 @@ def _build_edit_analysis(
                 "RULE_TOLERANCE_PCT": rule.get("RULE_TOLERANCE_PCT"),
                 "EFFECTIVE_TOLERANCE_PCT": effective_tolerance_pct,
                 "TOLERANCE_DEFAULTED": tolerance_defaulted,
+                "ABSOLUTE_TOLERANCE": formula_result.get("absoluteTolerance"),
+                "RESULT_KIND": rule.get("RESULT_KIND"),
+                "RESULT_EXPRESSION": _read_lob(rule.get("RESULT_EXPRESSION")),
                 "RULE_EXPRESSION": _read_lob(rule.get("RULE_EXPRESSION")),
                 "SOURCE_VIOLATION_COUNT": source_count,
                 "EDIT_VIOLATION_COUNT": edit_count,

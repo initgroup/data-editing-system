@@ -473,9 +473,15 @@ def list_quick_edit_history(
 def build_quick_edit_history_detail(run_row: Dict[str, Any], node_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     run_status = normalize_status(run_row.get("STATUS"), "PENDING")
     failed_statuses = {"FAILED", "ERROR", "CANCELLED"}
-    active_statuses = {"PENDING", "QUEUED", "SUBMITTED", "STARTED", "RUNNING", "IN_PROGRESS"}
+    active_statuses = {"PENDING", "QUEUED", "SUBMITTED", "STARTED", "RUNNING", "IN_PROGRESS", "PAUSE_REQUESTED", "STOP_REQUESTED"}
     plan_data = parse_json(run_row.get("PLAN_JSON"), {})
     plan_steps = plan_data.get("plan") if isinstance(plan_data, dict) else []
+    quick_summary = plan_data.get("quickEditSummary", {}) if isinstance(plan_data, dict) else {}
+    process_type = "MIXED_XAI" if (
+        str(run_row.get("FLOW_TYPE") or "").upper() == "MIXED_XAI_SCENARIO"
+        or any(str(node.get("EXEC_METHOD") or node.get("EXEC_OBJECT_NAME") or "").upper().startswith("MIXED_XAI_") for node in node_rows)
+        or (isinstance(quick_summary, dict) and quick_summary.get("processType") == "MIXED_XAI")
+    ) else "LEGACY"
     job_ids = []
     for step in plan_steps if isinstance(plan_steps, list) else []:
         if not isinstance(step, dict):
@@ -492,6 +498,10 @@ def build_quick_edit_history_detail(run_row: Dict[str, Any], node_rows: List[Dic
         completed_steps = list(range(8))
         current_step = 7
         pipeline_status = "success"
+    elif run_status in {"PAUSED", "CANCELLED"}:
+        completed_steps = list(range(6))
+        current_step = 6
+        pipeline_status = "paused" if run_status == "PAUSED" else "stopped"
     elif run_status in failed_statuses:
         completed_steps = list(range(6))
         current_step = 6
@@ -548,6 +558,7 @@ def build_quick_edit_history_detail(run_row: Dict[str, Any], node_rows: List[Dic
         "nodes": node_rows,
         "steps": steps,
         "restoreState": {
+            "processType": process_type,
             "status": pipeline_status,
             "currentStep": current_step,
             "completedSteps": completed_steps,
@@ -741,6 +752,8 @@ def resume_run(
             "message": normalize_text(message, "", 4000),
             "planJson": json.dumps(plan or {}, ensure_ascii=False)
         })
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=409, detail="The flow run became active. Refresh before resuming.")
     finally:
         cursor.close()
 
@@ -949,7 +962,7 @@ def find_latest_compatible_run_id(
         return None
     for row in list_runs_by_flow(conn, flow_id):
         status = str(row.get("STATUS") or "").upper()
-        if status in {"STARTED", "RUNNING", "QUEUED", "PENDING"}:
+        if status in {"STARTED", "RUNNING", "QUEUED", "PENDING", "PAUSE_REQUESTED", "STOP_REQUESTED"}:
             continue
         flow_run_id = int(row.get("FLOW_RUN_ID") or 0)
         if flow_run_id <= 0:
@@ -1013,6 +1026,41 @@ def get_dependency_skip_message(
     return ""
 
 
+def request_run_control(conn, flow_run_id: int, action: str) -> Dict[str, Any]:
+    if action not in {"PAUSE", "STOP"}:
+        raise HTTPException(status_code=400, detail="Unsupported run control action.")
+    cursor = conn.cursor()
+    try:
+        execute_flow_dml(cursor, "FLOW_WORK_RUN_CONTROL_REQUEST", "FLOW_WORK_RUN_CONTROL_REQUEST", {
+            "flowRunId": flow_run_id, "action": action,
+        })
+        conn.commit()
+    finally:
+        cursor.close()
+    rows = data_work.require_success(execute_query(conn, "FLOW_WORK_RUN_CONTROL_STATUS", {
+        "flowRunId": flow_run_id,
+    }), "Run control status query failed.").get("data") or []
+    return rows[0] if rows else {}
+
+
+def apply_run_control(conn, flow_run_id: int, plan: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    cursor = conn.cursor()
+    try:
+        execute_flow_dml(cursor, "FLOW_WORK_RUN_CONTROL_APPLY", "FLOW_WORK_RUN_CONTROL_APPLY", {
+            "flowRunId": flow_run_id, "planJson": json.dumps(plan, ensure_ascii=False),
+        })
+        conn.commit()
+    finally:
+        cursor.close()
+    rows = data_work.require_success(execute_query(conn, "FLOW_WORK_RUN_CONTROL_STATUS", {
+        "flowRunId": flow_run_id,
+    }), "Run control status query failed.").get("data") or []
+    row = rows[0] if rows else {}
+    if row.get("STATUS") in {"PAUSED", "CANCELLED"}:
+        return {"status": row["STATUS"], "message": row.get("MESSAGE"), "plan": plan.get("plan") or []}
+    return None
+
+
 def execute_flow_plan(
     conn,
     flow_run_id: int,
@@ -1039,7 +1087,13 @@ def execute_flow_plan(
             "editSessionId": editing_session_id,
         }
 
-    for step in plan_steps:
+    for step_index, step in enumerate(plan_steps):
+        if run_summary_context.get("quickEditSummary"):
+            controlled = apply_run_control(conn, flow_run_id, {
+                "plan": enriched_plan + plan_steps[step_index:], **run_summary_context,
+            })
+            if controlled:
+                return controlled
         node_key = step.get("nodeKey") or ""
         node_name = step.get("nodeName") or node_key
         step_result = {**step}
@@ -1499,6 +1553,12 @@ def build_contract_node_output(
                 or ""
             )
         object_name = object_name.strip().upper()
+        legacy_mixed_object = {
+            "MIXED_XAI_RULES": "INIT$_TB_RULEDISC_XAI",
+            "MIXED_XAI_CANDIDATES": "INIT$_TB_RULEVIOL_XAI",
+        }.get(port.get("artifact"))
+        if has_explicit_outputs and legacy_mixed_object in reported_tables:
+            object_name = legacy_mixed_object
         if not object_name:
             continue
         kind = str(port.get("kind") or "TABLE").strip().upper()

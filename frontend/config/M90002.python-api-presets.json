@@ -15,6 +15,423 @@
   ],
   "groups": [
     {
+      "groupName": "Mixed XAI Python API",
+      "resources": [
+        {
+          "objectType": "INTERNAL_API",
+          "objectName": "MIXED_XAI_PROFILE",
+          "label": "Mixed Basic Statistics",
+          "apiGroup": "Mixed XAI Python API",
+          "endpoint": "/api/mlAnalysis/mixed-xai-profile",
+          "httpMethod": "POST",
+          "auth": {
+            "type": "API_KEY",
+            "keyName": "INIT_INTERNAL_API_KEY",
+            "headerName": "X-INIT-API-Key"
+          },
+          "timeoutSec": 300,
+          "sortOrder": 78,
+          "useYn": "Y",
+          "description": "Independent mixed scenario preprocessing; bounded native-type descriptive statistics and relationships without categorical/continuous approval. Reuses INIT$_TB_XAI_RUN SUMMARY_JSON.",
+          "output": {
+            "resultCreateYn": "T",
+            "resultOwner": ":INIT$TargetOwner",
+            "resultTableName": "INIT$_TB_XAI_RUN",
+            "persistMode": "SERVICE_MANAGED",
+            "rules": []
+          },
+          "details": [
+            {
+              "key": "INPUT.P_TARGET_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Source owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 1
+            },
+            {
+              "key": "INPUT.P_TARGET_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Source table",
+              "defaultValue": ":INIT$TargetTable",
+              "order": 2
+            },
+            {
+              "key": "INPUT.P_RUN_SOURCE_TYPE",
+              "value": "IN VARCHAR2",
+              "comment": "Persisted DATA_WORK or FLOW_WORK run",
+              "defaultValue": ":INIT$RunSourceType",
+              "order": 3
+            },
+            {
+              "key": "INPUT.P_RUN_ID",
+              "value": "IN NUMBER",
+              "comment": "Current run ID",
+              "defaultValue": ":INIT$RunId",
+              "order": 4
+            },
+            {
+              "key": "INPUT.P_SAMPLE_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Bounded first-row learning sample; server caps apply",
+              "defaultValue": "25000",
+              "order": 5
+            },
+            {
+              "key": "INPUT.P_EXCLUDE_COLUMNS",
+              "value": "IN VARCHAR2",
+              "comment": "Comma-separated columns excluded from learning",
+              "defaultValue": "FILE_ROW_NO",
+              "order": 10
+            }
+          ]
+        },
+        {
+          "objectType": "INTERNAL_API",
+          "objectName": "MIXED_XAI_RELATION",
+          "label": "Mixed Relationships and Data Quality",
+          "apiGroup": "Mixed XAI Python API",
+          "endpoint": "/api/mlAnalysis/mixed-xai-relation",
+          "httpMethod": "POST",
+          "auth": {
+            "type": "API_KEY",
+            "keyName": "INIT_INTERNAL_API_KEY",
+            "headerName": "X-INIT-API-Key"
+          },
+          "timeoutSec": 300,
+          "sortOrder": 79,
+          "useYn": "Y",
+          "description": "Independent mixed scenario preprocessing; bounded native-type descriptive statistics and relationships without categorical/continuous approval. Reuses INIT$_TB_XAI_RUN SUMMARY_JSON.",
+          "output": {
+            "resultCreateYn": "T",
+            "resultOwner": ":INIT$TargetOwner",
+            "resultTableName": "INIT$_TB_XAI_RUN",
+            "persistMode": "SERVICE_MANAGED",
+            "rules": []
+          },
+          "details": [
+            {
+              "key": "INPUT.P_TARGET_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Source owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 1
+            },
+            {
+              "key": "INPUT.P_TARGET_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Source table",
+              "defaultValue": ":INIT$TargetTable",
+              "order": 2
+            },
+            {
+              "key": "INPUT.P_RUN_SOURCE_TYPE",
+              "value": "IN VARCHAR2",
+              "comment": "Persisted DATA_WORK or FLOW_WORK run",
+              "defaultValue": ":INIT$RunSourceType",
+              "order": 3
+            },
+            {
+              "key": "INPUT.P_RUN_ID",
+              "value": "IN NUMBER",
+              "comment": "Current run ID",
+              "defaultValue": ":INIT$RunId",
+              "order": 4
+            },
+            {
+              "key": "INPUT.P_SAMPLE_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Bounded first-row learning sample; server caps apply",
+              "defaultValue": "25000",
+              "order": 5
+            },
+            {
+              "key": "INPUT.P_EXCLUDE_COLUMNS",
+              "value": "IN VARCHAR2",
+              "comment": "Comma-separated columns excluded from learning",
+              "defaultValue": "FILE_ROW_NO",
+              "order": 10
+            }
+          ]
+        },
+        {
+          "objectType": "INTERNAL_API",
+          "objectName": "MIXED_XAI_RULE_DISCOVER",
+          "label": "Mixed XAI Actual-Value Pattern Discovery",
+          "apiGroup": "Mixed XAI Python API",
+          "endpoint": "/api/mlAnalysis/mixed-xai-rule-discover",
+          "httpMethod": "POST",
+          "auth": {
+            "type": "API_KEY",
+            "keyName": "INIT_INTERNAL_API_KEY",
+            "headerName": "X-INIT-API-Key"
+          },
+          "timeoutSec": 300,
+          "sortOrder": 80,
+          "useYn": "Y",
+          "description": "Independent actual-column IF/THEN patterns. Manual INIT_TARGET_PATTERN.sql upgrade required; validation-selected rules and NULL-safe violations share existing result tables.",
+          "output": {
+            "resultCreateYn": "T",
+            "resultOwner": ":INIT$TargetOwner",
+            "resultTableName": "INIT$_TB_RULEDISC_ASSOC_SUM",
+            "persistMode": "SERVICE_MANAGED",
+            "rules": []
+          },
+          "details": [
+            {
+              "key": "INPUT.P_TARGET_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Source owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 1
+            },
+            {
+              "key": "INPUT.P_TARGET_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Source table",
+              "defaultValue": ":INIT$TargetTable",
+              "order": 2
+            },
+            {
+              "key": "INPUT.P_RUN_SOURCE_TYPE",
+              "value": "IN VARCHAR2",
+              "comment": "Persisted DATA_WORK or FLOW_WORK run",
+              "defaultValue": ":INIT$RunSourceType",
+              "order": 3
+            },
+            {
+              "key": "INPUT.P_RUN_ID",
+              "value": "IN NUMBER",
+              "comment": "Current run ID",
+              "defaultValue": ":INIT$RunId",
+              "order": 4
+            },
+            {
+              "key": "INPUT.P_SAMPLE_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Bounded first-row learning sample; server caps apply",
+              "defaultValue": "25000",
+              "order": 5
+            },
+            {
+              "key": "INPUT.P_MIN_CONFIDENCE",
+              "value": "IN NUMBER",
+              "comment": "Minimum training conditional confidence for an actual THEN value/range",
+              "defaultValue": "0.99",
+              "order": 6
+            },
+            {
+              "key": "INPUT.P_MAX_DEPTH",
+              "value": "IN NUMBER",
+              "comment": "Maximum actual-column prediction tree depth",
+              "defaultValue": "4",
+              "order": 7
+            },
+            {
+              "key": "INPUT.P_MIN_SAMPLES_LEAF",
+              "value": "IN NUMBER",
+              "comment": "Minimum training rows per leaf",
+              "defaultValue": "20",
+              "order": 8
+            },
+            {
+              "key": "INPUT.P_MAX_CATEGORIES",
+              "value": "IN NUMBER",
+              "comment": "Maximum categories per encoded feature",
+              "defaultValue": "32",
+              "order": 9
+            },
+            {
+              "key": "INPUT.P_EXCLUDE_COLUMNS",
+              "value": "IN VARCHAR2",
+              "comment": "Comma-separated columns excluded from learning",
+              "defaultValue": "FILE_ROW_NO",
+              "order": 10
+            },
+            {
+              "key": "INPUT.P_MIN_VALIDATION_CONFIDENCE",
+              "value": "IN NUMBER",
+              "comment": "Minimum separate validation confidence",
+              "defaultValue": "0.90",
+              "order": 11
+            },
+            {
+              "key": "INPUT.P_MIN_VALIDATION_COUNT",
+              "value": "IN NUMBER",
+              "comment": "Minimum validation condition matches",
+              "defaultValue": "10",
+              "order": 12
+            },
+            {
+              "key": "INPUT.P_MAX_TARGETS",
+              "value": "IN NUMBER",
+              "comment": "Maximum actual target columns to model",
+              "defaultValue": "64",
+              "order": 13
+            },
+            {
+              "key": "INPUT.P_MAX_RULES",
+              "value": "IN NUMBER",
+              "comment": "Maximum accepted rules",
+              "defaultValue": "64",
+              "order": 14
+            },
+            {
+              "key": "INPUT.P_TARGET_COLUMNS",
+              "value": "IN VARCHAR2",
+              "comment": "Optional actual THEN columns; empty automatically selects usable columns",
+              "defaultValue": "",
+              "order": 15
+            },
+            {
+              "key": "INPUT.P_MIN_LIFT",
+              "value": "IN NUMBER",
+              "comment": "Minimum gain over the unconditional result probability",
+              "defaultValue": "1.01",
+              "order": 16
+            },
+            {
+              "key": "INPUT.P_CONTINUOUS_ENABLED",
+              "value": "IN VARCHAR2",
+              "comment": "Enable continuous actual-value formula rules",
+              "defaultValue": "true",
+              "order": 17
+            },
+            {
+              "key": "INPUT.P_MAX_CONTINUOUS_TARGETS",
+              "value": "IN NUMBER",
+              "comment": "Maximum continuous targets; independent from maximum tree targets",
+              "defaultValue": "16",
+              "order": 18
+            },
+            {
+              "key": "INPUT.P_MAX_CONTINUOUS_RULES",
+              "value": "IN NUMBER",
+              "comment": "Maximum accepted continuous formula rules",
+              "defaultValue": "32",
+              "order": 19
+            },
+            {
+              "key": "INPUT.P_MAX_FORMULA_FEATURES",
+              "value": "IN NUMBER",
+              "comment": "Maximum input columns per readable formula",
+              "defaultValue": "3",
+              "order": 20
+            },
+            {
+              "key": "INPUT.P_MIN_FORMULA_CONFIDENCE",
+              "value": "IN NUMBER",
+              "comment": "Minimum fit-sample formula agreement; not a statistical prediction interval confidence level",
+              "defaultValue": "0.95",
+              "order": 21
+            },
+            {
+              "key": "INPUT.P_MIN_FORMULA_VALIDATION_CONFIDENCE",
+              "value": "IN NUMBER",
+              "comment": "Minimum agreement on separate validation rows",
+              "defaultValue": "0.90",
+              "order": 22
+            },
+            {
+              "key": "INPUT.P_MIN_FORMULA_R2",
+              "value": "IN NUMBER",
+              "comment": "Minimum fit/validation inlier R-squared; coverage and tolerance guards also apply (0.5 to 0.99999)",
+              "defaultValue": "0.90",
+              "order": 23
+            },
+            {
+              "key": "INPUT.P_MAX_TOLERANCE_FRACTION",
+              "value": "IN NUMBER",
+              "comment": "Maximum allowed residual tolerance as a fraction of target IQR (0.001 to 0.2)",
+              "defaultValue": "0.05",
+              "order": 24
+            },
+            {
+              "key": "OUTPUT.resultTable",
+              "value": "$.resultTable",
+              "comment": "Service-managed result",
+              "defaultValue": "INIT$_TB_RULEDISC_ASSOC_SUM",
+              "order": 25
+            }
+          ]
+        },
+        {
+          "objectType": "INTERNAL_API",
+          "objectName": "MIXED_XAI_RULE_DETECT",
+          "label": "Mixed XAI Pattern Violation Detection",
+          "apiGroup": "Mixed XAI Python API",
+          "endpoint": "/api/mlAnalysis/mixed-xai-rule-detect",
+          "httpMethod": "POST",
+          "auth": {
+            "type": "API_KEY",
+            "keyName": "INIT_INTERNAL_API_KEY",
+            "headerName": "X-INIT-API-Key"
+          },
+          "timeoutSec": 300,
+          "sortOrder": 81,
+          "useYn": "Y",
+          "description": "Independent actual-column IF/THEN patterns. Manual INIT_TARGET_PATTERN.sql upgrade required; validation-selected rules and NULL-safe violations share existing result tables.",
+          "output": {
+            "resultCreateYn": "T",
+            "resultOwner": ":INIT$TargetOwner",
+            "resultTableName": "INIT$_TB_RULEVIOL_ASSOC",
+            "persistMode": "SERVICE_MANAGED",
+            "rules": []
+          },
+          "details": [
+            {
+              "key": "INPUT.P_TARGET_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Source owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 1
+            },
+            {
+              "key": "INPUT.P_TARGET_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Source table",
+              "defaultValue": ":INIT$TargetTable",
+              "order": 2
+            },
+            {
+              "key": "INPUT.P_RUN_SOURCE_TYPE",
+              "value": "IN VARCHAR2",
+              "comment": "Persisted DATA_WORK or FLOW_WORK run",
+              "defaultValue": ":INIT$RunSourceType",
+              "order": 3
+            },
+            {
+              "key": "INPUT.P_RUN_ID",
+              "value": "IN NUMBER",
+              "comment": "Current run ID",
+              "defaultValue": ":INIT$RunId",
+              "order": 4
+            },
+            {
+              "key": "INPUT.P_DISCOVERY_RUN_ID",
+              "value": "IN NUMBER",
+              "comment": "Same FLOW run; for DATA_WORK set the preceding discovery run ID",
+              "defaultValue": ":INIT$RunId",
+              "order": 5
+            },
+            {
+              "key": "INPUT.P_MAX_VIOLATION_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Shared stored preview cap, fairly distributed across rules; full violations and distinct source rows are counted",
+              "defaultValue": "1000",
+              "order": 6
+            },
+            {
+              "key": "OUTPUT.resultTable",
+              "value": "$.resultTable",
+              "comment": "Service-managed result",
+              "defaultValue": "INIT$_TB_RULEVIOL_ASSOC",
+              "order": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
       "groupName": "Python API Base JSON",
       "resources": [
         {

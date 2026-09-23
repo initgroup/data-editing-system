@@ -1,0 +1,340 @@
+-- Real IF/THEN patterns share the existing rule and violation result objects.
+-- [PATTERN_SCHEMA_CHECK]
+SELECT TABLE_NAME
+     , COLUMN_NAME
+  FROM USER_TAB_COLUMNS
+ WHERE 1=1
+   AND ((TABLE_NAME = 'INIT$_TB_RULEDISC_ASSOC_SUM'
+         AND COLUMN_NAME IN ('CONDITION_JSON', 'RESULT_JSON', 'VALIDATION_JSON', 'RESULT_KIND', 'VIOLATION_COUNT'))
+     OR (TABLE_NAME = 'INIT$_TB_RULEVIOL_ASSOC' AND COLUMN_NAME = 'ACTUAL_VALUE'))
+;
+
+-- [PATTERN_CLEAR_RULES]
+DELETE FROM INIT$_TB_RULEDISC_ASSOC_SUM
+ WHERE RUN_SOURCE_TYPE = :runSourceType
+   AND RUN_ID = :runId
+   AND TARGET_OWNER = :owner
+   AND TARGET_TABLE = :tableName
+   AND RULE_SOURCE = 'MIXED_PATTERN_TREE'
+;
+
+-- [PATTERN_CLEAR_VIOLATIONS]
+DELETE FROM INIT$_TB_RULEVIOL_ASSOC
+ WHERE INIT$_TB_RULEVIOL_ASSOC.RUN_SOURCE_TYPE = :runSourceType
+   AND INIT$_TB_RULEVIOL_ASSOC.RUN_ID = :runId
+   AND INIT$_TB_RULEVIOL_ASSOC.TARGET_OWNER = :owner
+   AND INIT$_TB_RULEVIOL_ASSOC.TARGET_TABLE = :tableName
+   AND (INIT$_TB_RULEVIOL_ASSOC.MODEL_NAME = :modelName OR EXISTS
+       (
+        SELECT 1
+          FROM INIT$_TB_RULEDISC_ASSOC_SUM R
+         WHERE R.RUN_SOURCE_TYPE = INIT$_TB_RULEVIOL_ASSOC.RUN_SOURCE_TYPE
+           AND R.RUN_ID = INIT$_TB_RULEVIOL_ASSOC.RUN_ID
+           AND R.TARGET_OWNER = INIT$_TB_RULEVIOL_ASSOC.TARGET_OWNER
+           AND R.TARGET_TABLE = INIT$_TB_RULEVIOL_ASSOC.TARGET_TABLE
+           AND R.MODEL_NAME = INIT$_TB_RULEVIOL_ASSOC.MODEL_NAME
+           AND R.RULE_SOURCE = 'MIXED_PATTERN_TREE'
+       ))
+;
+
+-- [PATTERN_INSERT_RULE]
+INSERT INTO INIT$_TB_RULEDISC_ASSOC_SUM (
+    RUN_SOURCE_TYPE
+  , RUN_ID
+  , OWNER
+  , TARGET_OWNER
+  , TARGET_TABLE
+  , MODEL_NAME
+  , MODEL_TYPE
+  , RULE_SOURCE
+  , RULE_ID
+  , CONDITION_COUNT
+  , CONDITION_TEXT
+  , RESULT_COLUMN
+  , RESULT_VALUE
+  , RESULT_TEXT
+  , RESULT_HAS_VALUE_YN
+  , RULE_SUPPORT
+  , RULE_CONFIDENCE
+  , RULE_LIFT
+  , SUPPORT_COUNT
+  , CONDITION_TOTAL_COUNT
+  , RESULT_TOTAL_COUNT
+  , TOTAL_COUNT
+  , CONDITION_JSON
+  , RESULT_JSON
+  , VALIDATION_JSON
+  , RESULT_KIND
+) VALUES (
+    :runSourceType
+  , :runId
+  , :owner
+  , :owner
+  , :tableName
+  , :modelName
+  , 'MIXED_PATTERN_TREE'
+  , 'MIXED_PATTERN_TREE'
+  , :ruleId
+  , :conditionCount
+  , :conditionText
+  , :resultColumn
+  , :resultValue
+  , :resultText
+  , 'Y'
+  , :support
+  , :confidence
+  , :lift
+  , :supportCount
+  , :conditionTotal
+  , :resultTotal
+  , :totalCount
+  , :conditionJson
+  , :resultJson
+  , :validationJson
+  , :resultKind
+)
+;
+
+-- [PATTERN_RULE_LIST]
+SELECT R.*
+  FROM INIT$_TB_RULEDISC_ASSOC_SUM R
+ WHERE RUN_SOURCE_TYPE = :runSourceType
+   AND RUN_ID = :runId
+   AND TARGET_OWNER = :owner
+   AND TARGET_TABLE = :tableName
+   AND RULE_SOURCE = 'MIXED_PATTERN_TREE'
+ ORDER BY RULE_CONFIDENCE DESC
+        , RULE_SUPPORT DESC
+        , RULE_ID
+;
+
+-- [PATTERN_UPDATE_COUNTS]
+UPDATE INIT$_TB_RULEDISC_ASSOC_SUM
+   SET SUPPORT_COUNT = :supportCount
+     , CONDITION_TOTAL_COUNT = :conditionTotal
+     , RESULT_TOTAL_COUNT = :resultTotal
+     , TOTAL_COUNT = :totalCount
+     , RULE_SUPPORT = :support
+     , RULE_CONFIDENCE = :confidence
+     , RULE_LIFT = :lift
+     , VIOLATION_COUNT = :violationCount
+ WHERE RUN_SOURCE_TYPE = :runSourceType
+   AND RUN_ID = :runId
+   AND TARGET_OWNER = :owner
+   AND TARGET_TABLE = :tableName
+   AND MODEL_NAME = :modelName
+   AND RULE_ID = :ruleId
+   AND RULE_SOURCE = 'MIXED_PATTERN_TREE'
+;
+
+-- [PATTERN_COPY_DISCOVERY_RULES]
+INSERT INTO INIT$_TB_RULEDISC_ASSOC_SUM (
+    RUN_SOURCE_TYPE
+  , RUN_ID
+  , OWNER
+  , TARGET_OWNER
+  , TARGET_TABLE
+  , MODEL_NAME
+  , MODEL_TYPE
+  , RULE_SOURCE
+  , RULE_ID
+  , CONDITION_COUNT
+  , CONDITION_TEXT
+  , RESULT_COLUMN
+  , RESULT_VALUE
+  , RESULT_TEXT
+  , RESULT_HAS_VALUE_YN
+  , RULE_SUPPORT
+  , RULE_CONFIDENCE
+  , RULE_LIFT
+  , SUPPORT_COUNT
+  , CONDITION_TOTAL_COUNT
+  , RESULT_TOTAL_COUNT
+  , TOTAL_COUNT
+  , CONDITION_JSON
+  , RESULT_JSON
+  , VALIDATION_JSON
+  , RESULT_KIND
+)
+SELECT RUN_SOURCE_TYPE
+     , :runId
+     , OWNER
+     , TARGET_OWNER
+     , TARGET_TABLE
+     , MODEL_NAME
+     , MODEL_TYPE
+     , RULE_SOURCE
+     , RULE_ID
+     , CONDITION_COUNT
+     , CONDITION_TEXT
+     , RESULT_COLUMN
+     , RESULT_VALUE
+     , RESULT_TEXT
+     , RESULT_HAS_VALUE_YN
+     , RULE_SUPPORT
+     , RULE_CONFIDENCE
+     , RULE_LIFT
+     , SUPPORT_COUNT
+     , CONDITION_TOTAL_COUNT
+     , RESULT_TOTAL_COUNT
+     , TOTAL_COUNT
+     , CONDITION_JSON
+     , RESULT_JSON
+     , VALIDATION_JSON
+     , RESULT_KIND
+  FROM INIT$_TB_RULEDISC_ASSOC_SUM
+ WHERE RUN_SOURCE_TYPE = :runSourceType
+   AND RUN_ID = :discoveryRunId
+   AND TARGET_OWNER = :owner
+   AND TARGET_TABLE = :tableName
+   AND RULE_SOURCE = 'MIXED_PATTERN_TREE'
+;
+
+-- [PATTERN_UNIQUE_COUNT]
+SELECT /*+ NO_PARALLEL(T) */ COUNT(*)
+  FROM /*TARGET*/ T
+ WHERE /*PREDICATE*/
+;
+
+-- [PATTERN_PREVIEW]
+SELECT /*+ NO_PARALLEL(T) */ ROWIDTOCHAR(T.ROWID) AS CASE_ROWID
+     , /*CASE_ID*/ AS CASE_ID
+     , /*COLUMNS*/ AS ACTUAL_VALUE
+  FROM /*TARGET*/ T
+ WHERE /*PREDICATE*/
+   AND ROWNUM <= :rowLimit
+;
+
+-- [PATTERN_FORMULA_PREVIEW]
+SELECT /*+ NO_PARALLEL(T) */ ROWIDTOCHAR(T.ROWID) AS CASE_ROWID
+     , /*CASE_ID*/ AS CASE_ID
+     , /*COLUMNS*/ AS ACTUAL_VALUE
+     , /*EXPECTED*/ AS EXPECTED_VALUE
+  FROM /*TARGET*/ T
+ WHERE /*PREDICATE*/
+   AND ROWNUM <= :rowLimit
+;
+
+-- [PATTERN_INSERT_VIOLATION]
+INSERT INTO INIT$_TB_RULEVIOL_ASSOC (
+    RUN_SOURCE_TYPE
+  , RUN_ID
+  , TARGET_OWNER
+  , TARGET_TABLE
+  , RULE_OWNER
+  , MODEL_NAME
+  , RULE_ID
+  , CASE_ID
+  , CASE_ROWID
+  , CONDITION_COUNT
+  , CONDITION_TEXT
+  , RESULT_COLUMN
+  , EXPECTED_VALUE
+  , ACTUAL_VALUE
+  , RULE_SUPPORT
+  , RULE_CONFIDENCE
+  , RULE_LIFT
+  , SUPPORT_COUNT
+  , CONDITION_TOTAL_COUNT
+  , RESULT_TOTAL_COUNT
+  , TOTAL_COUNT
+  , VIOLATION_SCORE
+  , VIOLATION_REASON
+) VALUES (
+    :runSourceType
+  , :runId
+  , :owner
+  , :tableName
+  , :owner
+  , :modelName
+  , :ruleId
+  , :caseId
+  , :caseRowid
+  , :conditionCount
+  , :conditionText
+  , :resultColumn
+  , :expectedValue
+  , :actualValue
+  , :support
+  , :confidence
+  , :lift
+  , :supportCount
+  , :conditionTotal
+  , :resultTotal
+  , :totalCount
+  , NULL
+  , :reason
+)
+;
+
+-- [PATTERN_FLOW_RULES]
+SELECT R.*
+  FROM INIT$_TB_RULEDISC_ASSOC_SUM R
+ WHERE RUN_SOURCE_TYPE = 'FLOW_WORK'
+   AND RUN_ID = :runId
+   AND (:owner IS NULL OR TARGET_OWNER = :owner)
+   AND (:tableName IS NULL OR TARGET_TABLE = :tableName)
+   AND RULE_SOURCE = 'MIXED_PATTERN_TREE'
+ ORDER BY TARGET_OWNER
+        , TARGET_TABLE
+        , RULE_CONFIDENCE DESC
+        , RULE_ID
+;
+
+-- [PATTERN_FLOW_VIOLATIONS]
+SELECT V.*
+  FROM INIT$_TB_RULEVIOL_ASSOC V
+ WHERE RUN_SOURCE_TYPE = 'FLOW_WORK'
+   AND RUN_ID = :runId
+   AND (:owner IS NULL OR TARGET_OWNER = :owner)
+   AND (:tableName IS NULL OR TARGET_TABLE = :tableName)
+   AND EXISTS
+       (
+        SELECT 1
+          FROM INIT$_TB_RULEDISC_ASSOC_SUM R
+         WHERE R.RUN_SOURCE_TYPE = V.RUN_SOURCE_TYPE
+           AND R.RUN_ID = V.RUN_ID
+           AND R.OWNER = V.RULE_OWNER
+           AND R.TARGET_OWNER = V.TARGET_OWNER
+           AND R.TARGET_TABLE = V.TARGET_TABLE
+           AND R.MODEL_NAME = V.MODEL_NAME
+           AND R.RULE_ID = V.RULE_ID
+           AND R.RULE_SOURCE = 'MIXED_PATTERN_TREE'
+       )
+ ORDER BY TARGET_OWNER
+        , TARGET_TABLE
+        , RULE_ID
+        , VIOLATION_ID
+FETCH FIRST 1000 ROWS ONLY
+;
+
+-- [PATTERN_FORMULA_SAMPLE_RULE]
+SELECT R.*
+  FROM INIT$_TB_RULEDISC_ASSOC_SUM R
+ WHERE R.RUN_SOURCE_TYPE = 'FLOW_WORK'
+   AND R.RUN_ID = :runId
+   AND R.OWNER = :owner
+   AND R.TARGET_OWNER = :owner
+   AND R.TARGET_TABLE = :tableName
+   AND R.MODEL_NAME = :modelName
+   AND R.RULE_ID = :ruleId
+   AND R.RULE_SOURCE = 'MIXED_PATTERN_TREE'
+ FETCH FIRST 2 ROWS ONLY
+;
+
+-- [PATTERN_FORMULA_SAMPLE_ROWS]
+SELECT /*+ NO_MERGE(T) NO_PARALLEL(T) */ {caseIdExpression} AS CASE_ID
+     , T.{rowAlias} AS CASE_ROWID
+     , {actualRawExpression} AS ACTUAL_RAW
+     , {actualNumericExpression} AS ACTUAL_VALUE
+     , {formulaExpression} AS PREDICTED_VALUE
+     , CASE WHEN {conditionExpression} THEN 1 ELSE 0 END AS APPLICABLE_YN
+     , CASE WHEN {resultExpression} THEN 1 ELSE 0 END AS RESULT_VALID_YN{inputProjection}
+  FROM
+       (
+        SELECT /*+ NO_PARALLEL(Q) */ ROWIDTOCHAR(Q.ROWID) AS {rowAlias}
+             , {sourceColumns}
+          FROM {targetObject} Q
+         WHERE ROWNUM <= :scanLimit
+       ) T
+;

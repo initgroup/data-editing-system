@@ -1,0 +1,378 @@
+{"kind":"deck","id":"pr/5sfp8z","name":"Deck"}
+{"kind":"layout","layoutId":"e8524a4c-1164-40a4-8241-8d496cd2be96","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"000c11cc-c89f-4572-9bfa-4e8722d3c609","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/5870z3","slide":1,"title":"INIT Data Editing System  인뎁스","textShapes":5}
+{"kind":"textbox","id":"sh/9gj21gzi","slide":1,"text":"INIT Data Editing System  인뎁스","textPreview":"INIT Data Editing System  인뎁스","textChars":29,"textLines":1,"bbox":[70,92,1460,60]}
+{"kind":"textbox","id":"sh/mt836l0r","slide":1,"text":"GS 인증 준비·실행 매뉴얼","textPreview":"GS 인증 준비·실행 매뉴얼","textChars":15,"textLines":1,"bbox":[70,225,1460,120]}
+{"kind":"textbox","id":"sh/nehkzqhc","slide":1,"text":"INIT Data Editing System (인뎁스)\n첫 제품 출시를 위한 신청, 문서, 시험, 보완 작업","textPreview":"INIT Data Editing System (인뎁스) | 첫 제품 출시를 위한 신청, 문서, 시험, 보완 작업","textChars":60,"textLines":2,"bbox":[74,390,1450,150]}
+{"kind":"textbox","id":"sh/0rql4bi1","slide":1,"text":"30명 규모 소기업 · 기관 내부망 설치형 · 영구 라이선스\n작성 기준 2026.09.23 · 실무 실행안 v1.0","textPreview":"30명 규모 소기업 · 기관 내부망 설치형 · 영구 라이선스 | 작성 기준 2026.09.23 · 실무 실행안 v1.0","textChars":64,"textLines":2,"bbox":[74,655,1450,130]}
+{"kind":"textbox","id":"sh/1sz2xgj6","slide":1,"text":"실행 작업 · 담당 역할 · 산출물 · 완료 기준","textPreview":"실행 작업 · 담당 역할 · 산출물 · 완료 기준","textChars":27,"textLines":1,"bbox":[74,810,1400,38]}
+{"kind":"notes","id":"nt/5870z3","slide":1,"text":"사용자 요청: 첫 GS 인증과 나라장터 상품 등록을 위한 실무 지침서. 발표용이 아닌 독립적으로 읽고 실행할 문서. 회사는 30명 규모 소기업, 첫 제품 버전, 판매가격 없음. 내부망 설치형 영구 라이선스 선택. 가격·일정·지원 정책은 승인 전 제안이다. 조사일: 2026-09-23."}
+{"kind":"slide","id":"sl/7dxo19","slide":2,"title":"문서의 적용 기준","textShapes":5}
+{"kind":"textbox","id":"sh/eto72xoz","slide":2,"text":"문서의 적용 기준","textPreview":"문서의 적용 기준","textChars":9,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/1wzqxc7a","slide":2,"text":"공식 요건, 회사 결정, 권장안의 구분","textPreview":"공식 요건, 회사 결정, 권장안의 구분","textChars":21,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/nyh8z2pg","slide":2,"text":"근거 G1 · G2 · R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G1 · G2 · R1  / 공식 URL은 부록·슬라이드 노트","textChars":37,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/mx8r6hov","slide":2,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/90zq1c7m","slide":2,"text":"02 / 47","textPreview":"02 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/98zu1gne","slide":2,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/7dxo19","slide":2,"text":"문서: GS 실무매뉴얼\n페이지 2: 문서의 적용 기준\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG1: 소프트웨어 진흥법 시행규칙 제4·5조 (2025.04.30 시행)\nhttps://law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lspttninfSeq=163173\n\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020\n\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/r1ijak","slide":3,"title":"실행 순서와 읽는 방법","textShapes":5}
+{"kind":"textbox","id":"sh/w3m187eh","slide":3,"text":"실행 순서와 읽는 방법","textPreview":"실행 순서와 읽는 방법","textChars":12,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/v2d0f2dw","slide":3,"text":"각 표의 작업을 티켓으로 만들고 완료 증빙을 연결","textPreview":"각 표의 작업을 티켓으로 만들고 완료 증빙을 연결","textChars":27,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/5sf2lcvy","slide":3,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/k761c7ed","slide":3,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/j6d0j2ds","slide":3,"text":"03 / 47","textPreview":"03 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/jmhcfq94","slide":3,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/r1ijak","slide":3,"text":"문서: GS 실무매뉴얼\n페이지 3: 실행 순서와 읽는 방법\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다."}
+{"kind":"slide","id":"sl/atj8rp","slide":4,"title":"최단기 추진의 핵심 경로","textShapes":5}
+{"kind":"textbox","id":"sh/p8ra587e","slide":4,"text":"최단기 추진의 핵심 경로","textPreview":"최단기 추진의 핵심 경로","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/250badon","slide":4,"text":"내부 준비 4주 초안 / 기관 시험·심의 기간은 별도","textPreview":"내부 준비 4주 초안 / 기관 시험·심의 기간은 별도","textChars":29,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/cb2tgn6p","slide":4,"text":"근거 G2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G2  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/dcbu9s7a","slide":4,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/q9kbedoj","slide":4,"text":"04 / 47","textPreview":"04 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/ypwz2xsb","slide":4,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/atj8rp","slide":4,"text":"문서: GS 실무매뉴얼\n페이지 4: 최단기 추진의 핵심 경로\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n4주는 준비 목표의 예시이며 기관 공인 소요기간이 아니다. 기존 품질과 인력 투입에 따라 재산정한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020"}
+{"kind":"slide","id":"sl/wayerx","slide":5,"title":"30명 회사의 담당 체계","textShapes":5}
+{"kind":"textbox","id":"sh/qlcfyt47","slide":5,"text":"30명 회사의 담당 체계","textPreview":"30명 회사의 담당 체계","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/dony983i","slide":5,"text":"겸직 가능 / 작성자와 최종 확인자는 분리","textPreview":"겸직 가능 / 작성자와 최종 확인자는 분리","textChars":23,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/3ilg3ylg","slide":5,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/2hcfut4v","slide":5,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/pk3y5o3m","slide":5,"text":"05 / 47","textPreview":"05 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/5o7m9obm","slide":5,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/wayerx","slide":5,"text":"문서: GS 실무매뉴얼\n페이지 5: 30명 회사의 담당 체계\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n인원은 권장 배치다. 현재 조직의 실제 여력으로 조정하며 총원 증원을 전제하지 않는다."}
+{"kind":"slide","id":"sl/zwnk5p","slide":6,"title":"착수 후 5영업일 작업","textShapes":5}
+{"kind":"textbox","id":"sh/xw3210re","slide":6,"text":"착수 후 5영업일 작업","textPreview":"착수 후 5영업일 작업","textChars":12,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/atcjql8n","slide":6,"text":"GS-01 / PM이 매일 완료 여부 확인","textPreview":"GS-01 / PM이 매일 완료 여부 확인","textChars":23,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/o7u1obqx","slide":6,"text":"근거 G2 · R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G2 · R1  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/9s32xgr2","slide":6,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/m5sjml8r","slide":6,"text":"06 / 47","textPreview":"06 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/qdgnqx4b","slide":6,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/zwnk5p","slide":6,"text":"문서: GS 실무매뉴얼\n페이지 6: 착수 후 5영업일 작업\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020\n\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/xcryl6","slide":7,"title":"인뎁스의 인증 범위 초안","textShapes":5}
+{"kind":"textbox","id":"sh/cja1czyx","slide":7,"text":"인뎁스의 인증 범위 초안","textPreview":"인뎁스의 인증 범위 초안","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/bi103uhc","slide":7,"text":"GS-02 / 실제 메뉴와 제공 패키지에 맞춰 확정","textPreview":"GS-02 / 실제 메뉴와 제공 패키지에 맞춰 확정","textChars":28,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/l8j29oze","slide":7,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/kna1gjyt","slide":7,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/zm107eh8","slide":7,"text":"07 / 47","textPreview":"07 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/nahg3q9s","slide":7,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/xcryl6","slide":7,"text":"문서: GS 실무매뉴얼\n페이지 7: 인뎁스의 인증 범위 초안\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n기능 제외 또는 노출·업무 흐름 변경은 프로젝트 지침상 사전 설명과 사용자 확인 후 구현한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/93p1cn","slide":8,"title":"메뉴별 기능 목록 작성 예시","textShapes":5}
+{"kind":"textbox","id":"sh/k72p4r2p","slide":8,"text":"메뉴별 기능 목록 작성 예시","textPreview":"메뉴별 기능 목록 작성 예시","textChars":15,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/j6t8vml4","slide":8,"text":"GS-02 / 화면마다 정상·오류·권한·한계 항목 작성","textPreview":"GS-02 / 화면마다 정상·오류·권한·한계 항목 작성","textChars":30,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/xkrqtc3y","slide":8,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/wjip07md","slide":8,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/bi98rmls","slide":8,"text":"08 / 47","textPreview":"08 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/bi9oz21o","slide":8,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/93p1cn","slide":8,"text":"문서: GS 실무매뉴얼\n페이지 8: 메뉴별 기능 목록 작성 예시\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/mzt8g9","slide":9,"title":"외부 연동과 AI 범위 결정","textShapes":5}
+{"kind":"textbox","id":"sh/f6hony5o","slide":9,"text":"외부 연동과 AI 범위 결정","textPreview":"외부 연동과 AI 범위 결정","textChars":15,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/07qpw3mt","slide":9,"text":"GS-02 / 내부망 배포와 재현 가능한 시험 우선","textPreview":"GS-02 / 내부망 배포와 재현 가능한 시험 우선","textChars":28,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/2t87yd4z","slide":9,"text":"근거 R1 · P1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1 · P1  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/nuhori5k","slide":9,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/ovap0nm5","slide":9,"text":"09 / 47","textPreview":"09 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/kvm1sr65","slide":9,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/mzt8g9","slide":9,"text":"문서: GS 실무매뉴얼\n페이지 9: 외부 연동과 AI 범위 결정\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록\n\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214"}
+{"kind":"slide","id":"sl/vk32us","slide":10,"title":"인증기관 선택과 상담","textShapes":5}
+{"kind":"textbox","id":"sh/8natkni9","slide":10,"text":"인증기관 선택과 상담","textPreview":"인증기관 선택과 상담","textChars":11,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/7m1cri14","slide":10,"text":"GS-03 / 동일 범위로 비교하고 한 기관을 확정","textPreview":"GS-03 / 동일 범위로 비교하고 한 기관을 확정","textChars":28,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/hc3uxsj6","slide":10,"text":"근거 G2 · G3  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G2 · G3  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/wrudonil","slide":10,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/vqlcvi10","slide":10,"text":"10 / 47","textPreview":"10 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/bq9szutc","slide":10,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/vk32us","slide":10,"text":"문서: GS 실무매뉴얼\n페이지 10: 인증기관 선택과 상담\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020\n\nG3: KTC GS인증 안내·기준·재인증 점검표 자료 (2026.09.23 조회)\nhttps://www.ktc.re.kr/web_united/task/task.asp?pagen=2540"}
+{"kind":"slide","id":"sl/4s5m8q","slide":11,"title":"사전상담 질의서","textShapes":5}
+{"kind":"textbox","id":"sh/21w7et0j","slide":11,"text":"사전상담 질의서","textPreview":"사전상담 질의서","textChars":8,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/po7qpoja","slide":11,"text":"GS-03 / 아래 항목을 한 번에 질의","textPreview":"GS-03 / 아래 항목을 한 번에 질의","textChars":22,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/fy5oje18","slide":11,"text":"근거 G2 · G3  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G2 · G3  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/uxw7a90n","slide":11,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/h0n6lojy","slide":11,"text":"11 / 47","textPreview":"11 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/pgf69wn6","slide":11,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/4s5m8q","slide":11,"text":"문서: GS 실무매뉴얼\n페이지 11: 사전상담 질의서\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020\n\nG3: KTC GS인증 안내·기준·재인증 점검표 자료 (2026.09.23 조회)\nhttps://www.ktc.re.kr/web_united/task/task.asp?pagen=2540"}
+{"kind":"slide","id":"sl/pxm02l","slide":12,"title":"신청 서류 준비표","textShapes":5}
+{"kind":"textbox","id":"sh/rihofy94","slide":12,"text":"신청 서류 준비표","textPreview":"신청 서류 준비표","textChars":9,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/sjq583qp","slide":12,"text":"GS-04 / 법정 필수와 기관 요청 자료를 구분","textPreview":"GS-04 / 법정 필수와 기관 요청 자료를 구분","textChars":27,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/iton2t8n","slide":12,"text":"근거 G1 · G2 · G4  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G1 · G2 · G4  / 공식 URL은 부록·슬라이드 노트","textChars":37,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/jex4by9s","slide":12,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/4f654jqd","slide":12,"text":"12 / 47","textPreview":"12 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/w3y14rit","slide":12,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/pxm02l","slide":12,"text":"문서: GS 실무매뉴얼\n페이지 12: 신청 서류 준비표\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG1: 소프트웨어 진흥법 시행규칙 제4·5조 (2025.04.30 시행)\nhttps://law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lspttninfSeq=163173\n\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020\n\nG4: GS 품질인증 신청서, 시행규칙 별지 제5호 (공식 서식, 제출 시 현행본 확인)\nhttps://law.go.kr/flDownload.do?bylClsCd=110202&flSeq=133780841&gubun="}
+{"kind":"slide","id":"sl/9k0icy","slide":13,"title":"신청·계약·착수 절차","textShapes":5}
+{"kind":"textbox","id":"sh/7adgnid8","slide":13,"text":"신청·계약·착수 절차","textPreview":"신청·계약·착수 절차","textChars":11,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/sbmhgnut","slide":13,"text":"GS-04 / TTA 공개 절차 기준, 기관별 화면은 최신 안내 적용","textPreview":"GS-04 / TTA 공개 절차 기준, 기관별 화면은 최신 안내 적용","textChars":38,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/ilkzatwr","slide":13,"text":"근거 G2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G2  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/jmtgjydc","slide":13,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/kn2hc3ex","slide":13,"text":"13 / 47","textPreview":"13 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/kbq5cz2t","slide":13,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/9k0icy","slide":13,"text":"문서: GS 실무매뉴얼\n페이지 13: 신청·계약·착수 절차\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n포털 버튼명은 개편될 수 있으므로 서비스명으로 찾고 접수번호를 확인한다. 이 문서로 실제 신청이나 결제를 수행한 것은 아니다.\n\n근거 자료 (조회 기준 2026-09-23)\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020"}
+{"kind":"slide","id":"sl/57caxc","slide":14,"title":"예산과 일정의 승인 항목","textShapes":5}
+{"kind":"textbox","id":"sh/9s3e18fy","slide":14,"text":"예산과 일정의 승인 항목","textPreview":"예산과 일정의 승인 항목","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/m5sv6tg7","slide":14,"text":"GS-05 / 정액 수수료와 합격일을 임의 확정하지 않음","textPreview":"GS-05 / 정액 수수료와 합격일을 임의 확정하지 않음","textChars":31,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/k3ad4jyh","slide":14,"text":"근거 G2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G2  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/l4jexofm","slide":14,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/y1sv29gb","slide":14,"text":"14 / 47","textPreview":"14 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/y1k72l4z","slide":14,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/57caxc","slide":14,"text":"문서: GS 실무매뉴얼\n페이지 14: 예산과 일정의 승인 항목\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020"}
+{"kind":"slide","id":"sl/53tzy3","slide":15,"title":"시험환경 명세","textShapes":5}
+{"kind":"textbox","id":"sh/kz2dwzip","slide":15,"text":"시험환경 명세","textPreview":"시험환경 명세","textChars":7,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/jytwnu14","slide":15,"text":"GS-06 / 환경 하나를 끝까지 재현할 수 있어야 함","textPreview":"GS-06 / 환경 하나를 끝까지 재현할 수 있어야 함","textChars":30,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/xwbelkje","slide":15,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/wv2dsfit","slide":15,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/butwja18","slide":15,"text":"15 / 47","textPreview":"15 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/jm54n29c","slide":15,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/53tzy3","slide":15,"text":"문서: GS 실무매뉴얼\n페이지 15: 시험환경 명세\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/kad46i","slide":16,"title":"오프라인 설치 패키지","textShapes":5}
+{"kind":"textbox","id":"sh/l8769gri","slide":16,"text":"오프라인 설치 패키지","textPreview":"오프라인 설치 패키지","textChars":11,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/y5gnelsr","slide":16,"text":"GS-06 / 새 서버에서 인터넷 없이 설치·실행 확인","textPreview":"GS-06 / 새 서버에서 인터넷 없이 설치·실행 확인","textChars":30,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/c3e5cba1","slide":16,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/d4765gr6","slide":16,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/q1wna1sv","slide":16,"text":"16 / 47","textPreview":"16 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/qpkje9of","slide":16,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/kad46i","slide":16,"text":"문서: GS 실무매뉴얼\n페이지 16: 오프라인 설치 패키지\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/alqraa","slide":17,"title":"제품설명서 목차와 작성 기준","textShapes":5}
+{"kind":"textbox","id":"sh/mp43qd47","slide":17,"text":"제품설명서 목차와 작성 기준","textPreview":"제품설명서 목차와 작성 기준","textChars":15,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/9svm1s3i","slide":17,"text":"GS-07 / 구매자가 기능과 제약을 판단하는 문서","textPreview":"GS-07 / 구매자가 기능과 제약을 판단하는 문서","textChars":28,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/vex432lo","slide":17,"text":"근거 G1 · G3  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G1 · G3  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/at43ux43","slide":17,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/xgfm5c3u","slide":17,"text":"17 / 47","textPreview":"17 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/p4na1w32","slide":17,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/alqraa","slide":17,"text":"문서: GS 실무매뉴얼\n페이지 17: 제품설명서 목차와 작성 기준\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n목차는 인뎁스용 권장 구조다. 기관이 제공하는 현행 인증기준 체크리스트에 대조하여 항목을 보완한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG1: 소프트웨어 진흥법 시행규칙 제4·5조 (2025.04.30 시행)\nhttps://law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lspttninfSeq=163173\n\nG3: KTC GS인증 안내·기준·재인증 점검표 자료 (2026.09.23 조회)\nhttps://www.ktc.re.kr/web_united/task/task.asp?pagen=2540"}
+{"kind":"slide","id":"sl/vi02zz","slide":18,"title":"사용자취급설명서 목차","textShapes":5}
+{"kind":"textbox","id":"sh/rexkzy9o","slide":18,"text":"사용자취급설명서 목차","textPreview":"사용자취급설명서 목차","textChars":11,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/cfq1s3qt","slide":18,"text":"GS-08 / 신규 사용자가 화면만 따라 업무를 완료","textPreview":"GS-08 / 신규 사용자가 화면만 따라 업무를 완료","textChars":29,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/2pojmtsr","slide":18,"text":"근거 G1 · G3  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G1 · G3  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/3qxkve9c","slide":18,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/4r61ojax","slide":18,"text":"18 / 47","textPreview":"18 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/ofa54ved","slide":18,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/vi02zz","slide":18,"text":"문서: GS 실무매뉴얼\n페이지 18: 사용자취급설명서 목차\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG1: 소프트웨어 진흥법 시행규칙 제4·5조 (2025.04.30 시행)\nhttps://law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lspttninfSeq=163173\n\nG3: KTC GS인증 안내·기준·재인증 점검표 자료 (2026.09.23 조회)\nhttps://www.ktc.re.kr/web_united/task/task.asp?pagen=2540"}
+{"kind":"slide","id":"sl/9h7s8g","slide":19,"title":"설치·관리자·운영 설명서","textShapes":5}
+{"kind":"textbox","id":"sh/8z2tkre9","slide":19,"text":"설치·관리자·운영 설명서","textPreview":"설치·관리자·운영 설명서","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/nytsbmxo","slide":19,"text":"GS-09 / 사용자취급설명서의 별책으로 연결 가능","textPreview":"GS-09 / 사용자취급설명서의 별책으로 연결 가능","textChars":28,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/lwba9cfi","slide":19,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/0vitg7ex","slide":19,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/zu9s72xc","slide":19,"text":"19 / 47","textPreview":"19 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/3u9crq1s","slide":19,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/9h7s8g","slide":19,"text":"문서: GS 실무매뉴얼\n페이지 19: 설치·관리자·운영 설명서\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/x1hkrp","slide":20,"title":"사용자 매뉴얼 페이지 예시","textShapes":5}
+{"kind":"textbox","id":"sh/ydk3uxwb","slide":20,"text":"사용자 매뉴얼 페이지 예시","textPreview":"사용자 매뉴얼 페이지 예시","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/l0b25cvm","slide":20,"text":"GS-08 / F-EDIT-01 데이터 수정 확정","textPreview":"GS-08 / F-EDIT-01 데이터 수정 확정","textChars":27,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/batkz2dk","slide":20,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/q903qxwz","slide":20,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/dcb21svq","slide":20,"text":"20 / 47","textPreview":"20 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/pk3yh8je","slide":20,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/x1hkrp","slide":20,"text":"문서: GS 실무매뉴얼\n페이지 20: 사용자 매뉴얼 페이지 예시\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n이 페이지는 집필 틀이다. 저장·취소의 실제 버튼명이나 아직 검증되지 않은 rollback 기능을 존재한다고 기술하지 않는다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/37483p","slide":21,"title":"기능·문서·시험 추적표","textShapes":5}
+{"kind":"textbox","id":"sh/9wfe1obu","slide":21,"text":"기능·문서·시험 추적표","textPreview":"기능·문서·시험 추적표","textChars":12,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/mtov6tcj","slide":21,"text":"GS-10 / 누락 기능과 문서 불일치 방지","textPreview":"GS-10 / 누락 기능과 문서 불일치 방지","textChars":24,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/wzqdc3ul","slide":21,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/x0ze58b6","slide":21,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/axovatcf","slide":21,"text":"21 / 47","textPreview":"21 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/61gbuxsv","slide":21,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/37483p","slide":21,"text":"문서: GS 실무매뉴얼\n페이지 21: 기능·문서·시험 추적표\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/yftpdp","slide":22,"title":"품질 시험 분야별 점검","textShapes":5}
+{"kind":"textbox","id":"sh/jqtgvupg","slide":22,"text":"품질 시험 분야별 점검","textPreview":"품질 시험 분야별 점검","textChars":12,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/krmh4z61","slide":22,"text":"GS-11 / 인증기관의 현행 평가 항목과 매핑","textPreview":"GS-11 / 인증기관의 현행 평가 항목과 매핑","textChars":26,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/6t4z69o7","slide":22,"text":"근거 G2 · G3  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G2 · G3  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/7ud0zeps","slide":22,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/svmhsj6d","slide":22,"text":"22 / 47","textPreview":"22 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/4nmxgjm5","slide":22,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/yftpdp","slide":22,"text":"문서: GS 실무매뉴얼\n페이지 22: 품질 시험 분야별 점검\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n분야별 시험은 자체 준비용이다. 특정 내부 PASS 기준을 GS 공식 합격 기준으로 해석하지 않는다.\n\n근거 자료 (조회 기준 2026-09-23)\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020\n\nG3: KTC GS인증 안내·기준·재인증 점검표 자료 (2026.09.23 조회)\nhttps://www.ktc.re.kr/web_united/task/task.asp?pagen=2540"}
+{"kind":"slide","id":"sl/iwo4ol","slide":23,"title":"시험 데이터와 증빙 규칙","textShapes":5}
+{"kind":"textbox","id":"sh/ut07qtgz","slide":23,"text":"시험 데이터와 증빙 규칙","textPreview":"시험 데이터와 증빙 규칙","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/hwbq18za","slide":23,"text":"GS-11 / 고객 원본 데이터 대신 재현 가능한 합성 데이터","textPreview":"GS-11 / 고객 원본 데이터 대신 재현 가능한 합성 데이터","textChars":34,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/7q98vyh8","slide":23,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/6p07mtgn","slide":23,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/tsrqx8ze","slide":23,"text":"23 / 47","textPreview":"23 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/5of6t0vu","slide":23,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/iwo4ol","slide":23,"text":"문서: GS 실무매뉴얼\n페이지 23: 시험 데이터와 증빙 규칙\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/nb95g3","slide":24,"title":"업무 흐름 통합 시험","textShapes":5}
+{"kind":"textbox","id":"sh/6hsfa10j","slide":24,"text":"업무 흐름 통합 시험","textPreview":"업무 흐름 통합 시험","textChars":11,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/t4jylgju","slide":24,"text":"GS-12 / 실제 고객이 수행하는 전 과정을 연결","textPreview":"GS-12 / 실제 고객이 수행하는 전 과정을 연결","textChars":28,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/je1gfm1s","slide":24,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/id8f6107","slide":24,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/5gjyhwjy","slide":24,"text":"24 / 47","textPreview":"24 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/5gn61w7i","slide":24,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/nb95g3","slide":24,"text":"문서: GS 실무매뉴얼\n페이지 24: 업무 흐름 통합 시험\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/z5xncy","slide":25,"title":"인증·인가와 데이터 격리 시험","textShapes":5}
+{"kind":"textbox","id":"sh/bqpcb6x8","slide":25,"text":"인증·인가와 데이터 격리 시험","textPreview":"인증·인가와 데이터 격리 시험","textChars":16,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/crydkbyt","slide":25,"text":"GS-13 / 메뉴 숨김과 서버 권한을 각각 검증","textPreview":"GS-13 / 메뉴 숨김과 서버 권한을 각각 검증","textChars":27,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/ytgvmlgz","slide":25,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/zupcfqxk","slide":25,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/0vydoby5","slide":25,"text":"25 / 47","textPreview":"25 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/sbqd832x","slide":25,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/z5xncy","slide":25,"text":"문서: GS 실무매뉴얼\n페이지 25: 인증·인가와 데이터 격리 시험\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n프로젝트 보안 지침에서 도출한 시험 계획이다. 현재 취약점이 발견됐다는 의미는 아니다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/98lfef","slide":26,"title":"SQL·DML·편집 무결성 시험","textShapes":5}
+{"kind":"textbox","id":"sh/2hkbadon","slide":26,"text":"SQL·DML·편집 무결성 시험","textPreview":"SQL·DML·편집 무결성 시험","textChars":17,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/pkbu5s7y","slide":26,"text":"GS-14 / 가장 높은 우선순위의 데이터 보호","textPreview":"GS-14 / 가장 높은 우선순위의 데이터 보호","textChars":26,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/fetszypw","slide":26,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/ud0b6dob","slide":26,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/hgba1872","slide":26,"text":"26 / 47","textPreview":"26 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/xwbyx0fq","slide":26,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/98lfef","slide":26,"text":"문서: GS 실무매뉴얼\n페이지 26: SQL·DML·편집 무결성 시험\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/u52p34","slide":27,"title":"FLOW·캔버스·캐시 시험","textShapes":5}
+{"kind":"textbox","id":"sh/nahw7idg","slide":27,"text":"FLOW·캔버스·캐시 시험","textPreview":"FLOW·캔버스·캐시 시험","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/ovqx0ne1","slide":27,"text":"GS-15 / 첫 실행과 재진입을 구분해 재현","textPreview":"GS-15 / 첫 실행과 재진입을 구분해 재현","textChars":25,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/e58fudwz","slide":27,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/f6hw3idk","slide":27,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/07qxwne5","slide":27,"text":"27 / 47","textPreview":"27 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/sned07mx","slide":27,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/u52p34","slide":27,"text":"문서: GS 실무매뉴얼\n페이지 27: FLOW·캔버스·캐시 시험\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/qrr77w","slide":28,"title":"분석 모델과 결과 정확성 시험","textShapes":5}
+{"kind":"textbox","id":"sh/8bu58b6t","slide":28,"text":"분석 모델과 결과 정확성 시험","textPreview":"분석 모델과 결과 정확성 시험","textChars":16,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/nal4f65o","slide":28,"text":"GS-16 / 분석 성공 메시지와 결과의 정확성을 분리","textPreview":"GS-16 / 분석 성공 메시지와 결과의 정확성을 분리","textChars":30,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/l8jmdgni","slide":28,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/07alkb6x","slide":28,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/z614b65c","slide":28,"text":"28 / 47","textPreview":"28 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/veds7mp0","slide":28,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/qrr77w","slide":28,"text":"문서: GS 실무매뉴얼\n페이지 28: 분석 모델과 결과 정확성 시험\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/1bkls5","slide":29,"title":"성능·대용량 시험 계획","textShapes":5}
+{"kind":"textbox","id":"sh/it4fip0j","slide":29,"text":"성능·대용량 시험 계획","textPreview":"성능·대용량 시험 계획","textChars":12,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/5wfedkza","slide":29,"text":"GS-17 / 아래 숫자는 내부 검증 예시이며 제품 보장값 아님","textPreview":"GS-17 / 아래 숫자는 내부 검증 예시이며 제품 보장값 아님","textChars":35,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/ryxwfuhg","slide":29,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/qxofmp0v","slide":29,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/dkfeh4z6","slide":29,"text":"29 / 47","textPreview":"29 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/hcri9wve","slide":29,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/1bkls5","slide":29,"text":"문서: GS 실무매뉴얼\n페이지 29: 성능·대용량 시험 계획\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/3twxzv","slide":30,"title":"보안·OSS·배포 권리 점검","textShapes":5}
+{"kind":"textbox","id":"sh/298z2lcf","slide":30,"text":"보안·OSS·배포 권리 점검","textPreview":"보안·OSS·배포 권리 점검","textChars":15,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/pcjid0v6","slide":30,"text":"GS-18 / 인증 준비와 상용 배포를 함께 점검","textPreview":"GS-18 / 인증 준비와 상용 배포를 함께 점검","textChars":27,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/ry10fadw","slide":30,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/qdsj65cr","slide":30,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/d0jih0b2","slide":30,"text":"30 / 47","textPreview":"30 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/503ehofe","slide":30,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/3twxzv","slide":30,"text":"문서: GS 실무매뉴얼\n페이지 30: 보안·OSS·배포 권리 점검\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/oc8ouy","slide":31,"title":"장애·복구·설치 재현 시험","textShapes":5}
+{"kind":"textbox","id":"sh/xsfydkbq","slide":31,"text":"장애·복구·설치 재현 시험","textPreview":"장애·복구·설치 재현 시험","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/ap4fipcz","slide":31,"text":"GS-18 / 데이터와 설정을 함께 복구","textPreview":"GS-18 / 데이터와 설정을 함께 복구","textChars":22,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/8nmxgfu9","slide":31,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/9ovy9kbe","slide":31,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/m14fe5c3","slide":31,"text":"31 / 47","textPreview":"31 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/qxcbihsn","slide":31,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/oc8ouy","slide":31,"text":"문서: GS 실무매뉴얼\n페이지 31: 장애·복구·설치 재현 시험\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/t8yitu","slide":32,"title":"결함 관리와 수정 우선순위","textShapes":5}
+{"kind":"textbox","id":"sh/dkbq1cvy","slide":32,"text":"결함 관리와 수정 우선순위","textPreview":"결함 관리와 수정 우선순위","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/qh0rqhw7","slide":32,"text":"GS-19 / 발견부터 종료까지 하나의 결함 ID로 추적","textPreview":"GS-19 / 발견부터 종료까지 하나의 결함 ID로 추적","textChars":31,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/0729wre9","slide":32,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/l8bq5wvu","slide":32,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/y5kruhw3","slide":32,"text":"32 / 47","textPreview":"32 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/6hobad8v","slide":32,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/t8yitu","slide":32,"text":"문서: GS 실무매뉴얼\n페이지 32: 결함 관리와 수정 우선순위\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다."}
+{"kind":"slide","id":"sl/pjg5bg","slide":33,"title":"공식 시험 제출 승인 기준","textShapes":5}
+{"kind":"textbox","id":"sh/10bmh8zm","slide":33,"text":"공식 시험 제출 승인 기준","textPreview":"공식 시험 제출 승인 기준","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/exk36t0v","slide":33,"text":"GS-20 / 회사 내부 제출 기준이며 공식 합격 기준과 구분","textPreview":"GS-20 / 회사 내부 제출 기준이며 공식 합격 기준과 구분","textChars":34,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/o3mlc3id","slide":33,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/p4vml8zi","slide":33,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/2143at07","slide":33,"text":"33 / 47","textPreview":"33 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/iporqtsn","slide":33,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/pjg5bg","slide":33,"text":"문서: GS 실무매뉴얼\n페이지 33: 공식 시험 제출 승인 기준\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다."}
+{"kind":"slide","id":"sl/uhitud","slide":34,"title":"시험 착수일 운영 체크리스트","textShapes":5}
+{"kind":"textbox","id":"sh/l8butoz2","slide":34,"text":"시험 착수일 운영 체크리스트","textPreview":"시험 착수일 운영 체크리스트","textChars":15,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/yl0vi9gr","slide":34,"text":"GS-20 / 시험자의 독립 실행을 지원","textPreview":"GS-20 / 시험자의 독립 실행을 지원","textChars":22,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/cjidgzil","slide":34,"text":"근거 G2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G2  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/dkrup4z6","slide":34,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/qh0ve90f","slide":34,"text":"34 / 47","textPreview":"34 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/qxoryxwb","slide":34,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/uhitud","slide":34,"text":"문서: GS 실무매뉴얼\n페이지 34: 시험 착수일 운영 체크리스트\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020"}
+{"kind":"slide","id":"sl/vrq96r","slide":35,"title":"기관 결함 보완과 회귀시험","textShapes":5}
+{"kind":"textbox","id":"sh/czexwf25","slide":35,"text":"기관 결함 보완과 회귀시험","textPreview":"기관 결함 보완과 회귀시험","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/by5g3a1k","slide":35,"text":"GS-21 / 패치마다 동일 제출 규칙 적용","textPreview":"GS-21 / 패치마다 동일 제출 규칙 적용","textChars":24,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/lo7y94jm","slide":35,"text":"근거 G2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G2  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/0nyh0z21","slide":35,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/zmpg7u1g","slide":35,"text":"35 / 47","textPreview":"35 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/zyd83i54","slide":35,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/vrq96r","slide":35,"text":"문서: GS 실무매뉴얼\n페이지 35: 기관 결함 보완과 회귀시험\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020"}
+{"kind":"slide","id":"sl/u3g0dk","slide":36,"title":"인증 결과 수령과 조달 인계","textShapes":5}
+{"kind":"textbox","id":"sh/wzetwbil","slide":36,"text":"인증 결과 수령과 조달 인계","textPreview":"인증 결과 수령과 조달 인계","textChars":15,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/bylsnqh0","slide":36,"text":"GS-22 / 서류명과 제품 범위의 일치가 우선","textPreview":"GS-22 / 서류명과 제품 범위의 일치가 우선","textChars":26,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/9w3algzu","slide":36,"text":"근거 G2 · P1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G2 · P1  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/ovutsbip","slide":36,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/nulsj6h4","slide":36,"text":"36 / 47","textPreview":"36 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/f2x4va1s","slide":36,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/u3g0dk","slide":36,"text":"문서: GS 실무매뉴얼\n페이지 36: 인증 결과 수령과 조달 인계\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020\n\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214"}
+{"kind":"slide","id":"sl/dv9v96","slide":37,"title":"인증 후 변경·사후관리","textShapes":5}
+{"kind":"textbox","id":"sh/k3apwzad","slide":37,"text":"인증 후 변경·사후관리","textPreview":"인증 후 변경·사후관리","textChars":12,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/ji18nu9s","slide":37,"text":"GS-22 / 버전 번호만으로 인증 유지 판단 금지","textPreview":"GS-22 / 버전 번호만으로 인증 유지 판단 금지","textChars":28,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/xgzqlkrm","slide":37,"text":"근거 G3 · P1 · P2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G3 · P1 · P2  / 공식 URL은 부록·슬라이드 노트","textChars":37,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/wfqpsfah","slide":37,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/beh8ja9w","slide":37,"text":"37 / 47","textPreview":"37 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/ny1sba5w","slide":37,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/dv9v96","slide":37,"text":"문서: GS 실무매뉴얼\n페이지 37: 인증 후 변경·사후관리\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG3: KTC GS인증 안내·기준·재인증 점검표 자료 (2026.09.23 조회)\nhttps://www.ktc.re.kr/web_united/task/task.asp?pagen=2540\n\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP2: 상용소프트웨어 제3자단가계약 추가특수조건 (2026.01.01 시행, 지침 제46호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270216"}
+{"kind":"slide","id":"sl/hba78c","slide":38,"title":"산출물 폴더와 문서번호","textShapes":5}
+{"kind":"textbox","id":"sh/36x0nylc","slide":38,"text":"산출물 폴더와 문서번호","textPreview":"산출물 폴더와 문서번호","textChars":12,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/o7q1g32h","slide":38,"text":"권장 저장소 구조 / 추후 WORK에서 실제 파일 생성","textPreview":"권장 저장소 구조 / 추후 WORK에서 실제 파일 생성","textChars":30,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/e1ojatkf","slide":38,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/f2x0jyl0","slide":38,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/g361cj2l","slide":38,"text":"38 / 47","textPreview":"38 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/8zud07qx","slide":38,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/hba78c","slide":38,"text":"문서: GS 실무매뉴얼\n페이지 38: 산출물 폴더와 문서번호\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다."}
+{"kind":"slide","id":"sl/tbcz39","slide":39,"title":"주요 산출물 완료 기준","textShapes":5}
+{"kind":"textbox","id":"sh/zqpkb69g","slide":39,"text":"주요 산출물 완료 기준","textPreview":"주요 산출물 완료 기준","textChars":12,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/kry1kba1","slide":39,"text":"파일 존재보다 재현성과 승인 여부를 확인","textPreview":"파일 존재보다 재현성과 승인 여부를 확인","textChars":22,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/a1gje1sz","slide":39,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/bmpk769k","slide":39,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/cny1gra5","slide":39,"text":"39 / 47","textPreview":"39 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/47y9kbml","slide":39,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/tbcz39","slide":39,"text":"문서: GS 실무매뉴얼\n페이지 39: 주요 산출물 완료 기준\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다."}
+{"kind":"slide","id":"sl/fdtivo","slide":40,"title":"소스 작업 백로그 1","textShapes":5}
+{"kind":"textbox","id":"sh/sz6hojed","slide":40,"text":"소스 작업 백로그 1","textPreview":"소스 작업 백로그 1","textChars":11,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/ryx0feds","slide":40,"text":"확인 후 필요한 차이만 수정 / 현재 결함 확정 목록 아님","textPreview":"확인 후 필요한 차이만 수정 / 현재 결함 확정 목록 아님","textChars":32,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/1ozilovu","slide":40,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/g36hs3ep","slide":40,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/f2x0jyd4","slide":40,"text":"40 / 47","textPreview":"40 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/na5grip4","slide":40,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/fdtivo","slide":40,"text":"문서: GS 실무매뉴얼\n페이지 40: 소스 작업 백로그 1\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/crlgxg","slide":41,"title":"소스 작업 백로그 2","textShapes":5}
+{"kind":"textbox","id":"sh/pk3el4vq","slide":41,"text":"소스 작업 백로그 2","textPreview":"소스 작업 백로그 2","textChars":11,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/2hcfqpcz","slide":41,"text":"출시를 반복 가능하게 만드는 작업","textPreview":"출시를 반복 가능하게 만드는 작업","textChars":18,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/c7uxwjuh","slide":41,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/d8nypobm","slide":41,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/qlcfu9cb","slide":41,"text":"41 / 47","textPreview":"41 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/exknmp8r","slide":41,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/crlgxg","slide":41,"text":"문서: GS 실무매뉴얼\n페이지 41: 소스 작업 백로그 2\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/xystat","slide":42,"title":"바이브 코딩 작업 지시문","textShapes":5}
+{"kind":"textbox","id":"sh/ds7e907u","slide":42,"text":"바이브 코딩 작업 지시문","textPreview":"바이브 코딩 작업 지시문","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/qpgve5o3","slide":42,"text":"한 작업 ID씩 요청 / 정책 변경은 먼저 승인","textPreview":"한 작업 ID씩 요청 / 정책 변경은 먼저 승인","textChars":26,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/4nydcv6x","slide":42,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/po7e507i","slide":42,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/2lwvalo7","slide":42,"text":"42 / 47","textPreview":"42 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/uhg7yh03","slide":42,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/xystat","slide":42,"text":"문서: GS 실무매뉴얼\n페이지 42: 바이브 코딩 작업 지시문\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/6scldg","slide":43,"title":"WORK 문서 생성 지시문","textShapes":5}
+{"kind":"textbox","id":"sh/1wje983y","slide":43,"text":"WORK 문서 생성 지시문","textPreview":"WORK 문서 생성 지시문","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/ut8fed4n","slide":43,"text":"산출물 ID와 승인된 사실을 함께 전달","textPreview":"산출물 ID와 승인된 사실을 함께 전달","textChars":21,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/ozaxknmp","slide":43,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/p0jeds3a","slide":43,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/2xsfid4j","slide":43,"text":"43 / 47","textPreview":"43 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/ilgb29sb","slide":43,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/6scldg","slide":43,"text":"문서: GS 실무매뉴얼\n페이지 43: WORK 문서 생성 지시문\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다."}
+{"kind":"slide","id":"sl/uasa4v","slide":44,"title":"자주 발생하는 지연과 예방","textShapes":5}
+{"kind":"textbox","id":"sh/65o721or","slide":44,"text":"자주 발생하는 지연과 예방","textPreview":"자주 발생하는 지연과 예방","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/t8fqdwn2","slide":44,"text":"PM이 매주 점검할 재작업 요인","textPreview":"PM이 매주 점검할 재작업 요인","textChars":17,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/fax8f658","slide":44,"text":"근거 G2 · P1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G2 · P1  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/e9o761on","slide":44,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/1czqhgne","slide":44,"text":"44 / 47","textPreview":"44 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/h47u5gbm","slide":44,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/uasa4v","slide":44,"text":"문서: GS 실무매뉴얼\n페이지 44: 자주 발생하는 지연과 예방\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020\n\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214"}
+{"kind":"slide","id":"sl/2nxpwp","slide":45,"title":"첫 주 회의의 결정·완료 목록","textShapes":5}
+{"kind":"textbox","id":"sh/bahkvqho","slide":45,"text":"첫 주 회의의 결정·완료 목록","textPreview":"첫 주 회의의 결정·완료 목록","textChars":16,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/cbq1ovy9","slide":45,"text":"이 페이지를 회의록으로 복사해 사용","textPreview":"이 페이지를 회의록으로 복사해 사용","textChars":19,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/ydsjq5gf","slide":45,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/ze1kzah0","slide":45,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/kfa1sfy5","slide":45,"text":"45 / 47","textPreview":"45 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/cvu9sryt","slide":45,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/2nxpwp","slide":45,"text":"문서: GS 실무매뉴얼\n페이지 45: 첫 주 회의의 결정·완료 목록\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다."}
+{"kind":"slide","id":"sl/v90bpo","slide":46,"title":"공식 근거·자료 링크 1","textShapes":5}
+{"kind":"textbox","id":"sh/s7u5wvux","slide":46,"text":"공식 근거·자료 링크 1","textPreview":"공식 근거·자료 링크 1","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/r6l4nqdc","slide":46,"text":"조회 기준 2026.09.23 / 시행일·문서명으로 현행본 확인","textPreview":"조회 기준 2026.09.23 / 시행일·문서명으로 현행본 확인","textChars":35,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/54jmlgv6","slide":46,"text":"근거 G1 · G2 · R1 · P1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G1 · G2 · R1 · P1  / 공식 URL은 부록·슬라이드 노트","textChars":42,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/43a5sbul","slide":46,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/j214j6d0","slide":46,"text":"46 / 47","textPreview":"46 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/76pgv6dg","slide":46,"name":"","rows":5,"cols":2,"preview":"자료 ID · 문서·기준일 | 원문 위치와 확인할 내용","bbox":[70,205,1460,590]}
+{"kind":"notes","id":"nt/v90bpo","slide":46,"text":"문서: GS 실무매뉴얼\n페이지 46: 공식 근거·자료 링크 1\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n법령은 공개 정부 문서다. TTA·KTC 및 기타 사이트는 절차·기준 확인용으로 연결한다. 첨부 다운로드가 실패하거나 내용이 비어 있는 자료는 입수·검토 완료로 취급하지 않는다. KTC 예시·재인증 첨부는 공개 안내 페이지에서 존재를 확인했으며 신청 시 최신 파일을 기관에서 수령해야 한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG1: 소프트웨어 진흥법 시행규칙 제4·5조 (2025.04.30 시행)\nhttps://law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lspttninfSeq=163173\n\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020\n\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록\n\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214"}
+{"kind":"slide","id":"sl/ziqg5l","slide":47,"title":"공식 근거·자료 링크 2","textShapes":5}
+{"kind":"textbox","id":"sh/yxkzeh0n","slide":47,"text":"공식 근거·자료 링크 2","textPreview":"공식 근거·자료 링크 2","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/l0vy9wje","slide":47,"text":"조회 기준 2026.09.23 / 시행일·문서명으로 현행본 확인","textPreview":"조회 기준 2026.09.23 / 시행일·문서명으로 현행본 확인","textChars":35,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/n2dgb61k","slide":47,"text":"근거 G3 · G4 · P2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G3 · G4 · P2  / 공식 URL은 부록·슬라이드 노트","textChars":37,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/m14zi10z","slide":47,"text":"인뎁스  GS  ·  2026.09.23","textPreview":"인뎁스  GS  ·  2026.09.23","textChars":22,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/9ovydgja","slide":47,"text":"47 / 47","textPreview":"47 / 47","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/hw36tg3e","slide":47,"name":"","rows":4,"cols":2,"preview":"자료 ID · 문서·기준일 | 원문 위치와 확인할 내용","bbox":[70,205,1460,457]}
+{"kind":"notes","id":"nt/ziqg5l","slide":47,"text":"문서: GS 실무매뉴얼\n페이지 47: 공식 근거·자료 링크 2\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n법령은 공개 정부 문서다. TTA·KTC 및 기타 사이트는 절차·기준 확인용으로 연결한다. 첨부 다운로드가 실패하거나 내용이 비어 있는 자료는 입수·검토 완료로 취급하지 않는다. KTC 예시·재인증 첨부는 공개 안내 페이지에서 존재를 확인했으며 신청 시 최신 파일을 기관에서 수령해야 한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG3: KTC GS인증 안내·기준·재인증 점검표 자료 (2026.09.23 조회)\nhttps://www.ktc.re.kr/web_united/task/task.asp?pagen=2540\n\nG4: GS 품질인증 신청서, 시행규칙 별지 제5호 (공식 서식, 제출 시 현행본 확인)\nhttps://law.go.kr/flDownload.do?bylClsCd=110202&flSeq=133780841&gubun=\n\nP2: 상용소프트웨어 제3자단가계약 추가특수조건 (2026.01.01 시행, 지침 제46호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270216"}

@@ -225,6 +225,20 @@ def create_anly_work_router(
             flow_menu_code=FLOW_MENU_CODE,
         )
 
+    @router.get("/mixed-formula-sample")
+    def get_mixed_formula_sample(
+        request: Request,
+        flowRunId: int,
+        targetOwner: str,
+        targetTable: str,
+        ruleId: str,
+        modelName: str | None = None,
+        sampleLimit: int = 300,
+    ):
+        from backend.services.mixed_formula_sample_service import get_formula_sample
+        return get_formula_sample(request, flow_run_id=flowRunId, target_owner=targetOwner,
+            target_table=targetTable, model_name=modelName, rule_id=ruleId, sample_limit=sampleLimit)
+
     @router.get("/model-detail-summary")
     def get_model_detail_summary(
         request: Request,

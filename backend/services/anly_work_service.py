@@ -2454,7 +2454,7 @@ def get_analysis_bootstrap(
     include_all_users = get_request_role_code(request) == "ADMIN"
     normalized_page_size = _normalize_page_size(page_size, 20, 100)
     normalized_status = str(status or "ALL").strip().upper()
-    if normalized_status not in {"ALL", "SUCCESS", "FAILED", "STARTED", "RUNNING", "QUEUED", "SKIPPED", "ERROR"}:
+    if normalized_status not in {"ALL", "SUCCESS", "FAILED", "STARTED", "RUNNING", "QUEUED", "SKIPPED", "ERROR", "PAUSED", "PAUSE_REQUESTED", "STOP_REQUESTED", "CANCELLED"}:
         normalized_status = "ALL"
 
     conn = None
@@ -2586,7 +2586,7 @@ def list_flow_runs(
     page = _normalize_page(page)
     page_size = _normalize_page_size(pageSize, 20, 100)
     normalized_status = str(status or "ALL").strip().upper()
-    if normalized_status not in {"ALL", "SUCCESS", "FAILED", "STARTED", "RUNNING", "QUEUED", "SKIPPED", "ERROR"}:
+    if normalized_status not in {"ALL", "SUCCESS", "FAILED", "STARTED", "RUNNING", "QUEUED", "SKIPPED", "ERROR", "PAUSED", "PAUSE_REQUESTED", "STOP_REQUESTED", "CANCELLED"}:
         normalized_status = "ALL"
     conn = None
     cursor = None
@@ -2627,7 +2627,7 @@ def get_flow_run_position(
     include_all_users = get_request_role_code(request) == "ADMIN"
     page_size = _normalize_page_size(pageSize, 20, 100)
     normalized_status = str(status or "ALL").strip().upper()
-    if normalized_status not in {"ALL", "SUCCESS", "FAILED", "STARTED", "RUNNING", "QUEUED", "SKIPPED", "ERROR"}:
+    if normalized_status not in {"ALL", "SUCCESS", "FAILED", "STARTED", "RUNNING", "QUEUED", "SKIPPED", "ERROR", "PAUSED", "PAUSE_REQUESTED", "STOP_REQUESTED", "CANCELLED"}:
         normalized_status = "ALL"
     conn = None
     cursor = None
@@ -2842,16 +2842,35 @@ def get_descriptive_statistics(
                 "등록된 INITDN$ 비교 테이블을 조회할 수 없어 현재 INITUP$ 원본 데이터의 "
                 "기초통계량만 표시합니다."
             )
-        data = descriptive_statistics.attach_column_insights(
-            data,
-            descriptive_statistics.load_violation_column_insights(
+        mixed_xai = any("MIXED_XAI_" in " ".join(str(row.get(key) or "") for key in ("EXEC_METHOD", "EXEC_OBJECT_NAME"))
+                        or str(row.get("RESULT_OBJECT_NAME") or "").endswith("_XAI") for row in nodes)
+        if mixed_xai:
+            from backend.services.mixed_xai_service import read_results
+            payload = read_results(conn, normalized_flow_run_id, user_id, include_all_users=include_all_users,
+                                   target_owner=source_owner, target_table=source_table)["data"]
+            buckets = {}
+            real_patterns = payload.get("summary", {}).get("algorithm") == "MIXED_PATTERN_TREE"
+            for rule in payload["ruleSummary"]["rules"]:
+                affected_columns = [rule["RESULT_COLUMN"]] if real_patterns else rule["CONDITION_COLUMNS"]
+                for column in affected_columns:
+                    bucket = buckets.setdefault(column, {"COLUMN_NAME": column, "VIOLATION_COUNT": 0, "RULE_COUNT": 0})
+                    bucket["VIOLATION_COUNT"] += int(rule.get("MATCH_COUNT") or 0)
+                    bucket["RULE_COUNT"] += int((rule.get("MATCH_COUNT") or 0) > 0)
+            insight_rows = list(buckets.values())
+            if real_patterns:
+                data["notice"] = (data.get("notice", "") + " 실제 THEN 결과 컬럼별 전체 규칙×행 위반 건수입니다. 저장 미리보기 수와 다르며, 통계적 패턴 위반이므로 업무상 오류 여부는 검토가 필요합니다.").strip()
+            else:
+                data["notice"] = (data.get("notice", "") + " 혼합형의 위반 관련 지표는 확정 오류가 아닌 조건 해당 검토 대상입니다. 조건 컬럼별 규칙×행 건수이므로 여러 컬럼에 중복 집계될 수 있습니다.").strip()
+            data.setdefault("context", {})["processType"] = "MIXED_XAI"
+        else:
+            insight_rows = descriptive_statistics.load_violation_column_insights(
                 cursor,
                 target_owner=source_owner,
                 target_table=source_table,
                 run_source_type="FLOW_WORK",
                 run_id=normalized_flow_run_id,
-            ),
-        )
+            )
+        data = descriptive_statistics.attach_column_insights(data, insight_rows)
         return {"status": "success", "data": data}
     except HTTPException as exc:
         logger.warning(
@@ -2898,7 +2917,7 @@ def delete_flow_run(flow_run_id: int, request: Request, flow_menu_code: str = "M
             raise HTTPException(status_code=404, detail="Run history was not found or cannot be deleted by this user.")
         status = str(row[1] or "").strip().upper()
         force_delete_running = bool(force) and is_admin
-        if status in {"RUNNING", "STARTED", "QUEUED", "PENDING"} and not force_delete_running:
+        if status in {"RUNNING", "STARTED", "QUEUED", "PENDING", "PAUSE_REQUESTED", "STOP_REQUESTED"} and not force_delete_running:
             raise HTTPException(status_code=409, detail="Running or pending run history cannot be deleted.")
 
         cursor.execute(SqlLoader.get_sql("MCOMMON_ANLY_WORK_FLOW_RUN_DELETE_BLOCK"), {

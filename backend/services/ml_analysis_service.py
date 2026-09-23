@@ -93,6 +93,10 @@ def _load_networkx_dependency():
 
 
 WEB_API_METHODS = {
+    "MIXED_XAI_PROFILE",
+    "MIXED_XAI_RELATION",
+    "MIXED_XAI_RULE_DISCOVER",
+    "MIXED_XAI_RULE_DETECT",
     "LASSO_FEATURE_SELECT",
     "RELATION_NETWORK_CLUSTER",
     "INTEGRATED_RELATION_CLUSTER",
@@ -115,6 +119,16 @@ def execute_web_api_job(
         or job.get("EXEC_OBJECT_NAME")
     )
     payload = build_payload(job, runtime_values or {}, run_id)
+    if method in {"MIXED_XAI_PROFILE", "MIXED_XAI_RELATION"}:
+        from backend.services import mixed_analysis_profile_service as analysis
+        result = (analysis.profile if method == "MIXED_XAI_PROFILE" else analysis.relationships)(conn, payload)
+        return f"Mixed analysis completed: {result.get('columnCount', 0)} columns; {result.get('sampleCount', 0)} sampled rows."
+    if method in {"MIXED_XAI_RULE_DISCOVER", "MIXED_XAI_RULE_DETECT"}:
+        from backend.services import mixed_xai_service
+        result = (mixed_xai_service.discover if method == "MIXED_XAI_RULE_DISCOVER" else mixed_xai_service.detect)(conn, payload)
+        if result.get("algorithm") == "MIXED_PATTERN_TREE":
+            return f"Mixed patterns completed: {result.get('ruleCount', 0)} actual IF/THEN rules; {result.get('violationCount', 0)} rule-row violations."
+        return f"Mixed XAI completed: {result.get('ruleCount', 0)} candidate rules."
     if method == "LASSO_FEATURE_SELECT":
         result = run_lasso_feature_select(conn, payload)
         if str(result.get("skippedYn") or "N").upper() == "Y":

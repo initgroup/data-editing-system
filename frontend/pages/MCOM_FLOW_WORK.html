@@ -192,6 +192,16 @@
                                 <option value="N">N</option>
                             </select>
                         </label>
+                        <label>
+                            <span>기본 FLOW 시나리오</span>
+                            <select id="flowProcessTemplate-__PAGE_CODE__" class="env-field" aria-label="기본 FLOW 시나리오">
+                                <option value="LEGACY">기존 유형·관계 분석 (4단계)</option>
+                                <option value="MIXED_XAI">혼합형 기초통계·관계·값/수식 규칙 (4단계)</option>
+                            </select>
+                        </label>
+                        <button type="button" id="prepareProcessTemplate-__PAGE_CODE__" class="table-btn" onclick="__PAGE_CODE__.prepareProcessTemplate()" title="선택한 대상 테이블에 독립된 기본 FLOW를 생성하거나 불러옵니다.">
+                            선택 시나리오 FLOW 준비
+                        </button>
                     </div>
                 </section>
 

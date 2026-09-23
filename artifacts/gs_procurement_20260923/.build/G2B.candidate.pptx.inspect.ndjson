@@ -1,0 +1,410 @@
+{"kind":"deck","id":"pr/crpft3","name":"Deck"}
+{"kind":"layout","layoutId":"65fd5194-cb02-440c-9a6f-5baf223783c9","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"6cba7aae-3bac-442d-849e-d1b490cfac31","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/oozr32","slide":1,"title":"INIT Data Editing System  인뎁스","textShapes":5}
+{"kind":"textbox","id":"sh/7a5on6pk","slide":1,"text":"INIT Data Editing System  인뎁스","textPreview":"INIT Data Editing System  인뎁스","textChars":29,"textLines":1,"bbox":[70,92,1460,60]}
+{"kind":"textbox","id":"sh/8bepgbq5","slide":1,"text":"나라장터 상품화·등록 매뉴얼","textPreview":"나라장터 상품화·등록 매뉴얼","textChars":15,"textLines":1,"bbox":[70,225,1460,120]}
+{"kind":"textbox","id":"sh/tcn6pw7q","slide":1,"text":"INIT Data Editing System (인뎁스)\n서비스 형태, 가격, 라이선스, 계약·납품 실행안","textPreview":"INIT Data Editing System (인뎁스) | 서비스 형태, 가격, 라이선스, 계약·납품 실행안","textChars":58,"textLines":2,"bbox":[74,390,1450,150]}
+{"kind":"textbox","id":"sh/ylc7ah83","slide":1,"text":"30명 규모 소기업 · 첫 출시 · 가격 미정\n내부망 설치형 영구 라이선스 · 작성 기준 2026.09.23","textPreview":"30명 규모 소기업 · 첫 출시 · 가격 미정 | 내부망 설치형 영구 라이선스 · 작성 기준 2026.09.23","textChars":60,"textLines":2,"bbox":[74,655,1450,130]}
+{"kind":"textbox","id":"sh/jmlojmpo","slide":1,"text":"실행 작업 · 담당 역할 · 산출물 · 완료 기준","textPreview":"실행 작업 · 담당 역할 · 산출물 · 완료 기준","textChars":27,"textLines":1,"bbox":[74,810,1400,38]}
+{"kind":"notes","id":"nt/oozr32","slide":1,"text":"사용자 요청: 첫 GS 인증과 나라장터 상품 등록을 위한 실무 지침서. 발표용이 아닌 독립적으로 읽고 실행할 문서. 회사는 30명 규모 소기업, 첫 제품 버전, 판매가격 없음. 내부망 설치형 영구 라이선스 선택. 가격·일정·지원 정책은 승인 전 제안이다. 조사일: 2026-09-23."}
+{"kind":"slide","id":"sl/kt76av","slide":2,"title":"사업화 전제와 문서 사용법","textShapes":5}
+{"kind":"textbox","id":"sh/1gbq1ory","slide":2,"text":"사업화 전제와 문서 사용법","textPreview":"사업화 전제와 문서 사용법","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/et07698n","slide":2,"text":"확정 사실과 정책 제안을 구분하여 승인","textPreview":"확정 사실과 정책 제안을 구분하여 승인","textChars":21,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/oj29c3qp","slide":2,"text":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/9kbq5o7a","slide":2,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/mhk7at8j","slide":2,"text":"02 / 51","textPreview":"02 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/2hkju5w7","slide":2,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/kt76av","slide":2,"text":"문서: G2B 실무매뉴얼\n페이지 2: 사업화 전제와 문서 사용법\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP2: 상용소프트웨어 제3자단가계약 추가특수조건 (2026.01.01 시행, 지침 제46호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270216"}
+{"kind":"slide","id":"sl/9q9zoi","slide":3,"title":"업무 순서와 담당 산출물","textShapes":5}
+{"kind":"textbox","id":"sh/103axkr6","slide":3,"text":"업무 순서와 담당 산출물","textPreview":"업무 순서와 담당 산출물","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/excrmp8v","slide":3,"text":"GS 준비와 병행할 항목부터 시작","textPreview":"GS 준비와 병행할 항목부터 시작","textChars":18,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/one9szqx","slide":3,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/9ona14ri","slide":3,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/mlwrqp8r","slide":3,"text":"03 / 51","textPreview":"03 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/axo3idsv","slide":3,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/9q9zoi","slide":3,"text":"문서: G2B 실무매뉴얼\n페이지 3: 업무 순서와 담당 산출물\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다."}
+{"kind":"slide","id":"sl/0m48mv","slide":4,"title":"조달 경로의 구분","textShapes":5}
+{"kind":"textbox","id":"sh/m1kradgn","slide":4,"text":"조달 경로의 구분","textPreview":"조달 경로의 구분","textChars":9,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/94bq58zy","slide":4,"text":"같은 나라장터라도 자격과 계약 방식이 다름","textPreview":"같은 나라장터라도 자격과 계약 방식이 다름","textChars":23,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/zyt8zyhw","slide":4,"text":"근거 P1 · P6 · C1 · C2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · P6 · C1 · C2  / 공식 URL은 부록·슬라이드 노트","textChars":42,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/yx076tgb","slide":4,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/l0bq18z2","slide":4,"text":"04 / 51","textPreview":"04 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/14b21czy","slide":4,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/0m48mv","slide":4,"text":"문서: G2B 실무매뉴얼\n페이지 4: 조달 경로의 구분\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP6: 국가법령정보센터 상용SW 계약 현행 규정 목록 (2026.09.23 조회)\nhttps://www.law.go.kr/admRulSc.do?menuId=5&query=%EC%83%81%EC%9A%A9&subMenuId=41&tabMenuId=183\n\nC1: 디지털서비스 이용지원시스템 선정 절차 (2026.09.23 조회)\nhttps://www.digitalmarket.kr/web/index.do\n\nC2: KISA 클라우드서비스 보안인증 안내 (2026.03.12 최종수정)\nhttps://www.kisa.or.kr/1050603"}
+{"kind":"slide","id":"sl/47zf4l","slide":5,"title":"제3자단가계약의 선행 게이트","textShapes":5}
+{"kind":"textbox","id":"sh/1snyl0f2","slide":5,"text":"제3자단가계약의 선행 게이트","textPreview":"제3자단가계약의 선행 게이트","textChars":15,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/epwfalwb","slide":5,"text":"2026.01.01 시행 업무처리기준 / 신청 전 재확인","textPreview":"2026.01.01 시행 업무처리기준 / 신청 전 재확인","textChars":31,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/ovyxgved","slide":5,"text":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/pg7yp0fy","slide":5,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/2twfe5w7","slide":5,"text":"05 / 51","textPreview":"05 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/yp8ba1wn","slide":5,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/47zf4l","slide":5,"text":"문서: G2B 실무매뉴얼\n페이지 5: 제3자단가계약의 선행 게이트\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214"}
+{"kind":"slide","id":"sl/o5g1k3","slide":6,"title":"현재 회사에서 먼저 해결할 항목","textShapes":5}
+{"kind":"textbox","id":"sh/g7qx0fqp","slide":6,"text":"현재 회사에서 먼저 해결할 항목","textPreview":"현재 회사에서 먼저 해결할 항목","textChars":17,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/v6hg7ap4","slide":6,"text":"30명이라는 인원만으로 조달 자격을 확정하지 않음","textPreview":"30명이라는 인원만으로 조달 자격을 확정하지 않음","textChars":27,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/t4fy5k7e","slide":6,"text":"근거 P1 · P7  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · P7  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/836xwfqt","slide":6,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/72xg3ap8","slide":6,"text":"06 / 51","textPreview":"06 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/3m1cb6tk","slide":6,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/o5g1k3","slide":6,"text":"문서: G2B 실무매뉴얼\n페이지 6: 현재 회사에서 먼저 해결할 항목\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP7: SMPP 중소기업확인서 발급 안내 (2026.09.23 조회)\nhttps://www.smpp.go.kr/cst/smppInf/SelectMpeJ2.do"}
+{"kind":"slide","id":"sl/0pv4bd","slide":7,"title":"실적이 없을 때의 실행 경로","textShapes":5}
+{"kind":"textbox","id":"sh/mtwni98f","slide":7,"text":"실적이 없을 때의 실행 경로","textPreview":"실적이 없을 때의 실행 경로","textChars":15,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/9wn6t4rq","slide":7,"text":"G2B-01 / 조달 등록일보다 실판매 확보가 병목이 될 수 있음","textPreview":"G2B-01 / 조달 등록일보다 실판매 확보가 병목이 될 수 있음","textChars":36,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/z6lonu9o","slide":7,"text":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/e5cnep83","slide":7,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/1s36p4ru","slide":7,"text":"07 / 51","textPreview":"07 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/5kji9k7q","slide":7,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/0pv4bd","slide":7,"text":"문서: G2B 실무매뉴얼\n페이지 7: 실적이 없을 때의 실행 경로\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214"}
+{"kind":"slide","id":"sl/setm3i","slide":8,"title":"판매 형태 비교","textShapes":5}
+{"kind":"textbox","id":"sh/nq9g3618","slide":8,"text":"판매 형태 비교","textPreview":"판매 형태 비교","textChars":8,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/orihcb2t","slide":8,"text":"선택: 기관 내부망 설치형 영구 라이선스","textPreview":"선택: 기관 내부망 설치형 영구 라이선스","textChars":22,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/atkzelkj","slide":8,"text":"근거 R1 · C1 · C2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1 · C1 · C2  / 공식 URL은 부록·슬라이드 노트","textChars":37,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/but07q14","slide":8,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/wf2hgb2p","slide":8,"text":"08 / 51","textPreview":"08 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/wnm5k7ap","slide":8,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/setm3i","slide":8,"text":"문서: G2B 실무매뉴얼\n페이지 8: 판매 형태 비교\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록\n\nC1: 디지털서비스 이용지원시스템 선정 절차 (2026.09.23 조회)\nhttps://www.digitalmarket.kr/web/index.do\n\nC2: KISA 클라우드서비스 보안인증 안내 (2026.03.12 최종수정)\nhttps://www.kisa.or.kr/1050603"}
+{"kind":"slide","id":"sl/ix3cuh","slide":9,"title":"최초 SKU 규격 초안","textShapes":5}
+{"kind":"textbox","id":"sh/03ed4rah","slide":9,"text":"최초 SKU 규격 초안","textPreview":"최초 SKU 규격 초안","textChars":12,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/z25cbmtw","slide":9,"text":"G2B-02 / 첫 출시에는 기본상품 1개를 우선 검증","textPreview":"G2B-02 / 첫 출시에는 기본상품 1개를 우선 검증","textChars":30,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/d03u9wbq","slide":9,"text":"근거 P1 · R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · R1  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/cfut0ra5","slide":9,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/belc7mtk","slide":9,"text":"09 / 51","textPreview":"09 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/zex8f2h4","slide":9,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/ix3cuh","slide":9,"text":"문서: G2B 실무매뉴얼\n페이지 9: 최초 SKU 규격 초안\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/biagjq","slide":10,"title":"설치형 제품의 책임 분담","textShapes":5}
+{"kind":"textbox","id":"sh/6dsz61ob","slide":10,"text":"설치형 제품의 책임 분담","textPreview":"설치형 제품의 책임 분담","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/t0ji1g7m","slide":10,"text":"G2B-02 / 견적 전 고객 사전점검표에 포함","textPreview":"G2B-02 / 견적 전 고객 사전점검표에 포함","textChars":26,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/v2103qps","slide":10,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/u1szalo7","slide":10,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/h43i50ny","slide":10,"text":"10 / 51","textPreview":"10 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/1wb2lsza","slide":10,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/biagjq","slide":10,"text":"문서: G2B 실무매뉴얼\n페이지 10: 설치형 제품의 책임 분담\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/by9rub","slide":11,"title":"라이선스 측정 단위","textShapes":5}
+{"kind":"textbox","id":"sh/dsjmh0j6","slide":11,"text":"라이선스 측정 단위","textPreview":"라이선스 측정 단위","textChars":10,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/qp8n6l0f","slide":11,"text":"G2B-03 / 고객과 서버가 같은 수량을 계산","textPreview":"G2B-03 / 고객과 서버가 같은 수량을 계산","textChars":26,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/0va5cfih","slide":11,"text":"근거 P1 · R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · R1  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/1wjmlkj2","slide":11,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/etsna50r","slide":11,"text":"11 / 51","textPreview":"11 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/u1cjq1sz","slide":11,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/by9rub","slide":11,"text":"문서: G2B 실무매뉴얼\n페이지 11: 라이선스 측정 단위\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/hvjykt","slide":12,"title":"EULA에 필요한 계약 조항","textShapes":5}
+{"kind":"textbox","id":"sh/ixcf25kz","slide":12,"text":"EULA에 필요한 계약 조항","textPreview":"EULA에 필요한 계약 조항","textChars":15,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/50nydk3a","slide":12,"text":"G2B-03 / 법무 검토 후 계약 규격에 맞춰 확정","textPreview":"G2B-03 / 법무 검토 후 계약 규격에 맞춰 확정","textChars":29,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/vulg7al8","slide":12,"text":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/atcfy5kn","slide":12,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/xw3y9k3e","slide":12,"text":"12 / 51","textPreview":"12 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/l8z2pszu","slide":12,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/hvjykt","slide":12,"text":"문서: G2B 실무매뉴얼\n페이지 12: EULA에 필요한 계약 조항\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP2: 상용소프트웨어 제3자단가계약 추가특수조건 (2026.01.01 시행, 지침 제46호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270216"}
+{"kind":"slide","id":"sl/ntc22f","slide":13,"title":"재설치·이전·DR·가상화 정책","textShapes":5}
+{"kind":"textbox","id":"sh/7ihwbix8","slide":13,"text":"재설치·이전·DR·가상화 정책","textPreview":"재설치·이전·DR·가상화 정책","textChars":16,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/8jqd4ned","slide":13,"text":"G2B-03 / 현장 문의를 사전에 정책으로 정의","textPreview":"G2B-03 / 현장 문의를 사전에 정책으로 정의","textChars":27,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/u58v6xwj","slide":13,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/v6hwfix4","slide":13,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/g7ad8nep","slide":13,"text":"13 / 51","textPreview":"13 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/8jy1kzm9","slide":13,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/ntc22f","slide":13,"text":"문서: G2B 실무매뉴얼\n페이지 13: 재설치·이전·DR·가상화 정책\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n모든 수량·기간은 인뎁스 운영정책 초안이며 고객 계약과 대표 승인으로 확정한다."}
+{"kind":"slide","id":"sl/q59lq7","slide":14,"title":"오프라인 라이선스 구현 요구","textShapes":5}
+{"kind":"textbox","id":"sh/7ax0net4","slide":14,"text":"오프라인 라이선스 구현 요구","textPreview":"오프라인 라이선스 구현 요구","textChars":15,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/8b61wjap","slide":14,"text":"G2B-04 / 정책 승인 후 개발 티켓으로 전환","textPreview":"G2B-04 / 정책 승인 후 개발 티켓으로 전환","textChars":27,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/ud8jytsv","slide":14,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/veh0rytg","slide":14,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/gzq103a1","slide":14,"text":"14 / 51","textPreview":"14 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/gj6x4jmh","slide":14,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/q59lq7","slide":14,"text":"문서: G2B 실무매뉴얼\n페이지 14: 오프라인 라이선스 구현 요구\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n새 라이선스 제어는 사용자 업무와 인증 흐름에 영향을 주므로 구현 전에 정책·UI·장애 동작을 설명하고 승인을 받는다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/6r112s","slide":15,"title":"가격을 결정하기 전 수집할 정보","textShapes":5}
+{"kind":"textbox","id":"sh/psbmxcjm","slide":15,"text":"가격을 결정하기 전 수집할 정보","textPreview":"가격을 결정하기 전 수집할 정보","textChars":17,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/2pk3mxkv","slide":15,"text":"G2B-04 / 현재 시장가격을 확인한 문서가 아님","textPreview":"G2B-04 / 현재 시장가격을 확인한 문서가 아님","textChars":28,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/cf2ls72x","slide":15,"text":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/dgvm1cji","slide":15,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/qdk3qhk7","slide":15,"text":"15 / 51","textPreview":"15 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/25sbu98r","slide":15,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/6r112s","slide":15,"text":"문서: G2B 실무매뉴얼\n페이지 15: 가격을 결정하기 전 수집할 정보\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214"}
+{"kind":"slide","id":"sl/7tiss0","slide":16,"title":"기본상품 원가 계산 예시","textShapes":5}
+{"kind":"textbox","id":"sh/utszi9kv","slide":16,"text":"기본상품 원가 계산 예시","textPreview":"기본상품 원가 계산 예시","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/hgjytoj6","slide":16,"text":"예시 단위: 백만원 / VAT 별도 / 실원가로 교체","textPreview":"예시 단위: 백만원 / VAT 별도 / 실원가로 교체","textChars":29,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/7qhgne14","slide":16,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/6p8fe9kj","slide":16,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/tszyp4ja","slide":16,"text":"16 / 51","textPreview":"16 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/9kve9w32","slide":16,"name":"","rows":6,"cols":3,"preview":"원가 항목 | 산정 근거와 가정 | 건당 금액","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/7tiss0","slide":16,"text":"문서: G2B 실무매뉴얼\n페이지 16: 기본상품 원가 계산 예시\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n이 계산은 경영계획 예시다. 회계상 매출원가·판매관리비 분류 및 손익 판단은 회계 담당자가 별도로 확정한다."}
+{"kind":"slide","id":"sl/6uncym","slide":17,"title":"가격 민감도와 첫 가격 승인안","textShapes":5}
+{"kind":"textbox","id":"sh/2t8z2x4n","slide":17,"text":"가격 민감도와 첫 가격 승인안","textPreview":"가격 민감도와 첫 가격 승인안","textChars":16,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/pwzixc3y","slide":17,"text":"고정 원가 9백만원 가정 / VAT 별도","textPreview":"고정 원가 9백만원 가정 / VAT 별도","textChars":22,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/ry10z2l4","slide":17,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/qxsz6x4j","slide":17,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/dkji1c3a","slide":17,"text":"17 / 51","textPreview":"17 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/5snupsze","slide":17,"name":"","rows":6,"cols":3,"preview":"가격 후보 | 계산·판단 | 확인사항","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/6uncym","slide":17,"text":"문서: G2B 실무매뉴얼\n페이지 17: 가격 민감도와 첫 가격 승인안\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다."}
+{"kind":"slide","id":"sl/35qabq","slide":18,"title":"첫 상품 가격표 예시","textShapes":5}
+{"kind":"textbox","id":"sh/729cre5c","slide":18,"text":"첫 상품 가격표 예시","textPreview":"첫 상품 가격표 예시","textChars":11,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/83id0jmx","slide":18,"text":"정가·유지관리율 모두 미승인 예시 / VAT 별도","textPreview":"정가·유지관리율 모두 미승인 예시 / VAT 별도","textChars":27,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/yd0bu94v","slide":18,"text":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/jy9cne5g","slide":18,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/kzidwzm1","slide":18,"text":"18 / 51","textPreview":"18 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/8r6h8nmd","slide":18,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/35qabq","slide":18,"text":"문서: G2B 실무매뉴얼\n페이지 18: 첫 상품 가격표 예시\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214"}
+{"kind":"slide","id":"sl/gqc4ug","slide":19,"title":"영구·구독 5년 비용 비교","textShapes":5}
+{"kind":"textbox","id":"sh/rudg32xo","slide":19,"text":"영구·구독 5년 비용 비교","textPreview":"영구·구독 5년 비용 비교","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/svmxc7e9","slide":19,"text":"가격정책 계산 예시 / 제품별 실제 견적 비교가 아님","textPreview":"가격정책 계산 예시 / 제품별 실제 견적 비교가 아님","textChars":29,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/eh4fehwf","slide":19,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/fixg7mx0","slide":19,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/gj6xgrel","slide":19,"text":"19 / 51","textPreview":"19 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/c3u9cne5","slide":19,"name":"","rows":6,"cols":3,"preview":"모델 | 5년 계산과 가정 | 결과·주의","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/gqc4ug","slide":19,"text":"문서: G2B 실무매뉴얼\n페이지 19: 영구·구독 5년 비용 비교\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다."}
+{"kind":"slide","id":"sl/jxkikf","slide":20,"title":"할인·채널·우대가격 관리","textShapes":5}
+{"kind":"textbox","id":"sh/nm18325c","slide":20,"text":"할인·채널·우대가격 관리","textPreview":"할인·채널·우대가격 관리","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/8nu9c76x","slide":20,"text":"G2B-04 / 조달계약 후 동일 규격 가격의 추적 필요","textPreview":"G2B-04 / 조달계약 후 동일 규격 가격의 추적 필요","textChars":31,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/yhsr6xov","slide":20,"text":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/zi18z2pg","slide":20,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/0ja98761","slide":20,"text":"20 / 51","textPreview":"20 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/kf25grad","slide":20,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/jxkikf","slide":20,"text":"문서: G2B 실무매뉴얼\n페이지 20: 할인·채널·우대가격 관리\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214"}
+{"kind":"slide","id":"sl/83xakc","slide":21,"title":"유상 판매실적 증빙 묶음","textShapes":5}
+{"kind":"textbox","id":"sh/udovuxof","slide":21,"text":"유상 판매실적 증빙 묶음","textPreview":"유상 판매실적 증빙 묶음","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/hgfe5cn6","slide":21,"text":"G2B-05 / 제품별 실적과 규격별 가격자료를 함께 관리","textPreview":"G2B-05 / 제품별 실적과 규격별 가격자료를 함께 관리","textChars":32,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/7adczi54","slide":21,"text":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/694vqdoj","slide":21,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/tcvu1sna","slide":21,"text":"21 / 51","textPreview":"21 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/5onul0bm","slide":21,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/83xakc","slide":21,"text":"문서: G2B 실무매뉴얼\n페이지 21: 유상 판매실적 증빙 묶음\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214"}
+{"kind":"slide","id":"sl/p5njeq","slide":22,"title":"저작권·제조사·공급권 준비","textShapes":5}
+{"kind":"textbox","id":"sh/lorq5k3a","slide":22,"text":"저작권·제조사·공급권 준비","textPreview":"저작권·제조사·공급권 준비","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/ylg7a5kj","slide":22,"text":"G2B-06 / 제품명과 권리자가 같아야 자료 연결이 쉬움","textPreview":"G2B-06 / 제품명과 권리자가 같아야 자료 연결이 쉬움","textChars":32,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/cjyp8v2d","slide":22,"text":"근거 P1 · R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · R1  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/xk7q103y","slide":22,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/ahg765kn","slide":22,"text":"22 / 51","textPreview":"22 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/yp0nq1sr","slide":22,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/p5njeq","slide":22,"text":"문서: G2B 실무매뉴얼\n페이지 22: 저작권·제조사·공급권 준비\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/bqeylb","slide":23,"title":"나라장터 이용자·업체 등록","textShapes":5}
+{"kind":"textbox","id":"sh/twfuhsz6","slide":23,"text":"나라장터 이용자·업체 등록","textPreview":"나라장터 이용자·업체 등록","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/6tob6d0v","slide":23,"text":"G2B-07 / 최신 이용자등록 매뉴얼 기준으로 실행","textPreview":"G2B-07 / 최신 이용자등록 매뉴얼 기준으로 실행","textChars":29,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/gzqtc7ix","slide":23,"text":"근거 P3 · P4  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P3 · P4  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/h0zulczi","slide":23,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/uxobax0r","slide":23,"text":"23 / 51","textPreview":"23 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/m90b6907","slide":23,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/bqeylb","slide":23,"text":"문서: G2B 실무매뉴얼\n페이지 23: 나라장터 이용자·업체 등록\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP3: 조달청 입찰참가자격등록·이용자등록 매뉴얼 (2026.07 이용자 매뉴얼 게시 확인)\nhttps://www.pps.go.kr/kor/bbs/list.do?key=01334\n\nP4: 차세대 나라장터 이용자등록 FAQ (2025.03.28 게시)\nhttps://www.pps.go.kr/kor/bbs/view.do?bbsSn=2503280018&key=01334"}
+{"kind":"slide","id":"sl/m3g25y","slide":24,"title":"물품 분류와 식별번호","textShapes":5}
+{"kind":"textbox","id":"sh/fm50jq9w","slide":24,"text":"물품 분류와 식별번호","textPreview":"물품 분류와 식별번호","textChars":11,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/gne1sbqh","slide":24,"text":"G2B-08 / 분류코드를 추측해 신청하지 않음","textPreview":"G2B-08 / 분류코드를 추측해 신청하지 않음","textChars":26,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/2pgjul87","slide":24,"text":"근거 P1 · P5  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · P5  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/3qp0nqps","slide":24,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/4ry1wvqd","slide":24,"text":"24 / 51","textPreview":"24 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/gzmd4jm9","slide":24,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/m3g25y","slide":24,"text":"문서: G2B 실무매뉴얼\n페이지 24: 물품 분류와 식별번호\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP5: 조달청 목록정보시스템 개편 안내 (2025.09.26 시행 안내)\nhttps://www.pps.go.kr/kor/bbs/view.do?bbsSn=2509190007&key=00634"}
+{"kind":"slide","id":"sl/u59di6","slide":25,"title":"기본상품 계약 신청서류 1","textShapes":5}
+{"kind":"textbox","id":"sh/uhovm9or","slide":25,"text":"기본상품 계약 신청서류 1","textPreview":"기본상품 계약 신청서류 1","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/hkfuxoni","slide":25,"text":"G2B-09 / 현행 P1 제6조와 별지 서식 사용","textPreview":"G2B-09 / 현행 P1 제6조와 별지 서식 사용","textChars":28,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/3mhczy58","slide":25,"text":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/2l8vqt4n","slide":25,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/pozu18ne","slide":25,"text":"25 / 51","textPreview":"25 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/50ba5sve","slide":25,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/u59di6","slide":25,"text":"문서: G2B 실무매뉴얼\n페이지 25: 기본상품 계약 신청서류 1\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214"}
+{"kind":"slide","id":"sl/u81ebo","slide":26,"title":"기본상품 계약 신청서류 2","textShapes":5}
+{"kind":"textbox","id":"sh/md8z6l8f","slide":26,"text":"기본상품 계약 신청서류 2","textPreview":"기본상품 계약 신청서류 2","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/90jih0rq","slide":26,"text":"G2B-09 / 가격자료는 동일 규격 단위로 구성","textPreview":"G2B-09 / 가격자료는 동일 규격 단위로 구성","textChars":27,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/zah0b69o","slide":26,"text":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/y98z2l83","slide":26,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/lczidgru","slide":26,"text":"26 / 51","textPreview":"26 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/98jq98vm","slide":26,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/u81ebo","slide":26,"text":"문서: G2B 실무매뉴얼\n페이지 26: 기본상품 계약 신청서류 2\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214"}
+{"kind":"slide","id":"sl/kiqm39","slide":27,"title":"규격서 작성 예시","textShapes":5}
+{"kind":"textbox","id":"sh/4jy90325","slide":27,"text":"규격서 작성 예시","textPreview":"규격서 작성 예시","textChars":9,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/jip87ylk","slide":27,"text":"G2B-10 / GS 범위와 라이선스 정의를 그대로 사용","textPreview":"G2B-10 / GS 범위와 라이선스 정의를 그대로 사용","textChars":31,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/to7ad83m","slide":27,"text":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/sny94321","slide":27,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/rmp8bylg","slide":27,"text":"27 / 51","textPreview":"27 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/vy1cfa98","slide":27,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/kiqm39","slide":27,"text":"문서: G2B 실무매뉴얼\n페이지 27: 규격서 작성 예시\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214"}
+{"kind":"slide","id":"sl/dw6k9t","slide":28,"title":"라이선스 증서 예시 필드","textShapes":5}
+{"kind":"textbox","id":"sh/ruhwvelk","slide":28,"text":"라이선스 증서 예시 필드","textPreview":"라이선스 증서 예시 필드","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/cvqx4jm5","slide":28,"text":"G2B-10 / 계약과 실제 설치본을 연결","textPreview":"G2B-10 / 계약과 실제 설치본을 연결","textChars":23,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/ex8f6t4b","slide":28,"text":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/zyhgzylg","slide":28,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/0zqx8jm1","slide":28,"text":"28 / 51","textPreview":"28 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/4vm5wnit","slide":28,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/dw6k9t","slide":28,"text":"문서: G2B 실무매뉴얼\n페이지 28: 라이선스 증서 예시 필드\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214"}
+{"kind":"slide","id":"sl/b2h600","slide":29,"title":"신청·보완·가격협상","textShapes":5}
+{"kind":"textbox","id":"sh/83elkv29","slide":29,"text":"신청·보완·가격협상","textPreview":"신청·보완·가격협상","textChars":10,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/n25kral4","slide":29,"text":"G2B-11 / 담당자 회신과 전자문서 이력을 보관","textPreview":"G2B-11 / 담당자 회신과 전자문서 이력을 보관","textChars":28,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/x87mxk36","slide":29,"text":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/w7ylof2l","slide":29,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/v6p4val0","slide":29,"text":"29 / 51","textPreview":"29 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/ne94vml0","slide":29,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/b2h600","slide":29,"text":"문서: G2B 실무매뉴얼\n페이지 29: 신청·보완·가격협상\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP2: 상용소프트웨어 제3자단가계약 추가특수조건 (2026.01.01 시행, 지침 제46호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270216"}
+{"kind":"slide","id":"sl/wmkxo7","slide":30,"title":"전자계약과 몰 등록 확인","textShapes":5}
+{"kind":"textbox","id":"sh/h0jy14ra","slide":30,"text":"전자계약과 몰 등록 확인","textPreview":"전자계약과 몰 등록 확인","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/uxszqp8j","slide":30,"text":"G2B-12 / 계약 완료와 공개된 상품을 각각 검증","textPreview":"G2B-12 / 계약 완료와 공개된 상품을 각각 검증","textChars":29,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/8vqhofqd","slide":30,"text":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/twzyxkry","slide":30,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/6t8zmp8n","slide":30,"text":"30 / 51","textPreview":"30 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/eh0ju5sv","slide":30,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/wmkxo7","slide":30,"text":"문서: G2B 실무매뉴얼\n페이지 30: 전자계약과 몰 등록 확인\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP2: 상용소프트웨어 제3자단가계약 추가특수조건 (2026.01.01 시행, 지침 제46호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270216"}
+{"kind":"slide","id":"sl/pvtob6","slide":31,"title":"상품 상세페이지와 제안자료","textShapes":5}
+{"kind":"textbox","id":"sh/7q1knet0","slide":31,"text":"상품 상세페이지와 제안자료","textPreview":"상품 상세페이지와 제안자료","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/8ralwjal","slide":31,"text":"G2B-13 / 구매자가 범위·예산·설치 조건을 확인","textPreview":"G2B-13 / 구매자가 범위·예산·설치 조건을 확인","textChars":29,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/y18jqpsj","slide":31,"text":"근거 P1 · R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · R1  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/j2hkjut4","slide":31,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/k3q1szap","slide":31,"text":"31 / 51","textPreview":"31 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/8n2tgr6l","slide":31,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/pvtob6","slide":31,"text":"문서: G2B 실무매뉴얼\n페이지 31: 상품 상세페이지와 제안자료\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/pug5yh","slide":32,"title":"고객 납품요구 접수와 착수","textShapes":5}
+{"kind":"textbox","id":"sh/ob2hgrel","slide":32,"text":"고객 납품요구 접수와 착수","textPreview":"고객 납품요구 접수와 착수","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/3atgnmx0","slide":32,"text":"G2B-14 / 계약상품 외 과업을 먼저 구분","textPreview":"G2B-14 / 계약상품 외 과업을 먼저 구분","textChars":25,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/x0vitwf2","slide":32,"text":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/czmhkreh","slide":32,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/byt0rmxc","slide":32,"text":"32 / 51","textPreview":"32 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/nepkr6ls","slide":32,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/pug5yh","slide":32,"text":"문서: G2B 실무매뉴얼\n페이지 32: 고객 납품요구 접수와 착수\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP2: 상용소프트웨어 제3자단가계약 추가특수조건 (2026.01.01 시행, 지침 제46호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270216"}
+{"kind":"slide","id":"sl/dnoaxs","slide":33,"title":"설치·검사·검수 체크리스트","textShapes":5}
+{"kind":"textbox","id":"sh/3e5w36xs","slide":33,"text":"설치·검사·검수 체크리스트","textPreview":"설치·검사·검수 체크리스트","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/ofexcbyd","slide":33,"text":"G2B-15 / 수요기관이 확인할 기준을 사전에 합의","textPreview":"G2B-15 / 수요기관이 확인할 기준을 사전에 합의","textChars":29,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/e9cf61gb","slide":33,"text":"근거 R1 · P2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1 · P2  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/falwz6hw","slide":33,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/gbux8by1","slide":33,"text":"33 / 51","textPreview":"33 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/8zyhov6x","slide":33,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/dnoaxs","slide":33,"text":"문서: G2B 실무매뉴얼\n페이지 33: 설치·검사·검수 체크리스트\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록\n\nP2: 상용소프트웨어 제3자단가계약 추가특수조건 (2026.01.01 시행, 지침 제46호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270216"}
+{"kind":"slide","id":"sl/ehftby","slide":34,"title":"청구·수금·납품 증빙","textShapes":5}
+{"kind":"textbox","id":"sh/83ax0jmt","slide":34,"text":"청구·수금·납품 증빙","textPreview":"청구·수금·납품 증빙","textChars":11,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/721g7y5o","slide":34,"text":"G2B-15 / 회계와 기술지원 정보까지 연결","textPreview":"G2B-15 / 회계와 기술지원 정보까지 연결","textChars":25,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/l0jy5oni","slide":34,"text":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/kzaxwjmx","slide":34,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/zy1g3e5c","slide":34,"text":"34 / 51","textPreview":"34 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/nepon650","slide":34,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/ehftby","slide":34,"text":"문서: G2B 실무매뉴얼\n페이지 34: 청구·수금·납품 증빙\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP2: 상용소프트웨어 제3자단가계약 추가특수조건 (2026.01.01 시행, 지침 제46호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270216"}
+{"kind":"slide","id":"sl/dixip8","slide":35,"title":"무상 하자와 유상 유지관리","textShapes":5}
+{"kind":"textbox","id":"sh/29ob61sr","slide":35,"text":"무상 하자와 유상 유지관리","textPreview":"무상 하자와 유상 유지관리","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/pcfu1wri","slide":35,"text":"G2B-16 / 의무 하자보수와 선택 서비스를 구분","textPreview":"G2B-16 / 의무 하자보수와 선택 서비스를 구분","textChars":28,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/f6dsvm9g","slide":35,"text":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/el4b2hsv","slide":35,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/18fuxwr6","slide":35,"text":"35 / 51","textPreview":"35 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/d0zuxkrm","slide":35,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/dixip8","slide":35,"text":"문서: G2B 실무매뉴얼\n페이지 35: 무상 하자와 유상 유지관리\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP2: 상용소프트웨어 제3자단가계약 추가특수조건 (2026.01.01 시행, 지침 제46호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270216"}
+{"kind":"slide","id":"sl/jj0e9r","slide":36,"title":"지원 수준과 운영 체계","textShapes":5}
+{"kind":"textbox","id":"sh/mlkrid43","slide":36,"text":"지원 수준과 운영 체계","textPreview":"지원 수준과 운영 체계","textChars":12,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/9obqds3e","slide":36,"text":"G2B-16 / 아래 응답시간은 회사 운영안, 계약 전 검증","textPreview":"G2B-16 / 아래 응답시간은 회사 운영안, 계약 전 검증","textChars":33,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/zit87ilc","slide":36,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/yh0red4r","slide":36,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/lkbq983i","slide":36,"text":"36 / 51","textPreview":"36 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/tszihwfu","slide":36,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/jj0e9r","slide":36,"text":"문서: G2B 실무매뉴얼\n페이지 36: 지원 수준과 운영 체계\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다."}
+{"kind":"slide","id":"sl/ch0nec","slide":37,"title":"유지관리·커스터마이징 상품 신청","textShapes":5}
+{"kind":"textbox","id":"sh/hc3q50zi","slide":37,"text":"유지관리·커스터마이징 상품 신청","textPreview":"유지관리·커스터마이징 상품 신청","textChars":17,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/u9cru5gr","slide":37,"text":"G2B-17 / 기본상품 계약 이후 순서로 준비","textPreview":"G2B-17 / 기본상품 계약 이후 순서로 준비","textChars":26,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/87u9svy1","slide":37,"text":"근거 P1 · P2 · G3  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · P2 · G3  / 공식 URL은 부록·슬라이드 노트","textChars":37,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/983q10z6","slide":37,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/m5crqlgv","slide":37,"text":"37 / 51","textPreview":"37 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/i9o7u5kf","slide":37,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/ch0nec","slide":37,"text":"문서: G2B 실무매뉴얼\n페이지 37: 유지관리·커스터마이징 상품 신청\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP2: 상용소프트웨어 제3자단가계약 추가특수조건 (2026.01.01 시행, 지침 제46호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270216\n\nG3: KTC GS인증 안내·기준·재인증 점검표 자료 (2026.09.23 조회)\nhttps://www.ktc.re.kr/web_united/task/task.asp?pagen=2540"}
+{"kind":"slide","id":"sl/oxn6ig","slide":38,"title":"제품 변경·보안·판매 유지","textShapes":5}
+{"kind":"textbox","id":"sh/bapo76lc","slide":38,"text":"제품 변경·보안·판매 유지","textPreview":"제품 변경·보안·판매 유지","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/cbi50bmx","slide":38,"text":"G2B-18 / 등록 후에도 지속 관리할 의무","textPreview":"G2B-18 / 등록 후에도 지속 관리할 의무","textChars":25,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/yd0n2143","slide":38,"text":"근거 P1 · P2 · G3  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · P2 · G3  / 공식 URL은 부록·슬라이드 노트","textChars":37,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/ze9ob6l8","slide":38,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/kzi54bmt","slide":38,"text":"38 / 51","textPreview":"38 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/4nidg7i5","slide":38,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/oxn6ig","slide":38,"text":"문서: G2B 실무매뉴얼\n페이지 38: 제품 변경·보안·판매 유지\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP2: 상용소프트웨어 제3자단가계약 추가특수조건 (2026.01.01 시행, 지침 제46호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270216\n\nG3: KTC GS인증 안내·기준·재인증 점검표 자료 (2026.09.23 조회)\nhttps://www.ktc.re.kr/web_united/task/task.asp?pagen=2540"}
+{"kind":"slide","id":"sl/q5zn2x","slide":39,"title":"공공 SaaS는 후속 사업으로 분리","textShapes":5}
+{"kind":"textbox","id":"sh/a98jelsn","slide":39,"text":"공공 SaaS는 후속 사업으로 분리","textPreview":"공공 SaaS는 후속 사업으로 분리","textChars":19,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/xcji9gre","slide":39,"text":"확장 시 검토할 작업 / 이번 최초 상품 범위 밖","textPreview":"확장 시 검토할 작업 / 이번 최초 상품 범위 밖","textChars":27,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/jy10bq9k","slide":39,"text":"근거 C1 · C2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 C1 · C2  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/yxsjilsz","slide":39,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/l0jid0ra","slide":39,"text":"39 / 51","textPreview":"39 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/pgnq50be","slide":39,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/q5zn2x","slide":39,"text":"문서: G2B 실무매뉴얼\n페이지 39: 공공 SaaS는 후속 사업으로 분리\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nC1: 디지털서비스 이용지원시스템 선정 절차 (2026.09.23 조회)\nhttps://www.digitalmarket.kr/web/index.do\n\nC2: KISA 클라우드서비스 보안인증 안내 (2026.03.12 최종수정)\nhttps://www.kisa.or.kr/1050603"}
+{"kind":"slide","id":"sl/f1mc8b","slide":40,"title":"인증과 조달의 통합 일정","textShapes":5}
+{"kind":"textbox","id":"sh/zyx0rqdg","slide":40,"text":"인증과 조달의 통합 일정","textPreview":"인증과 조달의 통합 일정","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/0z610ve1","slide":40,"text":"착수일을 W1로 두는 내부 목표 / 실적 확보 기간은 미정","textPreview":"착수일을 W1로 두는 내부 목표 / 실적 확보 기간은 미정","textChars":32,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/m1oj25cr","slide":40,"text":"근거 G2 · P1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 G2 · P1  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/n2x0vadc","slide":40,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/83614vux","slide":40,"text":"40 / 51","textPreview":"40 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/c3qxwbed","slide":40,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/f1mc8b","slide":40,"text":"문서: G2B 실무매뉴얼\n페이지 40: 인증과 조달의 통합 일정\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020\n\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214"}
+{"kind":"slide","id":"sl/5mxw01","slide":41,"title":"대표가 승인할 정책 목록","textShapes":5}
+{"kind":"textbox","id":"sh/u54jipov","slide":41,"text":"대표가 승인할 정책 목록","textPreview":"대표가 승인할 정책 목록","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/hsvid476","slide":41,"text":"문서 집필과 코드 구현의 입력값","textPreview":"문서 집필과 코드 구현의 입력값","textChars":17,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/72t07up4","slide":41,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/61kjepoj","slide":41,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/t4bi947a","slide":41,"text":"41 / 51","textPreview":"41 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/pofu1o7y","slide":41,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/5mxw01","slide":41,"text":"문서: G2B 실무매뉴얼\n페이지 41: 대표가 승인할 정책 목록\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다."}
+{"kind":"slide","id":"sl/e44shw","slide":42,"title":"실무 산출물 목록 1","textShapes":5}
+{"kind":"textbox","id":"sh/5gv6l4f2","slide":42,"text":"실무 산출물 목록 1","textPreview":"실무 산출물 목록 1","textChars":11,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/it4napgb","slide":42,"text":"상품·계약의 공통 기준 파일","textPreview":"상품·계약의 공통 기준 파일","textChars":15,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/grm58zyl","slide":42,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/hsv6hkf6","slide":42,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/up4n6pgf","slide":42,"text":"42 / 51","textPreview":"42 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/6h43i983","slide":42,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/e44shw","slide":42,"text":"문서: G2B 실무매뉴얼\n페이지 42: 실무 산출물 목록 1\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다."}
+{"kind":"slide","id":"sl/mvve11","slide":43,"title":"실무 산출물 목록 2","textShapes":5}
+{"kind":"textbox","id":"sh/6xkvytkb","slide":43,"text":"실무 산출물 목록 2","textPreview":"실무 산출물 목록 2","textChars":11,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/tkvu98jm","slide":43,"text":"행정·등록·납품 증빙 묶음","textPreview":"행정·등록·납품 증빙 묶음","textChars":14,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/jutc3y1k","slide":43,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/itkvutkz","slide":43,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/5wbu5ojq","slide":43,"text":"43 / 51","textPreview":"43 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/tofi1g7m","slide":43,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/mvve11","slide":43,"text":"문서: G2B 실무매뉴얼\n페이지 43: 실무 산출물 목록 2\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다."}
+{"kind":"slide","id":"sl/d2m9me","slide":44,"title":"상품화를 위한 개발 백로그","textShapes":5}
+{"kind":"textbox","id":"sh/8buh8zmt","slide":44,"text":"상품화를 위한 개발 백로그","textPreview":"상품화를 위한 개발 백로그","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/7algfu58","slide":44,"text":"정책 승인 후 실제 차이를 점검해 구현","textPreview":"정책 승인 후 실제 차이를 점검해 구현","textChars":21,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/l83ydkn2","slide":44,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/knah4zmh","slide":44,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/jm1gbu5w","slide":44,"text":"44 / 51","textPreview":"44 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/bupcvit8","slide":44,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/d2m9me","slide":44,"text":"문서: G2B 실무매뉴얼\n페이지 44: 상품화를 위한 개발 백로그\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/mojque","slide":45,"title":"바이브 코딩 작업 지시문","textShapes":5}
+{"kind":"textbox","id":"sh/jmdwrq58","slide":45,"text":"바이브 코딩 작업 지시문","textPreview":"바이브 코딩 작업 지시문","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/kn6xkb6t","slide":45,"text":"예: 오프라인 영구 라이선스 구현 전에 사용할 요청","textPreview":"예: 오프라인 영구 라이선스 구현 전에 사용할 요청","textChars":28,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/6pofmloz","slide":45,"text":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 R1  / 공식 URL은 부록·슬라이드 노트","textChars":27,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/7qxwvq5k","slide":45,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/8b6xov6p","slide":45,"text":"45 / 51","textPreview":"45 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/4zi5oryt","slide":45,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/mojque","slide":45,"text":"문서: G2B 실무매뉴얼\n페이지 45: 바이브 코딩 작업 지시문\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록"}
+{"kind":"slide","id":"sl/w1vbpq","slide":46,"title":"WORK 문서 작업 지시문","textShapes":5}
+{"kind":"textbox","id":"sh/z2t8n6ts","slide":46,"text":"WORK 문서 작업 지시문","textPreview":"WORK 문서 작업 지시문","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/0329grax","slide":46,"text":"대표 승인 자료와 공식 양식을 근거로 문서 생성","textPreview":"대표 승인 자료와 공식 양식을 근거로 문서 생성","textChars":26,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/m5kri1s3","slide":46,"text":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textPreview":"내부 실행안 · 수치와 정책 제안은 회사 승인 후 적용","textChars":30,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/n6t8r6to","slide":46,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/87m9kba9","slide":46,"text":"46 / 51","textPreview":"46 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/w76tsvex","slide":46,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/w1vbpq","slide":46,"text":"문서: G2B 실무매뉴얼\n페이지 46: WORK 문서 작업 지시문\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다."}
+{"kind":"slide","id":"sl/o13jwk","slide":47,"title":"기관 사전상담 질문 목록","textShapes":5}
+{"kind":"textbox","id":"sh/betwbqd8","slide":47,"text":"기관 사전상담 질문 목록","textPreview":"기관 사전상담 질문 목록","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/cf2d4ved","slide":47,"text":"G2B-01 / 답변을 실행계획과 신청서에 반영","textPreview":"G2B-01 / 답변을 실행계획과 신청서에 반영","textChars":26,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/yh4v6lwj","slide":47,"text":"근거 P1 · P2 · P3  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · P2 · P3  / 공식 URL은 부록·슬라이드 노트","textChars":37,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/zidwfqd4","slide":47,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/0jmd8vep","slide":47,"text":"47 / 51","textPreview":"47 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/cvalwve5","slide":47,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/o13jwk","slide":47,"text":"문서: G2B 실무매뉴얼\n페이지 47: 기관 사전상담 질문 목록\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP2: 상용소프트웨어 제3자단가계약 추가특수조건 (2026.01.01 시행, 지침 제46호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270216\n\nP3: 조달청 입찰참가자격등록·이용자등록 매뉴얼 (2026.07 이용자 매뉴얼 게시 확인)\nhttps://www.pps.go.kr/kor/bbs/list.do?key=01334"}
+{"kind":"slide","id":"sl/u67u30","slide":48,"title":"최종 등록 승인 체크리스트","textShapes":5}
+{"kind":"textbox","id":"sh/apkvihcb","slide":48,"text":"최종 등록 승인 체크리스트","textPreview":"최종 등록 승인 체크리스트","textChars":14,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/xsbedwbm","slide":48,"text":"전부 확인한 뒤 회사가 신청·서명·공개 승인","textPreview":"전부 확인한 뒤 회사가 신청·서명·공개 승인","textChars":24,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/jutwf6ts","slide":48,"text":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · P2  / 공식 URL은 부록·슬라이드 노트","textChars":32,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/ytkvm1c7","slide":48,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/lwvehwby","slide":48,"text":"48 / 51","textPreview":"48 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/h8bahsn6","slide":48,"name":"","rows":6,"cols":3,"preview":"업무·확인 항목 | 실행 내용 | 담당·산출물·완료 기준","bbox":[70,205,1460,578]}
+{"kind":"notes","id":"nt/u67u30","slide":48,"text":"문서: G2B 실무매뉴얼\n페이지 48: 최종 등록 승인 체크리스트\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP2: 상용소프트웨어 제3자단가계약 추가특수조건 (2026.01.01 시행, 지침 제46호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270216"}
+{"kind":"slide","id":"sl/gj9d1e","slide":49,"title":"공식 근거·자료 링크 1","textShapes":5}
+{"kind":"textbox","id":"sh/8f6dsjyl","slide":49,"text":"공식 근거·자료 링크 1","textPreview":"공식 근거·자료 링크 1","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/nexwjyh0","slide":49,"text":"조회 기준 2026.09.23 / 시행일·문서명으로 현행본 확인","textPreview":"조회 기준 2026.09.23 / 시행일·문서명으로 현행본 확인","textChars":35,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/lsvuhozu","slide":49,"text":"근거 P1 · P2 · P6 · C1  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P1 · P2 · P6 · C1  / 공식 URL은 부록·슬라이드 노트","textChars":42,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/0rmdojy9","slide":49,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/zqdcfeho","slide":49,"text":"49 / 51","textPreview":"49 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/7upojapc","slide":49,"name":"","rows":5,"cols":2,"preview":"자료 ID · 문서·기준일 | 원문 위치와 확인할 내용","bbox":[70,205,1460,590]}
+{"kind":"notes","id":"nt/gj9d1e","slide":49,"text":"문서: G2B 실무매뉴얼\n페이지 49: 공식 근거·자료 링크 1\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n법령은 공개 정부 문서다. TTA·KTC 및 기타 사이트는 절차·기준 확인용으로 연결한다. 첨부 다운로드가 실패하거나 내용이 비어 있는 자료는 입수·검토 완료로 취급하지 않는다. KTC 예시·재인증 첨부는 공개 안내 페이지에서 존재를 확인했으며 신청 시 최신 파일을 기관에서 수령해야 한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP1: 상용소프트웨어 제3자단가계약 업무처리기준 (2026.01.01 시행, 지침 제45호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270214\n\nP2: 상용소프트웨어 제3자단가계약 추가특수조건 (2026.01.01 시행, 지침 제46호)\nhttps://www.law.go.kr/LSW/admRulLsInfoP.do?admRulSeq=2100000270216\n\nP6: 국가법령정보센터 상용SW 계약 현행 규정 목록 (2026.09.23 조회)\nhttps://www.law.go.kr/admRulSc.do?menuId=5&query=%EC%83%81%EC%9A%A9&subMenuId=41&tabMenuId=183\n\nC1: 디지털서비스 이용지원시스템 선정 절차 (2026.09.23 조회)\nhttps://www.digitalmarket.kr/web/index.do"}
+{"kind":"slide","id":"sl/dfx2ij","slide":50,"title":"공식 근거·자료 링크 2","textShapes":5}
+{"kind":"textbox","id":"sh/rmtkjmx4","slide":50,"text":"공식 근거·자료 링크 2","textPreview":"공식 근거·자료 링크 2","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/sn2lcrep","slide":50,"text":"조회 기준 2026.09.23 / 시행일·문서명으로 현행본 확인","textPreview":"조회 기준 2026.09.23 / 시행일·문서명으로 현행본 확인","textChars":35,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/ih0j6hwn","slide":50,"text":"근거 C2 · P7 · R1 · P3  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 C2 · P7 · R1 · P3  / 공식 URL은 부록·슬라이드 노트","textChars":42,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/ji9kfmx8","slide":50,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/4ji18ret","slide":50,"text":"50 / 51","textPreview":"50 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/sjy9c76p","slide":50,"name":"","rows":5,"cols":2,"preview":"자료 ID · 문서·기준일 | 원문 위치와 확인할 내용","bbox":[70,205,1460,590]}
+{"kind":"notes","id":"nt/dfx2ij","slide":50,"text":"문서: G2B 실무매뉴얼\n페이지 50: 공식 근거·자료 링크 2\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n법령은 공개 정부 문서다. TTA·KTC 및 기타 사이트는 절차·기준 확인용으로 연결한다. 첨부 다운로드가 실패하거나 내용이 비어 있는 자료는 입수·검토 완료로 취급하지 않는다. KTC 예시·재인증 첨부는 공개 안내 페이지에서 존재를 확인했으며 신청 시 최신 파일을 기관에서 수령해야 한다.\n\n근거 자료 (조회 기준 2026-09-23)\nC2: KISA 클라우드서비스 보안인증 안내 (2026.03.12 최종수정)\nhttps://www.kisa.or.kr/1050603\n\nP7: SMPP 중소기업확인서 발급 안내 (2026.09.23 조회)\nhttps://www.smpp.go.kr/cst/smppInf/SelectMpeJ2.do\n\nR1: 인뎁스 로컬 소스·프로젝트 지침 (2026.09.23 정적 확인, 실행검증 아님)\n로컬: AGENTS.md, README.md, main.py, frontend/config/menu.config.js, package.json, requirements.txt, backend/tests 파일목록\n\nP3: 조달청 입찰참가자격등록·이용자등록 매뉴얼 (2026.07 이용자 매뉴얼 게시 확인)\nhttps://www.pps.go.kr/kor/bbs/list.do?key=01334"}
+{"kind":"slide","id":"sl/gqebcy","slide":51,"title":"공식 근거·자료 링크 3","textShapes":5}
+{"kind":"textbox","id":"sh/z2tob6hk","slide":51,"text":"공식 근거·자료 링크 3","textPreview":"공식 근거·자료 링크 3","textChars":13,"textLines":1,"bbox":[70,44,1460,75]}
+{"kind":"textbox","id":"sh/k32pkbi5","slide":51,"text":"조회 기준 2026.09.23 / 시행일·문서명으로 현행본 확인","textPreview":"조회 기준 2026.09.23 / 시행일·문서명으로 현행본 확인","textChars":35,"textLines":1,"bbox":[73,130,1450,55]}
+{"kind":"textbox","id":"sh/ad07e103","slide":51,"text":"근거 P4 · P5 · G3 · G2  / 공식 URL은 부록·슬라이드 노트","textPreview":"근거 P4 · P5 · G3 · G2  / 공식 URL은 부록·슬라이드 노트","textChars":42,"textLines":1,"bbox":[74,808,1380,30]}
+{"kind":"textbox","id":"sh/be9o7m1o","slide":51,"text":"인뎁스  G2B  ·  2026.09.23","textPreview":"인뎁스  G2B  ·  2026.09.23","textChars":23,"textLines":1,"bbox":[74,852,1260,27]}
+{"kind":"textbox","id":"sh/cf2pgri9","slide":51,"text":"51 / 51","textPreview":"51 / 51","textChars":7,"textLines":1,"bbox":[1410,847,120,33]}
+{"kind":"table","id":"tb/obidgjit","slide":51,"name":"","rows":5,"cols":2,"preview":"자료 ID · 문서·기준일 | 원문 위치와 확인할 내용","bbox":[70,205,1460,590]}
+{"kind":"notes","id":"nt/gqebcy","slide":51,"text":"문서: G2B 실무매뉴얼\n페이지 51: 공식 근거·자료 링크 3\n\n공식 요건은 표시된 출처를 적용한다. 별도 출처가 없는 실행·정책·시험·일정·금액은 작성자가 제안하는 내부 준비안이다. 계약 및 기관의 현행 양식과 조건을 최종 확인한다.\n\n법령은 공개 정부 문서다. TTA·KTC 및 기타 사이트는 절차·기준 확인용으로 연결한다. 첨부 다운로드가 실패하거나 내용이 비어 있는 자료는 입수·검토 완료로 취급하지 않는다. KTC 예시·재인증 첨부는 공개 안내 페이지에서 존재를 확인했으며 신청 시 최신 파일을 기관에서 수령해야 한다.\n\n근거 자료 (조회 기준 2026-09-23)\nP4: 차세대 나라장터 이용자등록 FAQ (2025.03.28 게시)\nhttps://www.pps.go.kr/kor/bbs/view.do?bbsSn=2503280018&key=01334\n\nP5: 조달청 목록정보시스템 개편 안내 (2025.09.26 시행 안내)\nhttps://www.pps.go.kr/kor/bbs/view.do?bbsSn=2509190007&key=00634\n\nG3: KTC GS인증 안내·기준·재인증 점검표 자료 (2026.09.23 조회)\nhttps://www.ktc.re.kr/web_united/task/task.asp?pagen=2540\n\nG2: TTA GS시험인증(1등급) 서비스·절차 (2026.09.23 조회)\nhttps://cs.tta.or.kr/tta/introduce/introCont.do?tabMode=cont&tnc_cls_no=T000127&tnc_lab=T000003&up_tnc_cls_no=T000020"}

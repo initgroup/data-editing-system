@@ -4,6 +4,10 @@
   "pageCode": "MCOM_EDIT_WORK",
   "description": "에디팅 공통 화면의 한국어 메시지와 동적 라벨입니다.",
   "labels": {
+    "buttonSaveCorrection": "수정 저장",
+    "rangeReplacementHelp": "허용 범위 규칙에는 단일 교정값이 없습니다. 범위 안의 실제 수정값을 입력하세요.",
+    "editReplacementHelp": "INITDN$에 저장할 수정값",
+    "editRowidMissing": "원본 ROWID가 없어 수정할 수 없습니다.",
     "ruleDecisionTab": "규칙 판단",
     "ruleMasterTab": "규칙 마스터",
     "violationQueryTab": "위반 조회",
@@ -314,7 +318,15 @@
     "analysisReanalysisViolations": "재분석 저장 위반",
     "analysisReanalysisMethod": "Flow 재분석 결과는 저장된 Run의 선정 대상 컬럼 위반 건수를 비교합니다. 규칙 ID나 수식이 재발굴 과정에서 달라질 수 있으므로 동일 규칙 직접 비교 카드와 함께 판단하세요.",
     "analysisNoData": "표시할 데이터가 없습니다.",
-    "analysisReviewConfirm": "일부 검증 지표가 검토 필요 상태입니다. 상세 결과를 확인했으며 이 상태로 효과 검증을 완료할까요?"
+    "analysisReviewConfirm": "일부 검증 지표가 검토 필요 상태입니다. 상세 결과를 확인했으며 이 상태로 효과 검증을 완료할까요?",
+    "formulaReplacementHelp": "수식 예측값은 자동 교정값이 아닙니다. 원본 값과 허용 오차를 확인하여 실제 수정값을 입력하세요.",
+    "formulaRuleHelp": "IF 조건에서 실제값과 수식 예측값의 차이가 허용 오차 안에 있어야 합니다. 예측값은 자동 교정값이 아닙니다.",
+    "analysisTargetUnits": "결과 단위",
+    "formulaCoverage": "허용 오차 충족률",
+    "formulaValidationCoverage": "검증 허용 오차 충족률",
+    "formulaValidationR2": "검증 R²",
+    "formulaValidationMae": "검증 평균 절대 오차(결과 단위)",
+    "formulaAbsoluteTolerance": "절대 허용 오차(결과 단위)"
   },
   "messages": {
     "Complete effect validation before operational DML execution.": "운영 반영 DML을 실행하기 전에 효과 검증을 완료하세요.",
