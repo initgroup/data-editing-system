@@ -69,6 +69,38 @@ class MixedContinuousAlgorithmTests(unittest.TestCase):
             self.assertEqual(len(matches), 1200)
             self.assertTrue(all(formula_result_accepts(rule["resultPredicate"], row) for row in matches))
 
+    def test_accepted_global_formula_does_not_hide_or_flag_stable_minority_regime(self):
+        rng = np.random.default_rng(83)
+        rows = []
+        for index, value in enumerate(rng.uniform(5, 100, 5000)):
+            group = "B" if index % 25 == 0 else "A"
+            rows.append({"GROUP": group, "GROUP_COPY": group, "CHANNEL": "C" if index % 2 else "D",
+                         "X": float(value), "Y": float(5 * value - 10 if group == "B" else 2 * value + 3)})
+        result = discover(rows)
+        self.assertEqual(2, len(result["rules"]))
+        self.assertIn("GLOBAL_FORMULA_SCOPED_AROUND_VALIDATED_GROUPS", result["warnings"])
+        global_rule = next(rule for rule in result["rules"]
+                           if rule["validation"].get("scopePolicy") == "EXCLUDES_VALIDATED_ALTERNATIVE_GROUPS")
+        minority_rule = next(rule for rule in result["rules"]
+                             if rule["validation"].get("scopePolicy") == "VALIDATED_ALTERNATIVE_GROUP")
+        self.assertEqual({"A"}, {row["GROUP"] for row in rows if evaluate_pattern_predicate(global_rule["predicate"], row)})
+        self.assertEqual({"B"}, {row["GROUP"] for row in rows if evaluate_pattern_predicate(minority_rule["predicate"], row)})
+        for row in rows:
+            applicable = [rule for rule in result["rules"] if evaluate_pattern_predicate(rule["predicate"], row)]
+            self.assertEqual(1, len(applicable))
+            self.assertTrue(formula_result_accepts(applicable[0]["resultPredicate"], row))
+        self.assertTrue(evaluate_pattern_predicate(global_rule["predicate"], {"GROUP": None, "X": 10, "Y": 23}))
+        # Saved expressions, counts and scoped AST must be reproducible.
+        self.assertIn("GROUP != 'B'", global_rule["expression"])
+        self.assertEqual(1, global_rule["validation"]["alternativeGroupCount"])
+        json.dumps(result, allow_nan=False)
+
+    def test_groups_do_not_turn_unrelated_data_into_conditional_formulas(self):
+        rng = np.random.default_rng(207)
+        rows = [{"GROUP": "A" if index % 2 else "B", "X": float(x), "Y": float(y)}
+                for index, (x, y) in enumerate(rng.normal(size=(2400, 2)))]
+        self.assertEqual([], discover(rows)["rules"])
+
     def test_additive_formula_uses_multiple_predictors_without_target_leakage(self):
         rng = np.random.default_rng(223)
         rows = [{"A": float(a), "B": float(b), "Y": float(3 * a - 2 * b + 4)}
@@ -174,17 +206,35 @@ class MixedContinuousAlgorithmTests(unittest.TestCase):
         inferred = result["metrics"]["columnInference"]
         self.assertTrue(all(item["invalidCount"] == 0 and item["fitSource"] == "TRAIN_FIT" for item in inferred))
 
-    def test_malformed_fit_text_excludes_column_and_records_exact_reason(self):
+    def test_isolated_malformed_fit_text_keeps_column_but_marks_original_as_violation(self):
         rows = [{"X": str(i % 107), "Y": str(4 * (i % 107) + 2)} for i in range(1600)]
         train = np.sort(np.random.default_rng(42).permutation(len(rows))[400:])
         fit = np.random.default_rng(43).permutation(train)[300:]
         rows[int(fit[0])]["Y"] = "unknown"
         result = discover(rows)
-        self.assertEqual(result["rules"], [])
-        self.assertEqual(result["metrics"]["status"], "NO_ELIGIBLE_TARGETS")
+        self.assertEqual(1, len(result["rules"]))
+        rule = result["rules"][0]
+        self.assertTrue(rule["resultPredicate"]["numericText"])
+        self.assertTrue(evaluate_pattern_predicate(rule["predicate"], rows[int(fit[0])]))
+        self.assertFalse(formula_result_accepts(rule["resultPredicate"], rows[int(fit[0])]))
+        self.assertEqual("unknown", rows[int(fit[0])]["Y"])
+        inferred = next(item for item in result["metrics"]["columnInference"] if item["column"] == "Y")
+        self.assertEqual(1, inferred["invalidCount"])
+        self.assertEqual({"fit": 1, "calibration": 0, "validation": 0}, inferred["invalidTextAssessment"])
+        self.assertEqual(1, rule["validation"]["train"]["invalidNumericTextCount"])
+        self.assertIn("DIRTY_NUMERIC_TEXT_RETAINED_AS_INVALID", result["warnings"])
+
+    def test_substantial_malformed_fit_text_does_not_force_numeric_type(self):
+        rows = [{"X": str(i % 107), "Y": str(4 * (i % 107) + 2)} for i in range(1600)]
+        train = np.sort(np.random.default_rng(42).permutation(len(rows))[400:])
+        fit = np.random.default_rng(43).permutation(train)[300:]
+        for index in fit[:45]:
+            rows[int(index)]["Y"] = "unknown"
+        result = discover(rows)
+        self.assertEqual([], result["rules"])
         rejected = next(item for item in result["metrics"]["excludedColumns"] if item["column"] == "Y")
-        self.assertEqual(rejected["reason"], "NON_NUMERIC_TEXT")
-        self.assertEqual(rejected["invalidCount"], 1)
+        self.assertEqual("NON_NUMERIC_TEXT", rejected["reason"])
+        self.assertEqual(45, rejected["invalidCount"])
 
     def test_small_count_measurements_can_be_formula_targets_without_relaxing_quality(self):
         rng = np.random.default_rng(19)

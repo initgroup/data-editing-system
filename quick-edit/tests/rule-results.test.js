@@ -5,16 +5,37 @@ const test = require("node:test");
 const vm = require("node:vm");
 const root = path.resolve(__dirname, "../..");
 
+function catalogFixture(payload, params) {
+    const family = params.get("family") || "CONDITION", source = params.get("source") || "ALL";
+    const all = (payload.ruleSummary?.rules || []).filter((row) => row.RULE_KIND === "MIXED_PATTERN_TREE").map((row, index) => ({
+        key: `mixed-key-${index}`, source: "MIXED_PATTERN", family: row.RESULT_KIND === "FORMULA" ? "FORMULA" : "CONDITION", row,
+        scope: { flowRunId: 41, targetOwner: "OWNER", targetTable: "SOURCE", modelName: row.MODEL_NAME || "XAI_PATTERN_41", ruleId: row.RULE_ID, targetColumn: row.RESULT_COLUMN },
+        artifact: { owner: "OWNER", objectName: "INIT$_TB_RULEDISC_ASSOC_SUM" }
+    }));
+    const page = Number(params.get("page") || 1), pageSize = Number(params.get("pageSize") || 20);
+    if (params.get("view") === "violations") {
+        const rule = all.find((entry) => entry.key === params.get("ruleKey"));
+        const violations = (payload.violations || []).filter((row) => row.RULE_ID === rule?.scope.ruleId);
+        return {rule, violations: violations.slice((page - 1) * pageSize, page * pageSize),
+            columns: [...new Set(violations.flatMap(Object.keys))], total: violations.length, page, pageSize, hasMore: page * pageSize < violations.length, previewOnly: true};
+    }
+    const selected = all.filter((item) => item.family === family && (source === "ALL" || source === item.source));
+    return { family, source, rules: selected.slice((page - 1) * pageSize, page * pageSize), page, pageSize, total: selected.length,
+        hasMore: page * pageSize < selected.length, summary: { families: Object.fromEntries(["CONDITION", "FORMULA"].map((key) => [key, { total: all.filter((item) => item.family === key).length }])),
+            sourceCounts: ["CONDITION", "FORMULA"].map((key) => ({ family: key, source: "MIXED_PATTERN", ruleCount: all.filter((item) => item.family === key).length })) } };
+}
+
 function setup(language = "ko") {
     const panel = { innerHTML: "", classList: { remove() {} }, querySelector: () => null,
         insertAdjacentHTML(position, html) { this.innerHTML = position === "afterbegin" ? html + this.innerHTML : this.innerHTML + html; } };
     const sandbox = { URLSearchParams, window: { sessionStorage: { getItem: () => language } },
-        PageManager: { createHelper: () => ({ getContainerEl: () => panel }) }, API_BASE_URL: "/api" };
-    for (const file of ["frontend/js/rule-result-common.js", "frontend/js/MCOM_ANLY_WORK.js"]) {
+        PageManager: { createHelper: () => ({ getContainerEl: (selector) => selector.includes("tableResultBody") ? null : panel }) }, API_BASE_URL: "/api" };
+    for (const file of ["frontend/js/rule-result-common.js", "frontend/js/editing-result-view.js", "frontend/js/MCOM_ANLY_WORK.js"]) {
         vm.runInNewContext(fs.readFileSync(path.join(root, file), "utf8"), sandbox);
     }
     sandbox.window.M04002_PAGE_I18N = JSON.parse(fs.readFileSync(path.join(root, `frontend/i18n/pages/MCOM_ANLY_WORK.${language}.json`), "utf8"));
     const page = sandbox.window.MCOMMON.createAnlyWorkPage({ pageCode: "M04002" });
+    page.editingResultsMode = "SOURCE";
     const common = sandbox.window.RuleResultCommon;
     const rows = Array.from({ length: 25 }, (_, i) => ({ RULE_ID: `R${i}`, RULE_KIND: "MIXED_XAI", RULE_SOURCE: "MIXED_XAI",
         CONDITION_TEXT: 'VALUE > 10 AND KIND = "<script>"', CONDITION_COUNT: i % 2 + 1, CONDITION_COLUMNS: ["VALUE", "KIND"],
@@ -144,7 +165,7 @@ test("actual-pattern results reuse expected-value cards and rule review without 
         assert.equal(page.selectedNode.RESULT_OBJECT_NAME, "INIT$_TB_RULEVIOL_ASSOC");
         assert.match(panel.innerHTML, language === "ko" ? /NULL\(결측\)/ : /NULL \(missing\)/);
         assert.doesNotMatch(panel.innerHTML, /PATTERN_RESULT_MISSING/);
-        assert.match(panel.innerHTML, /openViolationSqlPopup\('rule', 'PATTERN_1'\)/);
+        assert.match(panel.innerHTML, /openViolationSqlPopup\('rule', 'PATTERN_1', '[^']*'\)/);
     }
 });
 
@@ -174,12 +195,12 @@ test("pattern saved/live queries select actual violations with model scope and N
 test("pattern common tables are intercepted by mixed execution method and retain actual result export", async () => {
     const { page, sandbox, payload } = patternSetup();
     const calls = [];
-    sandbox.CommonUtils = { request: async (url) => { calls.push(url); return { data: payload }; } };
+    sandbox.CommonUtils = { request: async (url) => { calls.push(url); return { data: url.includes("editing-results") ? catalogFixture(payload, new URL(url, "http://test").searchParams) : payload }; } };
     page.showResultLoading = () => {};
     for (const name of ["INIT$_TB_RULEDISC_ASSOC_SUM", "INIT$_TB_RULEVIOL_ASSOC"]) {
         page.selectedNode.RESULT_OBJECT_NAME = name;
         await page.loadResultTable();
-        assert.match(calls.at(-1), /mlAnalysis\/mixed-xai-results/);
+        assert.match(calls.at(-1), /mlAnalysis\/editing-results/);
     }
     const exported = page.buildRuleSummaryExport(page.selectedNode, payload.ruleSummary);
     assert.equal(exported.rows[0].RESULT_TEXT, "CODE = 0");
@@ -286,7 +307,7 @@ test("mixed formula cards reuse symbolic actions and identify actual expression 
         assert.match(panel.innerHTML, /anly-work-symbolic-rule-card/);
         assert.match(panel.innerHTML, /anly-work-symbolic-y-panel[\s\S]*anly-work-symbolic-formula-row[\s\S]*anly-work-symbolic-x-panel/);
         assert.match(panel.innerHTML, /copySymbolicFormula\('CODE ≈ VALUE \+ EXTRA', event\)/);
-        assert.match(panel.innerHTML, /openMixedFormulaPopup\('PATTERN_1'\)/);
+        assert.match(panel.innerHTML, /openMixedFormulaPopup\('PATTERN_1', '[^']*'\)/);
         assert.doesNotMatch(panel.innerHTML, /<script>/);
         page.selectedNode = page.nodes[0];
         page.renderMixedXaiViolationResult(payload);
@@ -295,7 +316,7 @@ test("mixed formula cards reuse symbolic actions and identify actual expression 
         assert.match(panel.innerHTML, /anly-work-violation-formula-row/);
         assert.match(panel.innerHTML, /anly-work-symbolic-violation-summary/);
         assert.match(panel.innerHTML, /anly-work-rule-facet-panel is-symbolic/);
-        assert.match(panel.innerHTML, /openViolationSqlPopup\('rule', 'PATTERN_1'\)/);
+        assert.match(panel.innerHTML, /openViolationSqlPopup\('rule', 'PATTERN_1', '[^']*'\)/);
         assert.doesNotMatch(panel.innerHTML, /selectViolationResultScope\('MAX_RULES'\)|anly-work-violation-reason-strip/);
         assert.doesNotMatch(panel.innerHTML, /<script>/);
     }
@@ -423,7 +444,7 @@ test("numeric-text live SQL exactly matches the server conversion and keeps inva
 test("XAI violation cards, saved SQL and realtime SQL use the existing stage 4 workflow", async () => {
     const { page, common, panel } = setup();
     await page.openViolationForRule("R1");
-    assert.match(panel.innerHTML, /openViolationSqlPopup\('rule', 'R1'\)/);
+    assert.match(panel.innerHTML, /openViolationSqlPopup\('rule', 'R1', '[^']*'\)/);
     assert.match(panel.innerHTML, /모델 일치율/);
     const saved = page.createViolationSql("rule", "R1");
     assert.match(saved, /V.RUN_ID = 41/);
@@ -455,7 +476,7 @@ test("translated analysis tabs and candidate links work in a browser", async () 
             window.PageManager = { createHelper: () => ({ getContainerEl: (s) => document.querySelector(s) }) };
             window.API_BASE_URL = "/api";
         });
-        for (const file of ["frontend/js/rule-result-common.js", "frontend/js/MCOM_ANLY_WORK.js"]) {
+        for (const file of ["frontend/js/rule-result-common.js", "frontend/js/editing-result-view.js", "frontend/js/MCOM_ANLY_WORK.js"]) {
             await tab.addScriptTag({ path: path.join(root, file) });
         }
         await tab.evaluate(({ detail, node, pack }) => {
@@ -479,7 +500,7 @@ test("translated analysis tabs and candidate links work in a browser", async () 
         await tab.locator(".anly-work-rule-open-link").first().click();
         assert.equal(await tab.evaluate(() => window.M04002.violationRuleFilters.ruleId), "R1");
         assert.match(await tab.locator('#resultPanel-M04002').textContent(), /original-id/);
-        await tab.locator('button[onclick*="openViolationSqlPopup(\'rule\', \'R1\')"]').click();
+        await tab.locator('button[onclick*="openViolationSqlPopup(\'rule\', \'R1\'"]').click();
         await tab.waitForFunction(() => window.sqlRequests.length === 1);
         assert.match(await tab.evaluate(() => window.sqlRequests[0]), /V.RUN_ID = 41/);
         await tab.locator('button[onclick*="changeViolationSqlMode(\'LIVE\')"]').click();
@@ -513,18 +534,23 @@ test("M04002 browser selects real profile, relationship and formula nodes in Kor
             const tab = await browser.newPage({viewport: {width: 1500, height: 1300}});
             const errors = [];
             tab.on("pageerror", (error) => errors.push(error.message));
-            await tab.route("**/*", (route) => route.abort());
-            await tab.setContent('<div style="padding:24px"><div class="page-container table-page anly-work-page" id="container-M04002"><main class="anly-work-detail-panel"><section><div id="nodeList-M04002" class="anly-work-node-grid"></div></section><section id="resultPanel-M04002" class="anly-work-result-panel"></section></main></div></div>');
-            for (const file of ["frontend/css/styletail.css", "frontend/css/style.css", "frontend/css/styleMenu.css", "frontend/css/pages/MCOM_ANLY_WORK.css", "frontend/css/grid-custom.css"]) await tab.addStyleTag({path: path.join(root, file)});
+            await tab.route("**/*", (route) => route.fulfill({contentType: "text/html", body: '<div style="padding:24px"><div class="page-container table-page anly-work-page" id="container-M04002"><main class="anly-work-detail-panel"><section><div id="nodeList-M04002" class="anly-work-node-grid"></div></section><section id="resultPanel-M04002" class="anly-work-result-panel"></section></main></div></div>'}));
+            await tab.goto("https://mixed-stages.test/");
+            for (const file of ["frontend/css/styletail.css", "frontend/css/style.css", "frontend/css/styleMenu.css", "frontend/css/pages/MCOM_ANLY_WORK.css", "frontend/css/grid-custom.css", "frontend/css/editing-result-view.css"]) await tab.addStyleTag({path: path.join(root, file)});
             await tab.evaluate(() => {
                 window.PageManager = {createHelper: () => ({getContainerEl: (s) => document.querySelector(s)})};
                 window.API_BASE_URL = "/api";
             });
-            for (const file of ["frontend/js/rule-result-common.js", "frontend/js/MCOM_ANLY_WORK.js"]) await tab.addScriptTag({path: path.join(root, file)});
+            for (const file of ["frontend/js/rule-result-common.js", "frontend/js/editing-result-view.js", "frontend/js/MCOM_ANLY_WORK.js"]) await tab.addScriptTag({path: path.join(root, file)});
+        await tab.addScriptTag({content: `window.catalogFixture = ${catalogFixture.toString()};`});
             await tab.evaluate(({payload, pack, language}) => {
                 window.M04002_PAGE_I18N = pack;
                 window.I18nManager = {getSessionLanguage: () => language};
-                window.CommonUtils = {request: async (url) => { if (!url.includes("mixed-xai-results")) throw Error("Unexpected API " + url); return {data: payload}; }};
+                window.CommonUtils = {getRuntimeSetting: (_key, fallback) => fallback, request: async (url) => {
+                    if (url.includes("editing-results")) return {data: window.catalogFixture(payload, new URL(url, "https://fixture.test").searchParams)};
+                    if (!url.includes("mixed-xai-results")) throw Error("Unexpected API " + url);
+                    return {data: structuredClone(payload)};
+                }};
                 const p = window.MCOMMON.createAnlyWorkPage({pageCode: "M04002"});
                 p.selectedRun = {FLOW_RUN_ID: 41};
                 p.nodes = ["PROFILE", "RELATION", "RULE_DISCOVER", "RULE_DETECT"].map((method, i) => ({FLOW_NODE_RUN_ID: i + 1, NODE_NAME: method, REF_MENU_CODE: `M0300${i + 1}`, STATUS: "SUCCESS", EXEC_METHOD: `MIXED_XAI_${method}`,
@@ -537,10 +563,17 @@ test("M04002 browser selects real profile, relationship and formula nodes in Kor
             }, {payload, pack: sandbox.window.M04002_PAGE_I18N, language});
             for (const index of [0, 1, 2]) {
                 await tab.locator(".anly-work-node-card").nth(index).click();
+                if (index === 2) {
+                    await tab.waitForFunction(() => Boolean(window.M04002.editingResultData?.rules?.length));
+                    await tab.locator("[data-editing-rule-key]").first().click();
+                    await tab.locator('[data-editing-source-analysis]').click();
+                }
                 await tab.waitForFunction((index) => window.M04002.currentModelDetail && window.M04002.selectedNode.FLOW_NODE_RUN_ID === index + 1, index);
                 if (index === 2) {
+                    assert.equal(await tab.locator(".anly-work-readable-rule-card").count(), 1, await tab.locator("#resultPanel-M04002").innerText());
                     assert.match(await tab.locator(".anly-work-readable-rule-card").textContent(), /CODE[\s\S]*= 0/);
                     await tab.locator("[data-mixed-rule-family] button").nth(1).click();
+                    await tab.waitForSelector(".anly-work-symbolic-rule-card");
                     assert.equal(await tab.locator(".anly-work-symbolic-rule-card").count(), 1);
                 }
                 const text = await tab.locator("#resultPanel-M04002").textContent();
@@ -557,8 +590,13 @@ test("M04002 browser selects real profile, relationship and formula nodes in Kor
                 await tab.screenshot({path: path.join(root, `test-results/m04002-mixed-stage-${index + 1}-${language}.png`), fullPage: true});
             }
             await tab.locator(".anly-work-node-card").nth(3).click();
+            await tab.waitForFunction(() => Boolean(window.M04002.editingResultData?.rules?.length));
+            await tab.locator("[data-editing-rule-key]").first().click();
+            await tab.locator('[data-editing-source-analysis]').click();
             await tab.waitForFunction(() => window.M04002.selectedNode.FLOW_NODE_RUN_ID === 4 && window.M04002.lastViolationSummary);
             const family = tab.locator(".anly-work-rule-family-switcher");
+            await family.locator("button").nth(1).click();
+            await tab.waitForSelector(".anly-work-symbolic-violation-summary");
             assert.match(await family.textContent(), language === "ko" ? /연속형 규칙 위반/ : /Continuous violations/);
             assert.equal(await family.locator("button.is-active").count(), 1);
             assert.ok(await family.locator("button.is-active").evaluate((el) => parseFloat(getComputedStyle(el).borderRadius) > 20));
@@ -581,10 +619,192 @@ test("M04002 browser selects real profile, relationship and formula nodes in Kor
             assert.deepEqual(await tab.evaluate(() => window.clickedViolation), {kind: "rule", ruleId: "PATTERN_1"});
             await tab.screenshot({path: path.join(root, `test-results/m04002-mixed-stage-4-${language}.png`), fullPage: true});
             await family.locator("button").first().click();
+            await tab.waitForSelector(".anly-work-violation-summary");
             assert.equal(await tab.locator(".anly-work-violation-summary").evaluate((el) => getComputedStyle(el).backgroundColor), "rgb(255, 241, 242)");
             assert.equal(await tab.locator(".anly-work-node-card").count(), 4);
             assert.deepEqual(errors, []);
             await tab.close();
         }
+    } finally { await browser.close(); }
+});
+
+
+test("unified supplemental rules navigate to the mixed result of stage four", async () => {
+    const { page } = setup();
+    page.selectedNode.EXEC_METHOD = "UNIFIED_EDITING_DISCOVER";
+    page.selectedNode.RESULT_OBJECT_NAME = "INIT$_TB_XAI_RUN";
+    page.currentModelDetail.mixedXai.summary.algorithm = "MIXED_PATTERN_TREE";
+    page.currentModelDetail.mixedXai.ruleSummary.overview.RULE_SOURCE = "MIXED_PATTERN_TREE";
+    const target = { FLOW_NODE_RUN_ID: 4, EXEC_METHOD: "UNIFIED_EDITING_DETECT", RESULT_OBJECT_NAME: "INIT$_TB_RULEVIOL_ASSOC" };
+    page.nodes = [target];
+    let activated;
+    page.activateNodeResultObject = async (node, objectName) => { activated = {node, objectName}; return true; };
+    await page.openViolationForRule("R1");
+    assert.equal(activated.node, target);
+    assert.equal(activated.objectName, "INIT$_TB_XAI_RUN");
+    assert.equal(page.isMixedXaiViolationNode({...target, RESULT_OBJECT_NAME: activated.objectName}), true);
+    assert.equal(page.isMixedXaiViolationNode(target), false);
+});
+
+test("stage summaries expose mixed relationships and HASH limits with safe semantic diagnostics", () => {
+    const { common } = setup();
+    const summary = { profile: {sampleCount: 100, columns: [{COLUMN_NAME: "CODE", SEMANTIC_TYPE: "CATEGORICAL"}]},
+        relationships: {sampleCount: 100, samplingDiagnostics: {sampling: "HASH"}, categoricalPairsTruncated: true,
+            categoricalPairs: [{COLUMN_X: "CODE", COLUMN_Y: "KIND", PAIR_COUNT: 100, CRAMERS_V: .8}],
+            categoricalNumericPairs: [{COLUMN_X: "CODE", COLUMN_Y: "AMOUNT", PAIR_COUNT: 100, ETA_SQUARED: .7, GROUP_COUNT: 3}]}};
+    const relation = common.stageSummary(summary, "RELATION");
+    assert.ok(relation.sections.some((section) => section.rows[0]?.CRAMERS_V === .8));
+    assert.ok(relation.sections.some((section) => section.rows[0]?.ETA_SQUARED === .7));
+    assert.match(relation.notes, /해시/);
+    assert.match(relation.notes, /제한/);
+    assert.ok(common.stageSummary(summary, "PROFILE").sections[0].columns.includes("SEMANTIC_TYPE"));
+});
+
+function unifiedResultNode(method = "DETECT", includeDiagnostics = true) {
+    const contracts = JSON.parse(fs.readFileSync(path.join(root, "frontend/config/flow-model-contracts.json"), "utf8"));
+    const outputs = contracts.models[`UNIFIED_EDITING_${method}`].outputs
+        .filter((item) => includeDiagnostics || item.artifact !== "MIXED_XAI_DIAGNOSTICS")
+        .map((item) => ({ ...item, owner: "OWNER", kind: contracts.artifacts[item.artifact].kind,
+            label: item.label || contracts.artifacts[item.artifact].label,
+            objectName: item.objectName === ":INIT$ResultModelName" ? "INIT_UA_F_41" : item.objectName }));
+    return { FLOW_NODE_RUN_ID: method === "DETECT" ? 4 : 3, EXEC_METHOD: `UNIFIED_EDITING_${method}`,
+        RESULT_KIND: "TABLE", RESULT_OBJECT_NAME: method === "DETECT" ? "INIT$_TB_RULEVIOL_ASSOC" : "INIT$_TB_RULEDISC_ASSOC_SUM",
+        RESULT_OWNER: "OWNER", TARGET_OWNER: "OWNER", TARGET_TABLE: "SOURCE", RESULT_OBJECTS: outputs,
+        RUNTIME_PARAMS: { "INIT$PreResultTable": "INIT$_TB_RULEDISC_ASSOC_SUM" },
+        RUN_OUTPUT: { apiResult: { legacy: { results: [{task: "CATEGORICAL_RULE_VIOLATION", modelName: "INIT_UA_F_41"}] } } } };
+}
+
+test("unified shared tables have exclusive logical outputs and migrate saved table-name selections", () => {
+    const { sandbox, panel } = setup();
+    sandbox.sessionStorage = {setItem() {}};
+    const page = sandbox.window.MCOMMON.createAnlyWorkPage({pageCode: "M04002"});
+    for (const withDiagnostics of [false, true]) {
+        for (const method of ["DISCOVER", "DETECT"]) {
+            page.selectedNode = unifiedResultNode(method, withDiagnostics);
+            page.selectedResultObjectNames = new Map([[String(page.selectedNode.FLOW_NODE_RUN_ID), page.selectedNode.RESULT_OBJECT_NAME]]);
+            assert.equal(page.applyRememberedNodeResult(page.selectedNode), true);
+            const items = page.getNodeResultSwitcherItems();
+            assert.equal(items.length, 3);
+            assert.equal(items.filter((item) => item.objectName === "INIT$_TB_XAI_RUN").length, 1);
+            for (const item of items) {
+                page.setNodeResultObject(page.selectedNode, item);
+                page.rememberSelectedNodeResult();
+                panel.innerHTML = "";
+                page.prependNodeResultSwitcher();
+                assert.equal((panel.innerHTML.match(/aria-pressed="true"/g) || []).length, 1);
+                assert.equal((panel.innerHTML.match(/aria-pressed="false"/g) || []).length, 2);
+                const restored = unifiedResultNode(method, withDiagnostics);
+                assert.equal(page.applyRememberedNodeResult(restored), true);
+                assert.equal(restored.RESULT_OUTPUT_KEY, page.selectedNode.RESULT_OUTPUT_KEY);
+                if (item.artifact.startsWith("MIXED_XAI_")) {
+                    assert.equal(restored.RESULT_OBJECT_NAME, "INIT$_TB_XAI_RUN");
+                    assert.equal(page.isMixedScenarioNode(restored), true);
+                    assert.equal(page.isMixedXaiViolationNode(restored), method === "DETECT");
+                }
+            }
+        }
+    }
+});
+
+test("unified categorical result requests use the nested OML model and never a result table", () => {
+    const { page } = setup();
+    page.currentModelDetail = null;
+    page.selectedNode = unifiedResultNode();
+    page.selectedNode.RUN_OUTPUT.apiResult.results = [];
+    assert.equal(page.buildResultTableParams().get("ruleModelName"), "INIT_UA_F_41");
+    page.selectedNode.RUN_OUTPUT = {};
+    assert.equal(page.buildResultTableParams().has("ruleModelName"), false);
+    page.lastViolationSummary = {ruleModelName: "INIT$_TB_RULEDISC_ASSOC_SUM"};
+    assert.equal(page.buildResultTableParams().has("ruleModelName"), false);
+    page.selectedNode.RUNTIME_PARAMS.P_RULE_MODEL_NAME = "CUSTOM_OML_MODEL";
+    assert.equal(page.buildResultTableParams().get("ruleModelName"), "CUSTOM_OML_MODEL");
+});
+
+test("M04002 browser selects one unified family, loads its data, restores it and rejects late responses", async () => {
+    const { chromium } = require("playwright");
+    const browser = await chromium.launch({headless: true});
+    try {
+        const { payload, sandbox } = patternSetup();
+        const node = unifiedResultNode("DETECT", false);
+        const tab = await browser.newPage({viewport: {width: 1500, height: 1000}});
+        const errors = [];
+        tab.on("pageerror", (error) => errors.push(error.message));
+        await tab.route("**/*", (route) => route.fulfill({contentType: "text/html", body: '<main class="page-container anly-work-page"><section id="nodeList-M04002"></section><section id="resultPanel-M04002"></section></main>'}));
+        await tab.goto("https://result-tabs.test/");
+        await tab.addStyleTag({path: path.join(root, "frontend/css/pages/MCOM_ANLY_WORK.css")});
+        await tab.addStyleTag({path: path.join(root, "frontend/css/editing-result-view.css")});
+        await tab.evaluate(() => {
+            window.PageManager = {createHelper: () => ({getContainerEl: (selector) => document.querySelector(selector)})};
+            window.API_BASE_URL = "/api";
+        });
+        for (const file of ["frontend/js/rule-result-common.js", "frontend/js/editing-result-view.js", "frontend/js/MCOM_ANLY_WORK.js"]) await tab.addScriptTag({path: path.join(root, file)});
+        await tab.addScriptTag({content: `window.catalogFixture = ${catalogFixture.toString()};`});
+        await tab.evaluate(async ({payload, node, pack}) => {
+            window.M04002_PAGE_I18N = pack;
+            window.I18nManager = {getSessionLanguage: () => "ko"};
+            window.calls = [];
+            window.CommonUtils = {getRuntimeSetting: (_key, fallback) => fallback, request: async (url) => {
+                window.calls.push(url);
+                if (url.includes("editing-results")) return {data: window.catalogFixture(payload, new URL(url, location.href).searchParams)};
+                if (url.includes("mixed-xai-results")) {
+                    if (window.delayMixed) await new Promise((resolve) => { window.resolveMixed = resolve; });
+                    return {data: structuredClone(payload)};
+                }
+                const params = new URL(url, location.href).searchParams;
+                const objectName = params.get("objectName");
+                return {status: "success", owner: "OWNER", objectName,
+                    columns: ["ENGINE"], data: [{ENGINE: objectName.endsWith("SYMBOLIC") ? "CONTINUOUS_ONLY" : "OML_ONLY"}], total: 1};
+            }};
+            const p = window.MCOMMON.createAnlyWorkPage({pageCode: "M04002"});
+            p.selectedRun = {FLOW_RUN_ID: 41};
+            p.nodes = [node];
+            await p.selectNode(4);
+            await p.openEditingSourceAnalysis(p.editingResultData.rules[0].key);
+            await p.selectNodeResult(0);
+        }, {payload, node, pack: sandbox.window.M04002_PAGE_I18N});
+        const tabs = tab.locator('.anly-work-result-switcher button[onclick*="selectNodeResult("]');
+        const checkActive = async (index) => {
+            assert.equal(await tabs.count(), 3);
+            assert.equal(await tabs.filter({hasNotText: /^$/}).count(), 3);
+            assert.equal(await tab.locator('.anly-work-result-switcher button.is-active').count(), 1);
+            assert.equal(await tabs.nth(index).getAttribute("aria-pressed"), "true");
+            const backgrounds = await tabs.evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).backgroundColor));
+            assert.equal(backgrounds.filter((color) => color === "rgb(224, 242, 254)").length, 1);
+            assert.equal(backgrounds[index], "rgb(224, 242, 254)");
+        };
+        await checkActive(0);
+        assert.match(await tab.locator("#resultPanel-M04002").textContent(), /OML_ONLY/);
+        await tabs.nth(2).click();
+        await tab.waitForFunction(() => window.M04002.lastViolationSummary?.mixedPattern);
+        await checkActive(2);
+        assert.match(await tab.locator("#resultPanel-M04002").textContent(), /CODE/);
+        assert.doesNotMatch(await tab.locator("#resultPanel-M04002").textContent(), /OML_ONLY/);
+        await tab.evaluate(async (node) => {
+            const p = window.M04002;
+            p.nodes = [node];
+            p.loadSelectedResultObjectNames();
+            p.nodeResultCache.clear();
+            await p.selectNode(4);
+            await p.openEditingSourceAnalysis(p.editingResultData.rules[0].key);
+        }, node);
+        await checkActive(2);
+        assert.equal(await tab.evaluate(() => window.M04002.selectedNode.RESULT_OBJECT_NAME), "INIT$_TB_XAI_RUN");
+        await tabs.nth(1).click();
+        await tab.waitForFunction(() => document.querySelector("#resultPanel-M04002").textContent.includes("CONTINUOUS_ONLY"));
+        await checkActive(1);
+        await tabs.nth(0).click();
+        await tab.waitForFunction(() => document.querySelector("#resultPanel-M04002").textContent.includes("OML_ONLY"));
+        await checkActive(0);
+        assert.equal(await tab.evaluate(() => new URL(window.calls.at(-1), location.href).searchParams.get("ruleModelName")), "INIT_UA_F_41");
+        await tab.evaluate(() => { window.delayMixed = true; window.pendingMixed = window.M04002.selectNodeResult(2); });
+        await tab.waitForFunction(() => Boolean(window.resolveMixed));
+        await tab.evaluate(() => window.M04002.selectNodeResult(0));
+        await tab.evaluate(async () => { window.resolveMixed(); await window.pendingMixed; });
+        await checkActive(0);
+        assert.match(await tab.locator("#resultPanel-M04002").textContent(), /OML_ONLY/);
+        assert.equal(await tab.evaluate(() => window.M04002.currentModelDetail), null);
+        assert.deepEqual(errors, []);
+        fs.mkdirSync(path.join(root, "test-results"), {recursive: true});
+        await tab.screenshot({path: path.join(root, "test-results/m04002-unified-exclusive-tabs.png"), fullPage: true});
     } finally { await browser.close(); }
 });

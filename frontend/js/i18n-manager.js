@@ -2,7 +2,7 @@
     const DEFAULT_LANGUAGE = "en";
     const LANGUAGE_STORAGE_KEY = "initLanguageCode";
     const SUPPORTED_LANGUAGES = new Set(["en", "ko"]);
-    const EXPLICIT_DEFAULT_PAGE_PACKS = new Set(["M06001", "M06002"]);
+    const EXPLICIT_DEFAULT_PAGE_PACKS = new Set(["M00001", "M06001", "M06002"]);
     const commonPackCache = new Map();
     const pagePackCache = new Map();
     const mergedPagePackCache = new Map();

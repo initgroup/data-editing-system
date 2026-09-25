@@ -203,7 +203,14 @@
         ] : [];
         if (diagnostic?.diagnosticVersion) metrics.unshift(["Physical numeric columns", diagnostic.physicalNumericColumnCount],
             ["Inferred numeric-text columns", diagnostic.inferredNumericTextColumnCount], ["Tested formula candidates", diagnostic.testedCandidateCount]);
-        return { count, reasons, message: tr(reason) + (diagnostic && !diagnostic.diagnosticVersion ? " " + tr("Numeric-text inference was not recorded in this older execution.") : ""),
+        metrics.unshift(...[
+            ["Source columns", summary.sourceColumnCount], ["Sampled source columns", summary.sampleColumnCount],
+            ["Source column limit", summary.featureLimit], ["Sample rows", summary.sampleCount]
+        ].filter(([, value]) => value !== undefined && value !== null));
+        const limitations = [];
+        if (summary.featureLimitExcludedColumns?.length) limitations.push(tr("Some source columns were not evaluated because of the input limit."));
+        if (diagnostic?.excludedTargets?.length) limitations.push(tr("Some eligible continuous targets were not evaluated because of the target limit."));
+        return { count, reasons, message: [tr(reason), ...limitations].join(" ") + (diagnostic && !diagnostic.diagnosticVersion ? " " + tr("Numeric-text inference was not recorded in this older execution.") : ""),
             metrics: metrics.map(([key, value]) => ({ label: tr(key), value: number(value) })) };
     }
     const percent = (v) => v == null ? "-" : `${(Number(v) * 100).toFixed(1)}%`;
@@ -363,7 +370,7 @@
     function notes(summary = {}, tr = t) {
         const result = [tr(isPattern(summary) ? "These rules predict actual column values, ranges or formulas. Violations satisfy IF but do not satisfy THEN; they require review." : "These rules explain Isolation Forest candidates. Agreement measures model consistency, not confirmed errors."),
             tr("Counts are rule-row matches; one row may match several rules. Only a bounded preview is stored.")];
-        if (summary.sampling === "FIRST_ROWS") result.push(tr("First-row sampling may reflect source ordering."));
+        result.push(...samplingNotes(summary, tr));
         if (summary.sampleLimitReached || summary.sampleByteLimitReached) result.push(tr("Sample limits were applied."));
         if ((summary.warnings || []).some((s) => /HOLDOUT/.test(s))) result.push(tr("Insufficient holdout support"));
         if (isPattern(summary)) {
@@ -391,6 +398,102 @@
         if (/^Expected .+ but actual value is different\.$/.test(String(reason || "")) || ["PATTERN_MISMATCH", "RESULT_MISMATCH", "PATTERN_RESULT_MISMATCH"].includes(reason)) return tr("Actual value does not satisfy the expected value or range.");
         return reason || tr("Actual value does not satisfy the expected value or range.");
     }
+    Object.assign(ko, {
+        "Unified editing": "통합 에디팅",
+        "Unified editing: four automatic stages": "통합 에디팅 4단계 자동 실행",
+        "Mixed XAI": "혼합형 XAI", "Type and relationship analysis": "기존 유형·관계 분석", "Saved work": "저장된 작업",
+        "Run column profiling → mixed relationships → OML and mixed rule discovery → integrated violation detection automatically.": "컬럼 유형·기초통계 → 혼합 관계 분석 → OML·혼합형 규칙 발굴 → 통합 위반 탐지를 자동 실행합니다.",
+        "This saved execution explains Isolation Forest anomaly candidates. Start a new run to discover actual-value patterns.": "이 실행은 과거 Isolation Forest 이상 후보 설명 규칙입니다. 실제 값 패턴 규칙은 새 실행에서 발굴합니다.",
+        "Analyze column types and relationships, then discover categorical and continuous rules.": "컬럼 유형과 관계를 분석한 후 범주형·연속형 규칙을 발굴합니다.",
+        "Relationships and value patterns": "연관성과 값 패턴",
+        "Rules with more violations appear first. Select a card to inspect the rule.": "위반이 많은 규칙을 우선 표시합니다. 카드를 누르면 상세 규칙을 확인할 수 있습니다.",
+        "Unified run results": "통합 실행 결과 보기",
+        "Go to Main Home": "메인홈으로 이동",
+        "Past runs": "과거 실행", "From one file to discovered rules": "파일 하나로 규칙 발견까지",
+        "Choose a file to automatically prepare the project, models and FLOW, run the analysis, and review the results.": "파일을 선택하면 프로젝트부터 모델, FLOW, 실행과 결과 분석까지 필요한 단계를 자동으로 준비합니다.",
+        "automatic stages": "자동 단계", "Run all automatically": "전체 자동 실행", "Start new work": "새 작업 시작",
+        "File upload": "파일 업로드", "Source data": "원본 데이터", "Project": "프로젝트", "Workspace": "작업 공간",
+        "Scenario": "시나리오", "Analysis scope": "분석 기준", "Target table": "대상 테이블", "Register INITUP$ table": "INITUP$ 등록",
+        "Model setup": "모델 설정", "Default settings": "기본값 설계", "FLOW design": "FLOW 설계", "Internal flow": "내부 설계",
+        "Run discovery": "규칙 발굴 실행", "Rule discovery": "규칙 발굴", "Results": "결과 분석", "Discovered rules": "발견 규칙", "Result details": "결과상세",
+        "Choose a file to analyze": "분석할 파일을 선택하세요",
+        "Create a project and scenario, or continue in an existing workspace.": "프로젝트와 시나리오를 새로 만들거나 기존 작업 공간을 이어서 사용할 수 있습니다.",
+        "CSV, TSV, TXT, XLSX · chunked upload for large files": "CSV, TSV, TXT, XLSX · 대용량 파일도 분할 업로드",
+        "Browse files": "파일 찾기", "Drop a file here or click to choose": "파일을 놓거나 눌러서 선택", "Choose a CSV or Excel file.": "CSV 또는 Excel 파일을 선택하세요.",
+        "CSV requires column names in the first row. Quick Editing automatically uses that row as the header.": "CSV 필수 조건: 첫 행에 컬럼명(타이틀)이 포함된 파일만 사용할 수 있습니다. 퀵 에디팅은 첫 행을 자동으로 컬럼명으로 처리합니다.",
+        "Create new": "새로 만들기", "Name from the file": "파일명으로 자동 생성", "Use existing workspace": "기존 작업 사용", "Choose project and scenario": "프로젝트·시나리오 선택",
+        "Automatic task progress": "자동 작업 현황", "Current stage": "현재 단계",
+        "Choose a file, then start the automatic workflow. Progress appears here.": "파일을 선택한 뒤 전체 자동 실행을 시작하세요. 각 단계의 처리 상황을 여기에서 확인할 수 있습니다.",
+        "The signed-in user could not be verified. Sign in again.": "로그인 사용자를 확인할 수 없습니다. 다시 로그인하세요.",
+        "Reconnect to current session": "현재 세션으로 다시 연결",
+        "Reconnect the main workspace before continuing. Finish or save work in other tabs, then retry. The previous server run was not cancelled.": "계속하려면 메인 작업공간을 다시 연결해야 합니다. 다른 탭의 작업을 마치거나 저장한 뒤 다시 시도하세요. 이전 서버 실행을 취소한 것은 아닙니다.",
+        "The session or Target DB changed. Local requests stopped; an existing server run may continue. Refresh after the current request finishes.": "세션 또는 대상 DB가 변경되어 이 화면의 후속 요청을 멈췄습니다. 서버 실행은 계속될 수 있습니다. 현재 요청이 끝나면 새 세션으로 다시 연결하세요.",
+        "Discard unsaved column type edits and reconnect to the current session?": "저장하지 않은 컬럼 유형 편집을 취소하고 현재 세션으로 다시 연결할까요?",
+        "The previous workspace stopped local requests after a session or Target DB change. Its server run was not cancelled.": "세션 또는 대상 DB 변경으로 이전 작업창의 후속 요청을 중단했습니다. 서버 실행을 취소한 것은 아닙니다.",
+        "Quick editing is still processing. Pause or stop it before closing, refreshing or changing the Target DB.": "퀵 에디팅을 처리 중입니다. 일시정지 또는 중지한 뒤 닫기·새로고침·대상 DB 변경을 해주세요.",
+        "Save or discard column type changes before closing or refreshing Quick Editing.": "퀵 에디팅을 닫거나 새로고침하기 전에 컬럼 유형 변경사항을 저장하거나 취소하세요.",
+        "The Target DB changed in another workspace. This workspace will refresh after the current operation and edits are finished.": "다른 작업창에서 대상 DB가 변경되었습니다. 현재 처리와 편집이 끝나면 이 작업창을 새로고침합니다.",
+        "Analysis type": "분석 종류", "Mixed": "혼합형", "Rule type": "규칙 종류",
+        "OML association rules": "OML 연관규칙", "LASSO and Symbolic formulas": "LASSO·Symbolic 수식",
+        "Value, range and formula rules": "값·구간·수식 규칙",
+        "The result could not be loaded. This is not a zero-rule result.": "결과를 불러오지 못했습니다. 규칙이 0건이라는 뜻이 아닙니다.",
+        "This run has no saved output for this analysis. Check the stage status and output contract.": "이 실행에 해당 분석의 저장 결과가 없습니다. 단계 상태와 결과 연결을 확인하세요.",
+        "No categorical rules were saved for this run. Review the discovery settings and stage messages.": "이 실행에 저장된 범주형 규칙이 없습니다. 발굴 설정과 단계 메시지를 확인하세요.",
+        "No saved continuous formulas were found. Detailed discovery diagnostics were not recorded or could not be loaded; the cause cannot be inferred from a zero count.": "저장된 연속형 수식이 없습니다. 상세 발굴 진단이 기록되지 않았거나 조회되지 않아 0건만으로 원인을 판단할 수 없습니다.",
+        "Continuous analysis was not requested in the saved settings for this run.": "이 실행의 저장 설정에서 연속형 분석을 요청하지 않았습니다.",
+        "Continuous discovery did not complete successfully. Review the recorded task errors.": "연속형 발굴이 정상 완료되지 않았습니다. 기록된 작업 오류를 확인하세요.",
+        "No continuous formulas were saved. Review the recorded task diagnostics and target limits.": "저장된 연속형 수식이 없습니다. 기록된 작업 진단과 대상 제한을 확인하세요.",
+        "OML categorical and continuous results": "OML 범주형·연속형 결과",
+        "Mixed value, range and formula results": "혼합형 값·범위·수식 보강 결과",
+        "Both analyses belong to the same run. Their evidence may overlap; do not add violation counts and interpret them as erroneous cells.": "같은 실행에서 두 분석을 수행했습니다. 근거가 겹칠 수 있어 각 결과의 위반 건수를 합산하여 오류 셀 수로 해석하지 않습니다.",
+        "Save column type changes before switching result views.": "컬럼 유형 변경사항을 먼저 저장한 뒤 결과 보기를 전환하세요.",
+        "Mixed supplemental results": "혼합형 보강 결과",
+        "Semantic type": "분석 의미 유형", "Categorical relationships": "범주형 컬럼 관계",
+        "Categorical": "범주형", "Continuous": "연속형", "Identifier": "식별자", "Constant": "상수", "Empty": "모두 결측", "Unsupported": "지원하지 않는 유형",
+        "Invalid numeric text was excluded from numeric statistics; original values are preserved.": "숫자로 해석할 수 없는 문자열은 수치 통계에서 제외했으며 원본 값은 보존합니다.",
+        "Categorical and numeric relationships": "범주형·연속형 관계", "Categorical column": "범주형 컬럼",
+        "Numeric column": "연속형 컬럼", "Group count": "집단 수", "Cramér’s V": "크래머 V",
+        "Correlation ratio squared": "상관비 제곱 (η²)", "Sparse expected-cell fraction": "기대도수 부족 셀 비율",
+        "HASH samples reduce source-order bias but are not stratified; source snapshots are not pinned.": "해시 표본은 원본 순서 편향을 줄이지만 층화 표본은 아니며 원본 시점을 고정하지 않습니다.",
+        "Hash sampling requires a count and a source scan.": "해시 표본은 행 수 조회와 원본 스캔 비용이 발생합니다.",
+        "The sample byte limit reduced the stored hash sample; it may not represent the source.": "표본 용량 제한으로 저장된 해시 표본이 줄었으며 원본을 대표하지 않을 수 있습니다.",
+        "Hash filtering returned fewer rows than the requested sample size.": "해시 필터에 해당하는 행 수가 요청한 표본 크기보다 적습니다.",
+        "The source row count changed during sampling; statistics do not represent a fixed snapshot.": "표본 추출 중 원본 행 수가 달라졌으므로 통계가 고정된 시점의 원본을 나타내지 않습니다."
+    });
+    Object.assign(ko, {
+        "Source columns": "원본 컬럼 수",
+        "Sampled source columns": "표본에 포함한 컬럼 수",
+        "Sample rows": "표본 행 수",
+        "Some source columns were not evaluated because of the input limit.": "입력 한도로 분석하지 않은 원본 컬럼이 있습니다.",
+        "Some eligible continuous targets were not evaluated because of the target limit.": "대상 수 한도로 분석하지 않은 연속형 후보가 있습니다.",
+        "Input columns were screened with a bounded probe before applying the model input limit.": "작은 표본으로 입력 컬럼 후보를 검토한 뒤 모델 입력 한도를 적용했습니다.",
+        "The column probe uses an early source sample and may miss later or rare values.": "컬럼 검토 표본은 원본 앞부분을 사용하므로 뒤쪽이나 희귀 값을 놓칠 수 있습니다.",
+        "Column probes do not pin a source snapshot across batches.": "컬럼 묶음별 검토는 원본을 같은 시점으로 고정하지 않습니다."
+    });
+    function samplingNotes(data = {}, tr = t) {
+        const sampling = data.samplingDiagnostics || data;
+        const notes = [];
+        const screening = sampling.featureScreening || data.featureScreening;
+        if (screening?.policy) {
+            notes.push(tr("Input columns were screened with a bounded probe before applying the model input limit."));
+            if (screening.warnings?.includes("PREFIX_FEATURE_PROBE_MAY_MISS_LATE_OR_RARE_VALUES")) notes.push(tr("The column probe uses an early source sample and may miss later or rare values."));
+            if (screening.warnings?.includes("FEATURE_PROBE_SOURCE_NOT_SNAPSHOT_PINNED")) notes.push(tr("Column probes do not pin a source snapshot across batches."));
+        }
+        if (sampling.sampling === "FIRST_ROWS") notes.push(tr("First-row sampling may reflect source ordering."));
+        if (sampling.sampling === "HASH") {
+            notes.push(tr("HASH samples reduce source-order bias but are not stratified; source snapshots are not pinned."));
+            notes.push(tr("Hash sampling requires a count and a source scan."));
+        }
+        const warningLabels = {
+            HASH_SAMPLE_BYTE_TRUNCATED_NOT_REPRESENTATIVE: "The sample byte limit reduced the stored hash sample; it may not represent the source.",
+            HASH_SAMPLE_UNDERFILLED: "Hash filtering returned fewer rows than the requested sample size.",
+            SOURCE_COUNT_CHANGED_DURING_SAMPLING: "The source row count changed during sampling; statistics do not represent a fixed snapshot."
+        };
+        for (const code of sampling.samplingWarnings || []) {
+            if (warningLabels[code]) notes.push(tr(warningLabels[code]));
+        }
+        return notes;
+    }
     function stageSummary(summary = {}, kind, tr = t) {
         const profile = kind === "PROFILE";
         const data = summary[profile ? "profile" : "relationships"];
@@ -398,23 +501,28 @@
         if (!data) return { available: false, title, notes: tr("This stage was not stored in this execution. Existing two-stage history is preserved; run a new four-stage FLOW to create it."), metrics: [], sections: [] };
         const labels = { COLUMN_NAME: "Column", COLUMN_COMMENT: "Column description", DATA_TYPE: "Data type", NUMERIC_SOURCE: "Numeric interpretation", ROW_COUNT: "Sample rows", NON_NULL_COUNT: "Nonmissing rows", NULL_COUNT: "Missing rows", NULL_RATE: "Missing rate", DISTINCT_COUNT: "Distinct values", DISTINCT_RATE: "Distinct rate", MIN: "Minimum", MAX: "Maximum", MEAN: "Mean", STDDEV: "Standard deviation", Q1: "First quartile", MEDIAN: "Median", Q3: "Third quartile", ZERO_COUNT: "Zero values", INVALID_NUMERIC_COUNT: "Invalid numeric values", TOP_VALUES: "Frequent values", COLUMN_X: "Column X", COLUMN_Y: "Column Y", PAIR_COUNT: "Paired rows", COVERAGE: "Coverage", CORRELATION: "Pearson correlation", MATCH_COUNT: "Matching rows" };
         const comments = new Map((summary.profile?.columns || []).map((c) => [c.COLUMN_NAME, c.COLUMN_COMMENT]));
+        Object.assign(labels, { SEMANTIC_TYPE: "Semantic type", CRAMERS_V: "Cramér’s V", ETA_SQUARED: "Correlation ratio squared", GROUP_COUNT: "Group count", SPARSE_EXPECTED_CELL_FRACTION: "Sparse expected-cell fraction" });
         const section = (titleKey, columns, rows) => ({ title: tr(titleKey), columns, columnLabels: Object.fromEntries(columns.map((c) => [c, tr(c === "NUMERIC_WARNINGS" ? "Numeric warnings" : labels[c] || c)])), rows: (rows || []).map((row) => ({ ...row,
             ...Object.fromEntries(["COLUMN_X", "COLUMN_Y"].filter((c) => comments.get(row[c])).map((c) => [c, `${row[c]} · ${comments.get(row[c])}`])),
             ...Object.fromEntries(["NULL_RATE", "COVERAGE"].filter((c) => Object.hasOwn(row, c)).map((c) => [c, percent(row[c])])),
             ...(row.TOP_VALUES ? { TOP_VALUES: row.TOP_VALUES.map((v) => `${actualValue(v.value, tr)}: ${number(v.count)}`).join(" · ") } : {}),
+            ...(row.SEMANTIC_TYPE ? { SEMANTIC_TYPE: tr(({ CATEGORICAL: "Categorical", CONTINUOUS: "Continuous", IDENTIFIER: "Identifier", CONSTANT: "Constant", EMPTY: "Empty", UNSUPPORTED: "Unsupported" })[row.SEMANTIC_TYPE] || row.SEMANTIC_TYPE) } : {}),
             ...(["NUMERIC_TEXT", "PHYSICAL_NUMERIC"].includes(row.NUMERIC_SOURCE) ? { NUMERIC_SOURCE: tr(row.NUMERIC_SOURCE === "NUMERIC_TEXT" ? "Numeric text" : "Physical numeric type") } : {}),
-            ...(row.NUMERIC_WARNINGS ? { NUMERIC_WARNINGS: row.NUMERIC_WARNINGS.map((w) => tr(({NUMERIC_TEXT_INFERRED: "Strict numeric text was interpreted numerically; the physical database type is unchanged.", NON_FINITE_INPUT_EXCLUDED: "Nonfinite values were excluded from numeric statistics.", STATISTIC_OUT_OF_RANGE: "Some statistics exceed the representable range and are unavailable."})[w] || w)).join(" ") } : {}) })) });
+            ...(row.NUMERIC_WARNINGS ? { NUMERIC_WARNINGS: row.NUMERIC_WARNINGS.map((w) => tr(({NUMERIC_TEXT_INFERRED: "Strict numeric text was interpreted numerically; the physical database type is unchanged.", INVALID_NUMERIC_TEXT_EXCLUDED: "Invalid numeric text was excluded from numeric statistics; original values are preserved.", NON_FINITE_INPUT_EXCLUDED: "Nonfinite values were excluded from numeric statistics.", STATISTIC_OUT_OF_RANGE: "Some statistics exceed the representable range and are unavailable."})[w] || w)).join(" ") } : {}) })) });
         const metrics = profile ? [["Sample rows", data.sampleCount], ["Profiled columns", data.columnCount], ["Numeric columns", data.numericColumnCount], ["Text columns", data.textColumnCount], ["Duplicate sampled rows", data.duplicateRowCount], ["Skipped columns", data.skippedColumnCount]]
             : [["Sample rows", data.sampleCount], ["Numeric columns", data.numericColumnCount], ["Correlation pairs", data.pairCount], ["Duplicate column pairs", data.duplicateColumns?.length]];
         if (profile && data.numericTextColumnCount != null) metrics.push(["Inferred numeric-text columns", data.numericTextColumnCount]);
-        const sections = profile ? [section("Column statistics", ["COLUMN_NAME", "COLUMN_COMMENT", "DATA_TYPE", "NUMERIC_SOURCE", "ROW_COUNT", "NULL_COUNT", "NULL_RATE", "DISTINCT_COUNT", "MIN", "MAX", "MEAN", "STDDEV", "Q1", "MEDIAN", "Q3", "ZERO_COUNT", "INVALID_NUMERIC_COUNT", "TOP_VALUES", "NUMERIC_WARNINGS"], data.columns)]
+        const sections = profile ? [section("Column statistics", ["COLUMN_NAME", "COLUMN_COMMENT", "DATA_TYPE", "SEMANTIC_TYPE", "NUMERIC_SOURCE", "ROW_COUNT", "NULL_COUNT", "NULL_RATE", "DISTINCT_COUNT", "MIN", "MAX", "MEAN", "STDDEV", "Q1", "MEDIAN", "Q3", "ZERO_COUNT", "INVALID_NUMERIC_COUNT", "TOP_VALUES", "NUMERIC_WARNINGS"], data.columns)]
             : [section("Numeric relationships", ["COLUMN_X", "COLUMN_Y", "PAIR_COUNT", "COVERAGE", "CORRELATION"], data.correlationPairs),
+                section("Categorical relationships", ["COLUMN_X", "COLUMN_Y", "PAIR_COUNT", "COVERAGE", "CRAMERS_V", "SPARSE_EXPECTED_CELL_FRACTION"], data.categoricalPairs),
+                section("Categorical and numeric relationships", ["COLUMN_X", "COLUMN_Y", "PAIR_COUNT", "COVERAGE", "ETA_SQUARED", "GROUP_COUNT"], data.categoricalNumericPairs),
                 section("Duplicate columns", ["COLUMN_X", "COLUMN_Y", "MATCH_COUNT", "COVERAGE"], data.duplicateColumns),
                 section("Columns with missing values", ["COLUMN_NAME", "NULL_COUNT", "NULL_RATE"], data.missingColumns)];
         const notes = [tr("Statistics and relationships describe the saved bounded sample, not the entire source or a causal relationship.")];
-        if (data.sampling === "FIRST_ROWS" || summary.sampling === "FIRST_ROWS" || summary.profile?.sampling === "FIRST_ROWS") notes.push(tr("First-row sampling may reflect source ordering."));
+        const sampling = data.sampling || data.samplingDiagnostics ? data : summary.sampling ? summary : summary.profile || {};
+        notes.push(...samplingNotes(sampling, tr));
         if (data.sampleLimitReached || data.sampleByteLimitReached || (!profile && (summary.profile?.sampleLimitReached || summary.profile?.sampleByteLimitReached))) notes.push(tr("Sample limits were applied."));
-        if (data.pairsTruncated) notes.push(tr("Relationship pair limits were applied."));
+        if (data.pairsTruncated || data.categoricalPairsTruncated || data.categoricalNumericPairsTruncated) notes.push(tr("Relationship pair limits were applied."));
         return { available: true, title, metrics: metrics.map(([key, value]) => ({ label: tr(key), value: number(value) })), sections, notes: notes.join(" ") };
     }
     function ruleNotes(row, summary = {}, tr = t) {

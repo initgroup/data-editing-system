@@ -20,6 +20,10 @@ from backend.services import ml_analysis_service
 
 
 INTERNAL_METHODS = {
+    "UNIFIED_EDITING_PROFILE",
+    "UNIFIED_EDITING_RELATION",
+    "UNIFIED_EDITING_DISCOVER",
+    "UNIFIED_EDITING_DETECT",
     "LASSO_FEATURE_SELECT",
     "RELATION_NETWORK_CLUSTER",
     "INTEGRATED_RELATION_CLUSTER",
@@ -66,6 +70,9 @@ def execute_api_job(
 
 
 def execute_internal_python_api(conn, method: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    if method.startswith("UNIFIED_EDITING_"):
+        from backend.services import integrated_editing_service
+        return integrated_editing_service.execute(conn, method, payload)
     if method in {"MIXED_XAI_PROFILE", "MIXED_XAI_RELATION"}:
         from backend.services import mixed_analysis_profile_service as analysis
         return (analysis.profile if method == "MIXED_XAI_PROFILE" else analysis.relationships)(conn, payload)
@@ -88,6 +95,12 @@ def execute_internal_python_api(conn, method: str, payload: Dict[str, Any]) -> D
 
 
 def create_internal_success_message(method: str, result: Dict[str, Any]) -> str:
+    if method.startswith("UNIFIED_EDITING_"):
+        return (
+            f"Unified editing {result.get('stage', method)} completed: existing analysis and mixed supplement. "
+            f"Mixed rules: {result.get('mixedRuleCount', 0)}; "
+            f"mixed rule-row violations: {result.get('mixedViolationCount', 0)}."
+        )
     if method in {"MIXED_XAI_PROFILE", "MIXED_XAI_RELATION"}:
         return f"Mixed analysis completed: {result.get('columnCount', 0)} columns; {result.get('sampleCount', 0)} sampled rows."
     if method in {"MIXED_XAI_RULE_DISCOVER", "MIXED_XAI_RULE_DETECT"}:

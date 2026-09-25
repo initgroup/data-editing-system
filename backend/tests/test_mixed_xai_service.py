@@ -55,7 +55,7 @@ class FakeCursor:
         expected = set(re.findall(r":([A-Za-z][A-Za-z0-9_]*)", sql))
         if expected != set(params):
             raise AssertionError(f"Bind mismatch: expected {expected}; got {set(params)}")
-        sql_id = next((key for key, query in SqlLoader._query_map.items() if key.startswith("XAI_") and query == sql), None)
+        sql_id = next((key for key, query in SqlLoader._query_map.items() if key.startswith(("XAI_", "EDITING_")) and query == sql), None)
         if sql_id is None:
             if "AS XAI_CASE_ID" in sql:
                 sql_id = "XAI_MATCH_PREVIEW"
@@ -228,10 +228,11 @@ class MixedXaiServiceTests(unittest.TestCase):
         conn = FakeConnection()
         result = service.read_results(conn, 41, 7, target_owner="app_owner", target_table="source_data")
         queries = [params for sql_id, params, _ in conn.events if sql_id in {
-            "XAI_FLOW_SUMMARIES", "XAI_FLOW_RULES", "XAI_FLOW_VIOLATIONS", "XAI_FLOW_COLUMN_COMMENTS"}]
-        self.assertEqual(len(queries), 4)
+            "XAI_FLOW_SUMMARIES", "XAI_FLOW_RULES_PAGE", "XAI_FLOW_VIOLATIONS", "XAI_FLOW_COLUMN_COMMENTS", "EDITING_HISTORICAL_EXPLANATION_COUNT"}]
+        self.assertEqual(len(queries), 5)
         for params in queries:
-            self.assertEqual(params, {"runId": 41, "owner": "APP_OWNER", "tableName": "SOURCE_DATA"})
+            self.assertEqual({key: params[key] for key in ("runId", "owner", "tableName")},
+                             {"runId": 41, "owner": "APP_OWNER", "tableName": "SOURCE_DATA"})
         self.assertEqual(result["data"]["ruleSummary"]["overview"]["TOTAL_RULES"], 0)
         self.assertEqual(result["data"]["ruleSummary"]["rules"], [])
 

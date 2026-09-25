@@ -11,7 +11,7 @@
                         <input id="registeredOnly-M90002" type="checkbox" onchange="M90002.loadApiObjects()">
                         <span data-label-key="registeredOnly">Registered</span>
                     </label>
-                    <button id="createDefaultApisBtn-M90002" type="button" class="env-icon-btn" title="Create default Python APIs" data-title-key="createDefaultApisTitle" onclick="M90002.createDefaultApiObjects()">
+                    <button id="createDefaultApisBtn-M90002" type="button" class="env-icon-btn" title="Create unregistered default Python APIs" data-title-key="createDefaultApisTitle" onclick="M90002.createDefaultApiObjects()">
                         <i class="fas fa-wand-magic-sparkles"></i>
                     </button>
                     <button type="button" class="env-icon-btn" title="New external API" data-title-key="newExternalApiTitle" onclick="M90002.newApiObject()">
@@ -65,7 +65,7 @@
                 <div class="env-header-main">
                     <h1 class="env-title" id="api-title-M90002" data-label-key="apiRegistryTitle">API Object Registry</h1>
                     <p class="env-desc" id="apiDescription-M90002" data-label-key="apiRegistryDescription">
-                        Select an API object from the group tree. Input, auth, and output rules will appear here.
+                        Select an API object from the group tree. Default creation adds only unregistered items and preserves existing settings.
                     </p>
                 </div>
                 <div class="env-header-actions">

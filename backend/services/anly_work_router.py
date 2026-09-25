@@ -214,6 +214,9 @@ def create_anly_work_router(
         runSourceType: str,
         runId: int,
         sampleLimit: int = 300,
+        targetOwner: str | None = None,
+        targetTable: str | None = None,
+        targetColumn: str | None = None,
     ):
         return anly_work.get_symbolic_rule_sample(
             request=request,
@@ -222,6 +225,9 @@ def create_anly_work_router(
             runSourceType=runSourceType,
             runId=runId,
             sampleLimit=sampleLimit,
+            targetOwner=targetOwner,
+            targetTable=targetTable,
+            targetColumn=targetColumn,
             flow_menu_code=FLOW_MENU_CODE,
         )
 

@@ -40,6 +40,8 @@ def _sample(cursor, ctx, payload):
     ml = xai.ml
     row_cap = ml._ml_runtime_limit(payload, "APP_ML_MAX_IN_MEMORY_ROWS", ml._ml_in_memory_row_limit(), 1)
     feature_cap = min(128, ml._ml_runtime_limit(payload, "APP_ML_MAX_INPUT_FEATURES", ml._ml_input_feature_limit(), 1))
+    if feature_cap < 2:
+        raise HTTPException(400, "Pattern discovery requires a source feature limit of at least two.")
     limit = min(25000, row_cap, xai._number(payload, "sampleRows", row_cap, 32, 1000000, integer=True))
     columns = xai._columns(cursor, ctx)
     excluded = set(ml.normalize_column_list(xai._value(payload, "excludeColumns", "FILE_ROW_NO")))
@@ -51,10 +53,34 @@ def _sample(cursor, ctx, payload):
         if set(requested) - {c["COLUMN_NAME"] for c in eligible}:
             raise HTTPException(400, "Selected features contain excluded, unsupported or unknown columns.")
         eligible = [c for c in eligible if c["COLUMN_NAME"] in requested]
-    limited_columns = [column["COLUMN_NAME"] for column in eligible[feature_cap:]]
-    eligible = eligible[:feature_cap]
+    targets = ml.normalize_column_list(xai._value(payload, "targetColumns"))
+    if set(targets) - {c["COLUMN_NAME"] for c in eligible}:
+        raise HTTPException(400, "Selected targets contain excluded, unsupported, unknown or unselected source columns.")
+    if len(targets) > feature_cap:
+        raise HTTPException(400, "Selected targets exceed the configured source feature limit.")
+    screening = None
+    before_screen = eligible
+    if len(eligible) > feature_cap:
+        from backend.services.mixed_feature_screening import SCREEN_ROWS, screen_feature_columns
+        eligible, screening = screen_feature_columns(cursor, owner=ctx["owner"], table=ctx["tableName"],
+            columns=eligible, feature_limit=feature_cap, mandatory_columns=targets, probe_rows=min(SCREEN_ROWS, limit))
+    selected_names = {column["COLUMN_NAME"] for column in eligible}
+    limited_columns = [column["COLUMN_NAME"] for column in before_screen if column["COLUMN_NAME"] not in selected_names]
+    feature_diagnostics = {"featureScreening": screening} if screening else {}
     if len(eligible) < 2:
         raise HTTPException(400, "Pattern discovery requires at least two usable columns: an IF input and an actual THEN result.")
+    strategy = str(xai._value(payload, "samplingStrategy", "FIRST_ROWS")).strip().upper()
+    if strategy != "FIRST_ROWS":
+        from backend.services.analysis_sampling import sample_rows
+        try:
+            rows, sampling = sample_rows(cursor, owner=ctx["owner"], table=ctx["tableName"],
+                columns=eligible, row_limit=limit, strategy=strategy,
+                seed=xai._number(payload, "sampleSeed", 42, 0, 4294967295, integer=True))
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return rows, eligible, columns, {**sampling, "sourceColumnCount": len(columns),
+            "sampleColumnCount": len(eligible), "featureLimit": feature_cap,
+            "featureLimitExcludedColumns": limited_columns, **feature_diagnostics}
     projection = ", ".join("T." + ml.quote_identifier(c["COLUMN_NAME"]) for c in eligible)
     cursor.execute(xai._render("XAI_SOURCE_SAMPLE", ctx, projection), {"rowLimit": limit})
     names = [str(d[0]).upper() for d in cursor.description or []]
@@ -74,7 +100,7 @@ def _sample(cursor, ctx, payload):
         "sampleCount": len(rows), "sampleLimitReached": len(rows) == limit,
         "sampleByteLimitReached": byte_limit_reached, "sourceColumnCount": len(columns),
         "sampleColumnCount": len(eligible), "featureLimit": feature_cap,
-        "featureLimitExcludedColumns": limited_columns}
+        "featureLimitExcludedColumns": limited_columns, **feature_diagnostics}
 
 
 @xai.ml._limit_ml_concurrency
@@ -120,15 +146,16 @@ def discover(conn, payload):
         xai._execute(cursor, "XAI_RUN_SUMMARY", ctx)
         previous_row = cursor.fetchone()
         previous = xai._json_object(previous_row[0], "SUMMARY_JSON") if previous_row else {}
-        stage_snapshots = {key: previous[key] for key in ("profile", "relationships") if key in previous}
+        stage_snapshots = {key: previous[key] for key in ("profile", "relationships", "integratedEditing") if key in previous}
         xai._execute(cursor, "PATTERN_CLEAR_VIOLATIONS", {**ctx, "modelName": model_name})
         xai._execute(cursor, "PATTERN_CLEAR_RULES", ctx)
         for sql_id in ("XAI_CLEAR_VIOLATIONS", "XAI_CLEAR_RULES", "XAI_CLEAR_RUN"):
             xai._execute(cursor, sql_id, ctx)
-        warnings = list(analysis.get("warnings", []))
+        warnings = list(analysis.get("warnings", [])) + list(sampling.get("samplingWarnings", []))
+        warnings.extend((sampling.get("featureScreening") or {}).get("warnings", []))
         if sampling["featureLimitExcludedColumns"]:
             warnings.append("SOURCE_FEATURE_COLUMN_LIMIT")
-        if sampling["sampleLimitReached"] or sampling["sampleByteLimitReached"]:
+        if sampling.get("sampling", "FIRST_ROWS") == "FIRST_ROWS" and (sampling["sampleLimitReached"] or sampling["sampleByteLimitReached"]):
             warnings.append("FIRST_ROWS_SAMPLE_NOT_POPULATION_REPRESENTATIVE")
         summary = {**stage_snapshots, **analysis.get("metrics", {}), **sampling,
             "algorithm": ALGORITHM, "algorithmVersion": 2, "encoding": analysis.get("encoding", {}),
@@ -329,40 +356,61 @@ def rule_summary(rules, comments):
             "total": len(rules), "page": 1, "pageSize": max(20, len(rules))}
 
 
-def read_pattern_results(cursor, params, runs):
+def enrich_violation(row, rule):
+    """Preserve original actual text while deriving formula evidence consistently."""
+    row["RESULT_KIND"] = rule.get("RESULT_KIND")
+    if rule.get("RESULT_KIND") != "FORMULA" or row.get("EXPECTED_VALUE") is None:
+        return row
+    result = xai._json_object(rule.get("RESULT_JSON") or rule.get("RESULT_AST"), "RESULT_JSON")
+    expected = Decimal(str(row["EXPECTED_VALUE"]))
+    tolerance = max(Decimal(str(result["absoluteTolerance"])),
+                    Decimal(str(result.get("relativeTolerance", 0))) * abs(expected))
+    row.update(EXPECTED_LOWER=str(expected - tolerance), EXPECTED_UPPER=str(expected + tolerance))
+    if row.get("ACTUAL_VALUE") is not None:
+        if result.get("numericText"):
+            from backend.services.mixed_numeric import parse_numeric_decimal
+            actual = parse_numeric_decimal(row["ACTUAL_VALUE"])
+        else:
+            try:
+                actual = Decimal(str(row["ACTUAL_VALUE"]))
+            except (InvalidOperation, ValueError):
+                actual = None
+        if actual is not None and actual.is_finite():
+            residual = actual - expected
+            row.update(RESIDUAL=str(residual), ABS_ERROR=str(abs(residual)))
+        else:
+            row.update(RESIDUAL=None, ABS_ERROR=None, ACTUAL_NUMERIC_VALID_YN="N")
+    return row
+
+
+def read_pattern_results(cursor, params, runs, *, page=1, page_size=20, include_violations=True):
     require_schema(cursor)
-    xai._execute(cursor, "PATTERN_FLOW_RULES", params)
+    page, page_size = max(1, int(page)), max(1, min(100, int(page_size)))
+    xai._execute(cursor, "PATTERN_FLOW_RULE_OVERVIEW", params)
+    overview_rows = xai._rows(cursor)
+    overview = overview_rows[0] if overview_rows else {}
+    xai._execute(cursor, "PATTERN_FLOW_RULES_PAGE", {**params, "offset": (page - 1) * page_size, "pageSize": page_size})
     rules = xai._rows(cursor)
-    xai._execute(cursor, "PATTERN_FLOW_VIOLATIONS", params)
-    violations = xai._rows(cursor)
+    violations = []
+    if include_violations:
+        xai._execute(cursor, "PATTERN_FLOW_PAGE_VIOLATIONS",
+                     {**params, "offset": (page - 1) * page_size, "pageSize": page_size})
+        violations = xai._rows(cursor)
     rule_map = {(r["TARGET_OWNER"], r["TARGET_TABLE"], r["MODEL_NAME"], r["RULE_ID"]): r for r in rules}
     for row in violations:
         rule = rule_map.get((row["TARGET_OWNER"], row["TARGET_TABLE"], row["MODEL_NAME"], row["RULE_ID"]), {})
-        row["RESULT_KIND"] = rule.get("RESULT_KIND")
-        if rule.get("RESULT_KIND") == "FORMULA" and row.get("EXPECTED_VALUE") is not None:
-            result = xai._json_object(rule["RESULT_JSON"], "RESULT_JSON")
-            expected = Decimal(str(row["EXPECTED_VALUE"]))
-            tolerance = max(Decimal(str(result["absoluteTolerance"])),
-                            Decimal(str(result.get("relativeTolerance", 0))) * abs(expected))
-            row.update(EXPECTED_LOWER=str(expected - tolerance), EXPECTED_UPPER=str(expected + tolerance))
-            if row.get("ACTUAL_VALUE") is not None:
-                if result.get("numericText"):
-                    from backend.services.mixed_numeric import parse_numeric_decimal
-                    actual = parse_numeric_decimal(row["ACTUAL_VALUE"])
-                else:
-                    try:
-                        actual = Decimal(str(row["ACTUAL_VALUE"]))
-                    except (InvalidOperation, ValueError):
-                        actual = None
-                if actual is not None and actual.is_finite():
-                    residual = actual - expected
-                    row.update(RESIDUAL=str(residual), ABS_ERROR=str(abs(residual)))
-                else:
-                    row.update(RESIDUAL=None, ABS_ERROR=None, ACTUAL_NUMERIC_VALID_YN="N")
+        enrich_violation(row, rule)
     xai._execute(cursor, "XAI_FLOW_COLUMN_COMMENTS", params)
     comments = {r["COLUMN_NAME"]: r["COMMENTS"] for r in xai._rows(cursor) if r.get("COMMENTS")}
     summary = runs[0]["summary"] if len(runs) == 1 else {"algorithm": ALGORITHM, "algorithmVersion": 2,
         "targetCount": len(runs), "ruleCount": len(rules),
         "violationCount": sum(r["summary"].get("violationCount", 0) for r in runs)}
+    normalized = rule_summary(rules, comments)
+    normalized["overview"].update(overview)
+    normalized.update(total=int(overview.get("TOTAL_RULES") or 0), page=page, pageSize=page_size,
+                      hasMore=page * page_size < int(overview.get("TOTAL_RULES") or 0), distributionScope="PAGE")
     return {"status": "success", "data": {"rules": rules, "violations": violations,
-        "ruleSummary": rule_summary(rules, comments), "summary": summary, "runs": runs}}
+        "ruleSummary": normalized, "summary": summary, "runs": runs,
+        "page": page, "pageSize": page_size, "total": normalized["total"], "hasMore": normalized["hasMore"],
+        "violationsIncluded": include_violations, "violationPreviewLimit": 100,
+        "violationPreviewScope": "RULE_PAGE"}}

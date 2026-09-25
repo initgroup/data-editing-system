@@ -8,6 +8,14 @@ Oracle 기반 데이터 편집/규칙 발굴 업무를 위한 FastAPI + 정적 �
 - Frontend: Vanilla JavaScript, HTML, CSS, Tailwind CSS, Font Awesome, Grid.js
 - Database: Oracle, SQL 파일 기반 쿼리 로딩
 
+## 통합 에디팅 4단계
+
+기존 **컬럼 유형·기초통계 → 관계 분석 → 규칙 발굴 → 위반 탐지**와 전체 메뉴를 유지하면서, 각 단계의 Oracle 분석에 Python 혼합형 분석을 보강합니다. 새 통합 실행(`UNIFIED`)은 기존 분석과 혼합형 보강을 같은 FLOW에서 순차 수행하며, 저장된 `LEGACY`/`MIXED_XAI` 작업·설정·이력은 보존합니다.
+
+숫자 문자열의 일부 오타, 전체 관계와 다른 소수 집단 수식, 범주형–연속형 관계, 제한된 해시 표본을 지원합니다. 양쪽 분석의 위반 건수는 겹칠 수 있으므로 합산치를 고유 오류 셀 수로 해석하지 않습니다. 새 Python 의존성·추가 DDL은 없지만 기존 OML 및 혼합형 저장 스키마 설치가 필요합니다.
+
+사용·설정·실패 처리·Render 배포와 검증 범위는 [INTEGRATED_EDITING_GUIDE.md](INTEGRATED_EDITING_GUIDE.md), 혼합형 세부 기능은 [MIXED_XAI_GUIDE.md](MIXED_XAI_GUIDE.md)를 참고합니다. `database/ANALYSIS_SAMPLING.sql`은 서버가 로드하는 런타임 조회문이며 수동 설치 DDL이 아닙니다.
+
 ## 주요 구조
 
 ```text
@@ -215,14 +223,18 @@ SELECT ...
 
 ## 4단계 통합 FLOW
 
-기존 4단계와 별도로, 사전 컬럼 유형 판정이 필요 없는 **혼합형 XAI FLOW**를 제공합니다. 실제 컬럼별 예측 트리로 `IF 조건 THEN 실제 값·범위`를 발굴하고, 별도 표본 검증을 통과한 규칙을 원본 전체에 적용해 위반을 찾습니다. 기존 규칙·위반 테이블과 최종 분석·에디팅 화면을 재사용합니다. FLOW 기본 템플릿과 퀵 에디팅에서 방식을 선택할 수 있습니다. 새 Target DB 오브젝트는 자동 생성하지 않습니다. 혼합형 내장 API는 미등록 시 배포 프리셋으로 JOB을 준비하며, SQL 수동 설치와 선택적인 M90002 등록은 [MIXED_XAI_GUIDE.md](MIXED_XAI_GUIDE.md)를 참고하세요. 반복 오류의 원인과 재발 방지 검증은 [QUICK_EDIT_RELIABILITY.md](QUICK_EDIT_RELIABILITY.md)에 기록합니다.
+퀵 에디팅은 홈 바로 아래 **퀵 에디팅(M00001)** 메뉴 또는 상단 바로가기로 메인 탭에서 엽니다. 다른 메뉴를 확인해도 실행 상태를 유지하며, 실제 데이터 규칙은 **조건규칙(IF–THEN)·수식규칙**으로 구분합니다. 발굴 방법은 각 규칙에 보존하며 과거 이상 후보 설명은 별도로 확인합니다. 목록은 서버에서 페이지 단위로 조회하고, 위반 행·통계는 필요할 때 불러옵니다. 적용과 진단 확인은 [INTEGRATED_EDITING_GUIDE.md](INTEGRATED_EDITING_GUIDE.md)를 참고하세요.
 
-기본 FLOW 템플릿은 다음 통합 모델을 우선 선택합니다. 개별 프로파일링·상관·군집·LASSO·Apriori·Symbolic 모델도 별도 JOB으로 계속 사용할 수 있습니다.
+**혼합형 XAI 분석**은 새 통합 4단계의 보강 기능과 기존 혼합형 단독 FLOW에서 사용합니다. 실제 컬럼별 예측 트리와 수식으로 `IF 조건 THEN 실제 값·범위·수식`을 발굴하고, 별도 표본의 선택 검증을 통과한 규칙을 원본 전체에 적용합니다. 기존 규칙·위반 테이블과 최종 분석·에디팅 화면을 재사용합니다. 퀵 에디팅의 신규 작업은 통합 4단계로 고정하며, 상세 FLOW에서 개별 분석 구성을 관리합니다. 저장된 작업은 당시 방식을 유지합니다. Target DB 오브젝트는 분석 중 자동 생성하지 않습니다. 내장 API는 미등록 시 허용된 배포 프리셋으로 JOB을 준비하며, SQL 설치와 선택적인 M90002 등록은 [MIXED_XAI_GUIDE.md](MIXED_XAI_GUIDE.md)를 참고하세요. 반복 오류의 원인과 재발 방지 검증은 [QUICK_EDIT_RELIABILITY.md](QUICK_EDIT_RELIABILITY.md)에 기록합니다.
 
-1. `INIT$_SP_PREDICTED_TYPE`: 범주형/연속형 프로파일링
-2. `INTEGRATED_RELATION_CLUSTER`: 통합 관계 매트릭스와 네트워크 군집
-3. `INTEGRATED_RULE_DISCOVER`: 범주형 Apriori와 연속형 LASSO/Symbolic 규칙 발굴
-4. `INTEGRATED_RULE_VIOLATION_DETECT`: 범주형/연속형 규칙 위반 탐지
+신규 기본 FLOW 템플릿은 다음 4개 내장 통합 API를 우선 선택합니다. 각 API는 기존 Oracle 분석과 Python 혼합형 보강을 순서대로 수행합니다. 개별 프로파일링·상관·군집·LASSO·Apriori·Symbolic 모델과 저장된 기존 JOB도 계속 사용할 수 있습니다.
+
+1. `UNIFIED_EDITING_PROFILE`: 기존 컬럼 유형 판정과 표본 기초통계
+2. `UNIFIED_EDITING_RELATION`: 기존 관계 행렬·네트워크와 혼합형 관계·품질 진단
+3. `UNIFIED_EDITING_DISCOVER`: 기존 범주형·연속형 규칙과 혼합형 값·범위·수식 발굴
+4. `UNIFIED_EDITING_DETECT`: 같은 실행의 기존·혼합형 규칙 위반 탐지
+
+자동 생성된 JOB은 M03001~M03004의 작업 목록에서 열어 저장된 모델과 파라미터를 확인합니다. 미등록 내장 API로 준비한 JOB은 M90002 등록 ID가 없어도 저장된 계약으로 표시·저장·실행할 수 있습니다. M90002의 기본 Python API 생성은 미등록 항목만 추가하며 기존 설정이나 비활성 상태를 덮어쓰지 않습니다. 중앙 등록을 수정해도 과거 JOB의 설정은 자동 갱신되지 않습니다.
 
 `flow-model-contracts.json`은 각 모델의 입력·출력 artifact, 필수 여부, `SAME_RUN`/`LATEST_MASTER` 범위를 정의합니다. FLOW 저장·실행 시 서버가 단계 건너뛰기와 동일 RUN 결과 누락을 검증하며, 통합 노드의 복수 결과는 `INIT$_TB_FLOW_WORK_NODE_RUN.RUN_OUTPUT_JSON`에 기록됩니다. 기존 Target DB에는 `INIT_TARGET_ALTER.sql`을 적용해야 합니다.
 
@@ -230,4 +242,4 @@ SELECT ...
 
 - 현재 일부 기존 파일의 한글 주석/문자열이 깨져 보일 수 있습니다. 기존 인코딩을 일괄 변환하지 말고, 수정 범위 안에서만 UTF-8로 정리합니다.
 - `.env`, 지갑 파일, Oracle Instant Client, DB 접속 정보는 커밋하지 않습니다.
-- 이 저장소에는 아직 표준 테스트 스크립트가 없습니다. 변경 후 최소한 `.\venv\Scripts\python.exe -m uvicorn main:app --reload`로 앱 기동과 `/api/health`를 확인합니다.
+- `.\venv\Scripts\python.exe scripts/test_offline.py`로 환경 파일과 Oracle·네트워크 연결을 차단한 백엔드 회귀 검사를, `node --test quick-edit/tests/*.test.js`로 프런트 회귀 검사를 실행합니다. 앱 기동 후 `/api/health`도 확인하며 오프라인 검사를 실제 Oracle 실행 검증과 구분합니다.

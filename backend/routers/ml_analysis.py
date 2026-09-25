@@ -173,6 +173,30 @@ def mixed_xai_profile(req: MlAnalysisRequest, request: Request):
     return _run_mixed_xai(req, request, profile)
 
 
+@router.post("/unified-editing-profile")
+def unified_editing_profile(req: MlAnalysisRequest, request: Request):
+    from backend.services.integrated_editing_service import profile
+    return _run_mixed_xai(req, request, profile)
+
+
+@router.post("/unified-editing-relation")
+def unified_editing_relation(req: MlAnalysisRequest, request: Request):
+    from backend.services.integrated_editing_service import relationships
+    return _run_mixed_xai(req, request, relationships)
+
+
+@router.post("/unified-editing-discover")
+def unified_editing_discover(req: MlAnalysisRequest, request: Request):
+    from backend.services.integrated_editing_service import discover
+    return _run_mixed_xai(req, request, discover)
+
+
+@router.post("/unified-editing-detect")
+def unified_editing_detect(req: MlAnalysisRequest, request: Request):
+    from backend.services.integrated_editing_service import detect
+    return _run_mixed_xai(req, request, detect)
+
+
 @router.post("/mixed-xai-relation")
 def mixed_xai_relation(req: MlAnalysisRequest, request: Request):
     from backend.services.mixed_analysis_profile_service import relationships
@@ -191,15 +215,36 @@ def mixed_xai_rule_detect(req: MlAnalysisRequest, request: Request):
     return _run_mixed_xai(req, request, detect)
 
 
+@router.get("/editing-results")
+def editing_results(request: Request, flowRunId: int = Query(..., gt=0), targetOwner: str = "", targetTable: str = "",
+                    view: str = "rules", family: str = "CONDITION", page: int = Query(1, ge=1, le=1000000),
+                    pageSize: int = Query(20, ge=1, le=100), source: str = "ALL", ruleKey: str = "",
+                    conditionCount: str = "ALL", excludeZero: bool = False):
+    from backend.services.editing_result_service import read_results
+    conn = None
+    try:
+        conn = get_target_db_connection(request)
+        include_all_users = not getattr(request.state, "internal_api_user_id", None) and get_request_role_code(request) == "ADMIN"
+        return read_results(conn, flowRunId, get_request_user_id(request), include_all_users=include_all_users,
+                            target_owner=targetOwner, target_table=targetTable, view=view, family=family,
+                            page=page, page_size=pageSize, source=source, rule_key=ruleKey, condition_count=conditionCount, exclude_zero=excludeZero)
+    finally:
+        if conn:
+            conn.close()
+
+
 @router.get("/mixed-xai-results")
-def mixed_xai_results(request: Request, flowRunId: int = Query(..., gt=0), targetOwner: str = "", targetTable: str = ""):
+def mixed_xai_results(request: Request, flowRunId: int = Query(..., gt=0), targetOwner: str = "", targetTable: str = "",
+                      page: int = Query(1, ge=1), pageSize: int = Query(20, ge=1, le=100), includeViolations: bool = False,
+                      view: str = "rules", ruleId: str = ""):
     from backend.services.mixed_xai_service import read_results
     conn = None
     try:
         conn = get_target_db_connection(request)
         include_all_users = not getattr(request.state, "internal_api_user_id", None) and get_request_role_code(request) == "ADMIN"
         return read_results(conn, flowRunId, get_request_user_id(request), include_all_users=include_all_users,
-                            target_owner=targetOwner, target_table=targetTable)
+                            target_owner=targetOwner, target_table=targetTable, page=page, page_size=pageSize,
+                            include_violations=includeViolations, view=view, rule_id=ruleId)
     finally:
         if conn:
             conn.close()

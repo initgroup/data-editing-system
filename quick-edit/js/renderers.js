@@ -243,6 +243,7 @@
     }
 
     function annotateColumnText(value, columnComments = {}) {
+        if (window.EditingResultView?.annotateColumnText) return window.EditingResultView.annotateColumnText(value, columnComments);
         let text = String(value || "");
         const columns = Object.keys(columnComments || {})
             .filter(Boolean)
@@ -437,7 +438,7 @@
 
     function renderCategoricalRules(rules, options = {}) {
         const safeRules = Array.isArray(rules) ? rules : [];
-        if (!safeRules.length) return `<p class="qe-empty">${escapeHtml(options.mixedPattern ? window.RuleResultCommon.t("No patterns passed the support, confidence and validation criteria. No rules were forced.") : options.mixedXai ? window.RuleResultCommon.t("No candidate rules were discovered.") : "발견된 IF–THEN 규칙이 없습니다.")}</p>`;
+        if (!safeRules.length) return `<p class="qe-empty">${escapeHtml(options.emptyMessage || (options.mixedPattern ? window.RuleResultCommon.t("No patterns passed the support, confidence and validation criteria. No rules were forced.") : options.mixedXai ? window.RuleResultCommon.t("No candidate rules were discovered.") : "발견된 IF–THEN 규칙이 없습니다."))}</p>`;
         return safeRules.map((rule, index) => {
             const common = window.RuleResultCommon;
             const mixed = common?.isXai(rule);

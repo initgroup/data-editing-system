@@ -9,11 +9,1041 @@
     ":INIT$ResultModelName"
   ],
   "defaultObjectNames": [
+    "UNIFIED_EDITING_PROFILE",
+    "UNIFIED_EDITING_RELATION",
+    "UNIFIED_EDITING_DISCOVER",
+    "UNIFIED_EDITING_DETECT",
     "INTEGRATED_RELATION_CLUSTER",
     "INTEGRATED_RULE_DISCOVER",
     "INTEGRATED_RULE_VIOLATION_DETECT"
   ],
   "groups": [
+    {
+      "groupName": "Unified Editing Python API",
+      "resources": [
+        {
+          "objectType": "INTERNAL_API",
+          "objectName": "UNIFIED_EDITING_PROFILE",
+          "label": "Unified Editing Profile",
+          "apiGroup": "Unified Editing Python API",
+          "endpoint": "/api/mlAnalysis/unified-editing-profile",
+          "httpMethod": "POST",
+          "auth": {
+            "type": "API_KEY",
+            "keyName": "INIT_INTERNAL_API_KEY",
+            "headerName": "X-INIT-API-Key"
+          },
+          "timeoutSec": 300,
+          "sortOrder": 70,
+          "useYn": "Y",
+          "description": "Four-stage editing: preserves Oracle column types and OML analysis, adds mixed patterns in the same run. Existing jobs and admin settings are not overwritten.",
+          "output": {
+            "resultCreateYn": "T",
+            "resultOwner": ":INIT$TargetOwner",
+            "resultTableName": "INIT$_TB_COLTYPE_FINAL",
+            "persistMode": "SERVICE_MANAGED",
+            "rules": []
+          },
+          "details": [
+            {
+              "key": "INPUT.P_TARGET_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Source owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 1
+            },
+            {
+              "key": "INPUT.P_TARGET_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Source table",
+              "defaultValue": ":INIT$TargetTable",
+              "order": 2
+            },
+            {
+              "key": "INPUT.P_RUN_SOURCE_TYPE",
+              "value": "IN VARCHAR2",
+              "comment": "Persisted DATA_WORK or FLOW_WORK run",
+              "defaultValue": ":INIT$RunSourceType",
+              "order": 3
+            },
+            {
+              "key": "INPUT.P_RUN_ID",
+              "value": "IN NUMBER",
+              "comment": "Current run ID",
+              "defaultValue": ":INIT$RunId",
+              "order": 4
+            },
+            {
+              "key": "INPUT.P_SAMPLE_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Bounded mixed learning sample; HASH selects across the source and server caps apply",
+              "defaultValue": "25000",
+              "order": 5
+            },
+            {
+              "key": "INPUT.P_EXCLUDE_COLUMNS",
+              "value": "IN VARCHAR2",
+              "comment": "Comma-separated columns excluded from learning",
+              "defaultValue": "FILE_ROW_NO",
+              "order": 10
+            },
+            {
+              "key": "INPUT.P_SAMPLING_STRATEGY",
+              "value": "IN VARCHAR2",
+              "defaultValue": "HASH",
+              "comment": "Mixed supplement: reproducible row-hash sample; scans source in Oracle, bounded Python memory",
+              "order": 7
+            },
+            {
+              "key": "INPUT.P_SAMPLE_SEED",
+              "value": "IN NUMBER",
+              "defaultValue": "42",
+              "comment": "Stable hash sampling seed",
+              "order": 8
+            },
+            {
+              "key": "INPUT.P_PREDICTION_METHOD",
+              "value": "IN VARCHAR2",
+              "defaultValue": "AUTO",
+              "comment": "Oracle column type analysis method",
+              "order": 9
+            }
+          ]
+        },
+        {
+          "objectType": "INTERNAL_API",
+          "objectName": "UNIFIED_EDITING_RELATION",
+          "label": "Unified Editing Relation",
+          "apiGroup": "Unified Editing Python API",
+          "endpoint": "/api/mlAnalysis/unified-editing-relation",
+          "httpMethod": "POST",
+          "auth": {
+            "type": "API_KEY",
+            "keyName": "INIT_INTERNAL_API_KEY",
+            "headerName": "X-INIT-API-Key"
+          },
+          "timeoutSec": 900,
+          "sortOrder": 71,
+          "useYn": "Y",
+          "description": "Four-stage editing: preserves Oracle column types and OML analysis, adds mixed patterns in the same run. Existing jobs and admin settings are not overwritten.",
+          "output": {
+            "resultCreateYn": "T",
+            "resultOwner": ":INIT$TargetOwner",
+            "resultTableName": "INIT$_TB_COLREL_NETWORK_EDGE",
+            "persistMode": "SERVICE_MANAGED",
+            "rules": []
+          },
+          "details": [
+            {
+              "key": "INPUT.P_TARGET_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Target table owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 1
+            },
+            {
+              "key": "INPUT.P_TARGET_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Target table name",
+              "defaultValue": ":INIT$TargetTable",
+              "order": 2
+            },
+            {
+              "key": "INPUT.P_MIN_METRIC",
+              "value": "IN NUMBER",
+              "comment": "Minimum integrated relation strength",
+              "defaultValue": "0.65",
+              "order": 3
+            },
+            {
+              "key": "INPUT.P_MIN_CRAMER",
+              "value": "IN NUMBER",
+              "comment": "Minimum Cramer's V",
+              "defaultValue": "0.3",
+              "order": 4
+            },
+            {
+              "key": "INPUT.P_MIN_ABS_CORR",
+              "value": "IN NUMBER",
+              "comment": "Minimum absolute numeric correlation",
+              "defaultValue": "0.6",
+              "order": 5
+            },
+            {
+              "key": "INPUT.P_MIN_ETA",
+              "value": "IN NUMBER",
+              "comment": "Minimum categorical-numeric eta squared",
+              "defaultValue": "0.65",
+              "order": 6
+            },
+            {
+              "key": "INPUT.P_MIN_PVALUE",
+              "value": "IN NUMBER",
+              "comment": "Maximum p-value",
+              "defaultValue": "0.05",
+              "order": 7
+            },
+            {
+              "key": "INPUT.P_SAMPLE_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Maximum sample rows",
+              "defaultValue": "100000",
+              "order": 8
+            },
+            {
+              "key": "INPUT.P_MAX_DISTINCT",
+              "value": "IN NUMBER",
+              "comment": "Maximum categorical distinct count",
+              "defaultValue": "100",
+              "order": 9
+            },
+            {
+              "key": "INPUT.P_MAX_COLUMNS",
+              "value": "IN NUMBER",
+              "comment": "Maximum analyzed columns",
+              "defaultValue": "100",
+              "order": 10
+            },
+            {
+              "key": "INPUT.P_MIN_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Minimum complete rows",
+              "defaultValue": "30",
+              "order": 11
+            },
+            {
+              "key": "INPUT.P_INCLUDE_SPEARMAN",
+              "value": "IN VARCHAR2",
+              "comment": "Include Spearman metric Y/N",
+              "defaultValue": "Y",
+              "order": 12
+            },
+            {
+              "key": "INPUT.P_NETWORK_MIN_METRIC",
+              "value": "IN NUMBER",
+              "comment": "Minimum relation strength used as a network edge",
+              "defaultValue": "0.3",
+              "order": 13
+            },
+            {
+              "key": "INPUT.P_MAX_EDGES",
+              "value": "IN NUMBER",
+              "comment": "Maximum network edges",
+              "defaultValue": "500",
+              "order": 14
+            },
+            {
+              "key": "INPUT.P_RELATION_TYPES",
+              "value": "IN VARCHAR2",
+              "comment": "Optional relation type filter",
+              "defaultValue": "(auto)",
+              "order": 15
+            },
+            {
+              "key": "INPUT.P_METRIC_NAMES",
+              "value": "IN VARCHAR2",
+              "comment": "Optional metric filter",
+              "defaultValue": "(auto)",
+              "order": 16
+            },
+            {
+              "key": "INPUT.P_RUN_SOURCE_TYPE",
+              "value": "IN VARCHAR2",
+              "comment": "DATA_WORK or FLOW_WORK",
+              "defaultValue": ":INIT$RunSourceType",
+              "order": 17
+            },
+            {
+              "key": "INPUT.P_RUN_ID",
+              "value": "IN NUMBER",
+              "comment": "Run ID linking relation pairs and network results from the same DATA_WORK or FLOW_WORK execution",
+              "defaultValue": ":INIT$RunId",
+              "order": 18
+            },
+            {
+              "key": "OUTPUT.resultTables",
+              "value": "$.resultTables",
+              "comment": "Service-managed relation and network result tables",
+              "defaultValue": "INIT$_TB_COLREL_PAIR,INIT$_TB_COLREL_NETWORK_NODE,INIT$_TB_COLREL_NETWORK_EDGE",
+              "order": 19
+            },
+            {
+              "key": "INPUT.P_SAMPLING_STRATEGY",
+              "value": "IN VARCHAR2",
+              "defaultValue": "HASH",
+              "comment": "Mixed supplement: reproducible row-hash sample; scans source in Oracle, bounded Python memory",
+              "order": 20
+            },
+            {
+              "key": "INPUT.P_SAMPLE_SEED",
+              "value": "IN NUMBER",
+              "defaultValue": "42",
+              "comment": "Stable hash sampling seed",
+              "order": 21
+            },
+            {
+              "key": "INPUT.P_EXCLUDE_COLUMNS",
+              "value": "IN VARCHAR2",
+              "defaultValue": "FILE_ROW_NO",
+              "comment": "Columns excluded from mixed learning",
+              "order": 22
+            }
+          ]
+        },
+        {
+          "objectType": "INTERNAL_API",
+          "objectName": "UNIFIED_EDITING_DISCOVER",
+          "label": "Unified Editing Discover",
+          "apiGroup": "Unified Editing Python API",
+          "endpoint": "/api/mlAnalysis/unified-editing-discover",
+          "httpMethod": "POST",
+          "auth": {
+            "type": "API_KEY",
+            "keyName": "INIT_INTERNAL_API_KEY",
+            "headerName": "X-INIT-API-Key"
+          },
+          "timeoutSec": 900,
+          "sortOrder": 72,
+          "useYn": "Y",
+          "description": "Four-stage editing: preserves Oracle column types and OML analysis, adds mixed patterns in the same run. Existing jobs and admin settings are not overwritten.",
+          "output": {
+            "resultCreateYn": "T",
+            "resultOwner": ":INIT$TargetOwner",
+            "resultTableName": "INIT$_TB_RULEDISC_ASSOC_SUM",
+            "persistMode": "SERVICE_MANAGED",
+            "rules": []
+          },
+          "details": [
+            {
+              "key": "INPUT.P_TARGET_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Target table owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 1
+            },
+            {
+              "key": "INPUT.P_TARGET_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Target table name",
+              "defaultValue": ":INIT$TargetTable",
+              "order": 2
+            },
+            {
+              "key": "INPUT.P_RULE_PARTS",
+              "value": "IN VARCHAR2",
+              "comment": "Execution scope: ALL runs categorical Apriori and continuous LASSO/Symbolic work; CATEGORICAL or CONTINUOUS runs only that part",
+              "defaultValue": "ALL",
+              "order": 3
+            },
+            {
+              "key": "INPUT.P_ASSOC_MODEL_NAME",
+              "value": "IN VARCHAR2",
+              "comment": "Association model name for categorical rule discovery",
+              "defaultValue": "AUTO",
+              "order": 4
+            },
+            {
+              "key": "INPUT.P_CASE_ID_COLUMN_NAME",
+              "value": "IN VARCHAR2",
+              "comment": "Case ID column",
+              "defaultValue": "FILE_ROW_NO",
+              "order": 5
+            },
+            {
+              "key": "INPUT.P_MIN_SUPPORT",
+              "value": "IN NUMBER",
+              "comment": "Apriori minimum support",
+              "defaultValue": "0.2",
+              "order": 6
+            },
+            {
+              "key": "INPUT.P_MIN_CONFIDENCE",
+              "value": "IN NUMBER",
+              "comment": "Apriori minimum confidence",
+              "defaultValue": "0.7",
+              "order": 7
+            },
+            {
+              "key": "INPUT.P_MAX_RULE_LENGTH",
+              "value": "IN NUMBER",
+              "comment": "Maximum Apriori rule length",
+              "defaultValue": "3",
+              "order": 8
+            },
+            {
+              "key": "INPUT.P_DROP_EXISTING_YN",
+              "value": "IN VARCHAR2",
+              "comment": "Drop an existing association model before rebuilding",
+              "defaultValue": "Y",
+              "order": 9
+            },
+            {
+              "key": "INPUT.P_MAX_INPUT_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Maximum input rows for categorical rule discovery",
+              "defaultValue": "100000",
+              "order": 10
+            },
+            {
+              "key": "INPUT.P_CATEGORICAL_COLUMNS",
+              "value": "IN VARCHAR2",
+              "comment": "Comma-separated categorical columns. (auto) uses profiled columns.",
+              "defaultValue": "(auto)",
+              "order": 11
+            },
+            {
+              "key": "INPUT.P_MIN_RULE_SUPPORT_COUNT",
+              "value": "IN NUMBER",
+              "comment": "Minimum association rule support row count",
+              "defaultValue": "30",
+              "order": 12
+            },
+            {
+              "key": "INPUT.P_MIN_RULE_LIFT",
+              "value": "IN NUMBER",
+              "comment": "Minimum rule lift for association summary",
+              "defaultValue": "1",
+              "order": 13
+            },
+            {
+              "key": "INPUT.P_MAX_RULE_SUMMARY_COLUMNS",
+              "value": "IN NUMBER",
+              "comment": "Maximum candidate columns considered for association-rule summaries (2-80). This is not the X-condition count per rule.",
+              "defaultValue": "50",
+              "order": 14
+            },
+            {
+              "key": "INPUT.P_MAX_RULE_SUMMARY_PER_PAIR",
+              "value": "IN NUMBER",
+              "comment": "Maximum summarized rules stored per target/condition-column combination (1-200)",
+              "defaultValue": "50",
+              "order": 15
+            },
+            {
+              "key": "INPUT.P_MAX_RULE_CONDITION_COUNT",
+              "value": "IN NUMBER",
+              "comment": "Maximum X-condition columns searched per categorical rule (1-5). The default is 5; fewer may be found when candidate count or support/confidence/lift filters do not qualify a rule.",
+              "defaultValue": "5",
+              "order": 16
+            },
+            {
+              "key": "INPUT.P_MAX_RULE_COMBINATIONS",
+              "value": "IN NUMBER",
+              "comment": "Maximum target/condition-column combinations evaluated. Larger spaces are sampled by distributing this budget across targets and condition sizes without lowering the requested condition count.",
+              "defaultValue": "1000",
+              "order": 17
+            },
+            {
+              "key": "INPUT.P_TARGET_COLUMN",
+              "value": "IN VARCHAR2",
+              "comment": "Continuous target column. (auto) runs all eligible continuous targets.",
+              "defaultValue": "(auto)",
+              "order": 18
+            },
+            {
+              "key": "INPUT.P_MAX_FEATURES",
+              "value": "IN NUMBER",
+              "comment": "Maximum LASSO/Symbolic feature count",
+              "defaultValue": "10",
+              "order": 19
+            },
+            {
+              "key": "INPUT.P_CLUSTER_USAGE_MODE",
+              "value": "IN VARCHAR2",
+              "comment": "Cluster usage: NONE disables clusters; PREFER_SAME_CLUSTER prefers same-cluster features but allows cross-cluster features; WITHIN_CLUSTER_ONLY restricts to the same cluster. Non-NONE requires the same run's RELATION_NETWORK result.",
+              "defaultValue": "PREFER_SAME_CLUSTER",
+              "order": 20
+            },
+            {
+              "key": "INPUT.P_SAMPLE_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Maximum sampled rows",
+              "defaultValue": "50000",
+              "order": 21
+            },
+            {
+              "key": "INPUT.P_ALPHA",
+              "value": "IN NUMBER",
+              "comment": "LASSO alpha. (auto) lets the service select it.",
+              "defaultValue": "(auto)",
+              "order": 22
+            },
+            {
+              "key": "INPUT.P_MAX_ITERATIONS",
+              "value": "IN NUMBER",
+              "comment": "Maximum Symbolic/robust estimator iterations",
+              "defaultValue": "10000",
+              "order": 23
+            },
+            {
+              "key": "INPUT.P_MAX_SYMBOLIC_TERMS",
+              "value": "IN NUMBER",
+              "comment": "Maximum retained polynomial Symbolic Regression term count",
+              "defaultValue": "8",
+              "order": 24
+            },
+            {
+              "key": "INPUT.P_USE_PYSR",
+              "value": "IN VARCHAR2",
+              "comment": "Use PySR symbolic regression Y/N",
+              "defaultValue": "N",
+              "order": 25
+            },
+            {
+              "key": "INPUT.P_LINEAR_FIRST_YN",
+              "value": "IN VARCHAR2",
+              "comment": "Try a linear symbolic rule before nonlinear search",
+              "defaultValue": "Y",
+              "order": 26
+            },
+            {
+              "key": "INPUT.P_LINEAR_R2_THRESHOLD",
+              "value": "IN NUMBER",
+              "comment": "R2 threshold for accepting the linear symbolic rule",
+              "defaultValue": "0.995",
+              "order": 27
+            },
+            {
+              "key": "INPUT.P_MIN_R2_SCORE",
+              "value": "IN NUMBER",
+              "comment": "Minimum LASSO R2 score for symbolic regression",
+              "defaultValue": "0.7",
+              "order": 28
+            },
+            {
+              "key": "INPUT.P_DIMENSION_REDUCTION_MODE",
+              "value": "IN VARCHAR2",
+              "comment": "Source-feature screening mode: AUTO, PCA, or NONE. PCA retains representative original columns only.",
+              "defaultValue": "AUTO",
+              "order": 29
+            },
+            {
+              "key": "INPUT.P_ESTIMATION_MODE",
+              "value": "IN VARCHAR2",
+              "comment": "Linear estimator: AUTO, OLS, or ROBUST_IRLS. Robust mode uses deterministic Student-t-style IRLS.",
+              "defaultValue": "AUTO",
+              "order": 30
+            },
+            {
+              "key": "INPUT.P_MONTE_CARLO_MODE",
+              "value": "IN VARCHAR2",
+              "comment": "Fixed-seed stability validation: OFF, AUTO, BOOTSTRAP, or REPEATED_HOLDOUT. It does not randomize correction predictions.",
+              "defaultValue": "AUTO",
+              "order": 31
+            },
+            {
+              "key": "INPUT.P_MONTE_CARLO_ITERATIONS",
+              "value": "IN NUMBER",
+              "comment": "Stability-validation resample count, clamped to 5-50",
+              "defaultValue": "20",
+              "order": 32
+            },
+            {
+              "key": "INPUT.P_MONTE_CARLO_MAX_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Maximum rows used only for stability validation, clamped to 100-10000",
+              "defaultValue": "5000",
+              "order": 33
+            },
+            {
+              "key": "INPUT.P_BANFF_MODE",
+              "value": "IN VARCHAR2",
+              "comment": "Single-ratio candidate mode: AUTO, RATIO, or OFF. This is Banff-inspired and is not a full Banff implementation.",
+              "defaultValue": "AUTO",
+              "order": 34
+            },
+            {
+              "key": "INPUT.P_SIMPLE_ARITHMETIC_FIRST_YN",
+              "value": "IN VARCHAR2",
+              "comment": "Try coefficient-free arithmetic rules before fitted regression Y/N",
+              "defaultValue": "Y",
+              "order": 35
+            },
+            {
+              "key": "INPUT.P_SIMPLE_ARITHMETIC_MIN_MATCH_RATE",
+              "value": "IN NUMBER",
+              "comment": "Minimum dominant-row match rate for coefficient-free arithmetic rules",
+              "defaultValue": "0.90",
+              "order": 36
+            },
+            {
+              "key": "INPUT.P_SIMPLE_ARITHMETIC_MAX_TERMS",
+              "value": "IN NUMBER",
+              "comment": "Maximum source term count for coefficient-free arithmetic candidates, clamped to 2-4",
+              "defaultValue": "3",
+              "order": 37
+            },
+            {
+              "key": "INPUT.P_SIMPLE_ARITHMETIC_TOLERANCE_PCT",
+              "value": "IN NUMBER",
+              "comment": "Relative match tolerance for arithmetic discovery; 0.01 means 1 percent",
+              "defaultValue": "0",
+              "order": 38
+            },
+            {
+              "key": "INPUT.P_MAX_AUTO_TARGETS",
+              "value": "IN NUMBER",
+              "comment": "Maximum auto continuous target count",
+              "defaultValue": "10",
+              "order": 39
+            },
+            {
+              "key": "INPUT.P_CONTINUE_ON_ERROR",
+              "value": "IN VARCHAR2",
+              "comment": "Continue remaining subtasks when one fails. Y can return partial completion, so review failed-task details.",
+              "defaultValue": "Y",
+              "order": 40
+            },
+            {
+              "key": "INPUT.P_RUN_SOURCE_TYPE",
+              "value": "IN VARCHAR2",
+              "comment": "DATA_WORK or FLOW_WORK",
+              "defaultValue": ":INIT$RunSourceType",
+              "order": 41
+            },
+            {
+              "key": "INPUT.P_RUN_ID",
+              "value": "IN NUMBER",
+              "comment": "Run ID linking profiling, relationship-network, and rule results from the same DATA_WORK or FLOW_WORK execution",
+              "defaultValue": ":INIT$RunId",
+              "order": 42
+            },
+            {
+              "key": "OUTPUT.status",
+              "value": "$.status",
+              "comment": "API success status",
+              "defaultValue": "",
+              "order": 43
+            },
+            {
+              "key": "OUTPUT.resultTables",
+              "value": "$.resultTables",
+              "comment": "Service-managed result tables",
+              "defaultValue": "INIT$_TB_RULEDISC_ASSOC_SUM,INIT$_TB_COLREL_LASSO_FEATURE,INIT$_TB_RULEDISC_SYMBOLIC",
+              "order": 44
+            },
+            {
+              "key": "INPUT.P_SAMPLING_STRATEGY",
+              "value": "IN VARCHAR2",
+              "defaultValue": "HASH",
+              "comment": "Mixed supplement: reproducible row-hash sample; scans source in Oracle, bounded Python memory",
+              "order": 45
+            },
+            {
+              "key": "INPUT.P_SAMPLE_SEED",
+              "value": "IN NUMBER",
+              "defaultValue": "42",
+              "comment": "Stable hash sampling seed",
+              "order": 46
+            },
+            {
+              "key": "INPUT.P_EXCLUDE_COLUMNS",
+              "value": "IN VARCHAR2",
+              "defaultValue": "FILE_ROW_NO",
+              "comment": "Columns excluded from mixed learning",
+              "order": 47
+            },
+            {
+              "key": "INPUT.P_MIXED_MIN_CONFIDENCE",
+              "value": "IN NUMBER",
+              "defaultValue": "0.99",
+              "comment": "Minimum training conditional confidence for an actual THEN value/range",
+              "order": 48
+            },
+            {
+              "key": "INPUT.P_MIXED_MAX_DEPTH",
+              "value": "IN NUMBER",
+              "defaultValue": "4",
+              "comment": "Maximum actual-column prediction tree depth",
+              "order": 49
+            },
+            {
+              "key": "INPUT.P_MIXED_MIN_SAMPLES_LEAF",
+              "value": "IN NUMBER",
+              "defaultValue": "20",
+              "comment": "Minimum training rows per leaf",
+              "order": 50
+            },
+            {
+              "key": "INPUT.P_MIXED_MAX_CATEGORIES",
+              "value": "IN NUMBER",
+              "defaultValue": "32",
+              "comment": "Maximum categories per encoded feature",
+              "order": 51
+            },
+            {
+              "key": "INPUT.P_MIXED_MIN_VALIDATION_CONFIDENCE",
+              "value": "IN NUMBER",
+              "defaultValue": "0.90",
+              "comment": "Minimum separate validation confidence",
+              "order": 52
+            },
+            {
+              "key": "INPUT.P_MIXED_MIN_VALIDATION_COUNT",
+              "value": "IN NUMBER",
+              "defaultValue": "10",
+              "comment": "Minimum validation condition matches",
+              "order": 53
+            },
+            {
+              "key": "INPUT.P_MIXED_MAX_TARGETS",
+              "value": "IN NUMBER",
+              "defaultValue": "64",
+              "comment": "Maximum actual target columns to model",
+              "order": 54
+            },
+            {
+              "key": "INPUT.P_MIXED_MAX_RULES",
+              "value": "IN NUMBER",
+              "defaultValue": "64",
+              "comment": "Maximum accepted rules",
+              "order": 55
+            },
+            {
+              "key": "INPUT.P_MIXED_TARGET_COLUMNS",
+              "value": "IN VARCHAR2",
+              "defaultValue": "",
+              "comment": "Optional actual THEN columns; empty automatically selects usable columns",
+              "order": 56
+            },
+            {
+              "key": "INPUT.P_MIXED_MIN_LIFT",
+              "value": "IN NUMBER",
+              "defaultValue": "1.01",
+              "comment": "Minimum gain over the unconditional result probability",
+              "order": 57
+            },
+            {
+              "key": "INPUT.P_MIXED_CONTINUOUS_ENABLED",
+              "value": "IN VARCHAR2",
+              "defaultValue": "true",
+              "comment": "Enable continuous actual-value formula rules",
+              "order": 58
+            },
+            {
+              "key": "INPUT.P_MIXED_MAX_CONTINUOUS_TARGETS",
+              "value": "IN NUMBER",
+              "defaultValue": "16",
+              "comment": "Maximum continuous targets; independent from maximum tree targets",
+              "order": 59
+            },
+            {
+              "key": "INPUT.P_MIXED_MAX_CONTINUOUS_RULES",
+              "value": "IN NUMBER",
+              "defaultValue": "32",
+              "comment": "Maximum accepted continuous formula rules",
+              "order": 60
+            },
+            {
+              "key": "INPUT.P_MIXED_MAX_FORMULA_FEATURES",
+              "value": "IN NUMBER",
+              "defaultValue": "3",
+              "comment": "Maximum input columns per readable formula",
+              "order": 61
+            },
+            {
+              "key": "INPUT.P_MIXED_MIN_FORMULA_CONFIDENCE",
+              "value": "IN NUMBER",
+              "defaultValue": "0.95",
+              "comment": "Minimum fit-sample formula agreement; not a statistical prediction interval confidence level",
+              "order": 62
+            },
+            {
+              "key": "INPUT.P_MIXED_MIN_FORMULA_VALIDATION_CONFIDENCE",
+              "value": "IN NUMBER",
+              "defaultValue": "0.90",
+              "comment": "Minimum agreement on separate validation rows",
+              "order": 63
+            },
+            {
+              "key": "INPUT.P_MIXED_MIN_FORMULA_R2",
+              "value": "IN NUMBER",
+              "defaultValue": "0.90",
+              "comment": "Minimum fit/validation inlier R-squared; coverage and tolerance guards also apply (0.5 to 0.99999)",
+              "order": 64
+            },
+            {
+              "key": "INPUT.P_MIXED_MAX_TOLERANCE_FRACTION",
+              "value": "IN NUMBER",
+              "defaultValue": "0.05",
+              "comment": "Maximum allowed residual tolerance as a fraction of target IQR (0.001 to 0.2)",
+              "order": 65
+            }
+          ]
+        },
+        {
+          "objectType": "INTERNAL_API",
+          "objectName": "UNIFIED_EDITING_DETECT",
+          "label": "Unified Editing Detect",
+          "apiGroup": "Unified Editing Python API",
+          "endpoint": "/api/mlAnalysis/unified-editing-detect",
+          "httpMethod": "POST",
+          "auth": {
+            "type": "API_KEY",
+            "keyName": "INIT_INTERNAL_API_KEY",
+            "headerName": "X-INIT-API-Key"
+          },
+          "timeoutSec": 900,
+          "sortOrder": 73,
+          "useYn": "Y",
+          "description": "Four-stage editing: preserves Oracle column types and OML analysis, adds mixed patterns in the same run. Existing jobs and admin settings are not overwritten.",
+          "output": {
+            "resultCreateYn": "T",
+            "resultOwner": ":INIT$TargetOwner",
+            "resultTableName": "INIT$_TB_RULEVIOL_ASSOC",
+            "persistMode": "SERVICE_MANAGED",
+            "rules": []
+          },
+          "details": [
+            {
+              "key": "INPUT.P_RULE_PARTS",
+              "value": "IN VARCHAR2",
+              "comment": "Detection scope: ALL runs categorical and continuous checks; CATEGORICAL or CONTINUOUS runs only that part",
+              "defaultValue": "ALL",
+              "order": 1
+            },
+            {
+              "key": "INPUT.P_RULE_OWNER_NAME",
+              "value": "IN VARCHAR2",
+              "comment": "Owner of the association rule model produced by the upstream rule-discovery task in the same run",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 2
+            },
+            {
+              "key": "INPUT.P_RULE_MODEL_NAME",
+              "value": "IN VARCHAR2",
+              "comment": "Association rule model produced by rule discovery in the same run; (auto) resolves it by run ID",
+              "defaultValue": "(auto)",
+              "order": 3
+            },
+            {
+              "key": "INPUT.P_SYMBOLIC_RULE_TABLE_NAME",
+              "value": "IN VARCHAR2",
+              "comment": "Symbolic rule storage table. Use INIT$_TB_RULEDISC_SYMBOLIC; do not use :INIT$PreResultTable or an OML_ASSOC model name.",
+              "defaultValue": "INIT$_TB_RULEDISC_SYMBOLIC",
+              "order": 4
+            },
+            {
+              "key": "INPUT.P_RULE_ID",
+              "value": "IN NUMBER",
+              "comment": "Optional symbolic RULE_ID. (auto) evaluates all rules eligible for the current execution.",
+              "defaultValue": "(auto)",
+              "order": 5
+            },
+            {
+              "key": "INPUT.P_TARGET_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Target table owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 6
+            },
+            {
+              "key": "INPUT.P_TARGET_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Target table name",
+              "defaultValue": ":INIT$TargetTable",
+              "order": 7
+            },
+            {
+              "key": "INPUT.P_CASE_ID_COLUMN_NAME",
+              "value": "IN VARCHAR2",
+              "comment": "Case ID column",
+              "defaultValue": "FILE_ROW_NO",
+              "order": 8
+            },
+            {
+              "key": "INPUT.P_CAT_RESULT_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Categorical violation result owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 9
+            },
+            {
+              "key": "INPUT.P_CAT_RESULT_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Categorical violation result table",
+              "defaultValue": "INIT$_TB_RULEVIOL_ASSOC",
+              "order": 10
+            },
+            {
+              "key": "INPUT.P_SYMBOLIC_RESULT_OWNER",
+              "value": "IN VARCHAR2",
+              "comment": "Symbolic violation result owner",
+              "defaultValue": ":INIT$TargetOwner",
+              "order": 11
+            },
+            {
+              "key": "INPUT.P_SYMBOLIC_RESULT_TABLE",
+              "value": "IN VARCHAR2",
+              "comment": "Symbolic violation result table",
+              "defaultValue": "INIT$_TB_RULEVIOL_SYMBOLIC",
+              "order": 12
+            },
+            {
+              "key": "INPUT.P_MIN_CONFIDENCE",
+              "value": "IN NUMBER",
+              "comment": "Categorical violation minimum confidence",
+              "defaultValue": "0.8",
+              "order": 13
+            },
+            {
+              "key": "INPUT.P_MIN_LIFT",
+              "value": "IN NUMBER",
+              "comment": "Categorical violation minimum lift",
+              "defaultValue": "1",
+              "order": 14
+            },
+            {
+              "key": "INPUT.P_MAX_RULES",
+              "value": "IN NUMBER",
+              "comment": "Maximum categorical rule count",
+              "defaultValue": "100",
+              "order": 15
+            },
+            {
+              "key": "INPUT.P_SYMBOLIC_MAX_RULES",
+              "value": "IN NUMBER",
+              "comment": "Maximum symbolic rule count",
+              "defaultValue": "20",
+              "order": 16
+            },
+            {
+              "key": "INPUT.P_MAX_VIOLATIONS_PER_RULE",
+              "value": "IN NUMBER",
+              "comment": "Maximum violation rows per rule",
+              "defaultValue": "500",
+              "order": 17
+            },
+            {
+              "key": "INPUT.P_ERROR_PCT_THRESHOLD",
+              "value": "IN NUMBER",
+              "comment": "Symbolic allowed relative error threshold",
+              "defaultValue": "0.05",
+              "order": 18
+            },
+            {
+              "key": "INPUT.P_ABS_ERROR_THRESHOLD",
+              "value": "IN NUMBER",
+              "comment": "Optional absolute error threshold for symbolic violations",
+              "defaultValue": "(auto)",
+              "order": 19
+            },
+            {
+              "key": "INPUT.P_MAX_SCAN_ROWS",
+              "value": "IN NUMBER",
+              "comment": "Maximum scan rows per symbolic rule",
+              "defaultValue": "50000",
+              "order": 20
+            },
+            {
+              "key": "INPUT.P_MAX_ELAPSED_SECONDS",
+              "value": "IN NUMBER",
+              "comment": "Maximum symbolic violation scan time in seconds",
+              "defaultValue": "1800",
+              "order": 21
+            },
+            {
+              "key": "INPUT.P_MAX_EXPRESSION_LENGTH",
+              "value": "IN NUMBER",
+              "comment": "Maximum symbolic expression length",
+              "defaultValue": "8000",
+              "order": 22
+            },
+            {
+              "key": "INPUT.P_CLEAR_EXISTING_YN",
+              "value": "IN VARCHAR2",
+              "comment": "Clear existing violation rows for the same run before detection (Y/N)",
+              "defaultValue": "Y",
+              "order": 23
+            },
+            {
+              "key": "INPUT.P_COMMIT_YN",
+              "value": "IN VARCHAR2",
+              "comment": "Commit inside the subprocedure (Y/N). Keep N so the integrated API coordinates the transaction and commits once.",
+              "defaultValue": "N",
+              "order": 24
+            },
+            {
+              "key": "INPUT.P_COMMIT_INTERVAL",
+              "value": "IN NUMBER",
+              "comment": "Commit interval used by violation procedures",
+              "defaultValue": "5000",
+              "order": 25
+            },
+            {
+              "key": "INPUT.P_CONTINUE_ON_ERROR",
+              "value": "IN VARCHAR2",
+              "comment": "Continue remaining detection subtasks when one fails. Y can return partial completion, so review failed-task details.",
+              "defaultValue": "Y",
+              "order": 26
+            },
+            {
+              "key": "INPUT.P_RUN_SOURCE_TYPE",
+              "value": "IN VARCHAR2",
+              "comment": "DATA_WORK or FLOW_WORK",
+              "defaultValue": ":INIT$RunSourceType",
+              "order": 27
+            },
+            {
+              "key": "INPUT.P_RUN_ID",
+              "value": "IN NUMBER",
+              "comment": "Run ID linking upstream rules and violation results from the same DATA_WORK or FLOW_WORK execution",
+              "defaultValue": ":INIT$RunId",
+              "order": 28
+            },
+            {
+              "key": "OUTPUT.status",
+              "value": "$.status",
+              "comment": "API success status",
+              "defaultValue": "",
+              "order": 29
+            },
+            {
+              "key": "OUTPUT.resultTables",
+              "value": "$.resultTables",
+              "comment": "Service-managed result tables",
+              "defaultValue": "INIT$_TB_RULEVIOL_ASSOC,INIT$_TB_RULEVIOL_SYMBOLIC",
+              "order": 30
+            },
+            {
+              "key": "INPUT.P_SAMPLING_STRATEGY",
+              "value": "IN VARCHAR2",
+              "defaultValue": "HASH",
+              "comment": "Mixed supplement: reproducible row-hash sample; scans source in Oracle, bounded Python memory",
+              "order": 31
+            },
+            {
+              "key": "INPUT.P_SAMPLE_SEED",
+              "value": "IN NUMBER",
+              "defaultValue": "42",
+              "comment": "Stable hash sampling seed",
+              "order": 32
+            },
+            {
+              "key": "INPUT.P_SAMPLE_ROWS",
+              "value": "IN NUMBER",
+              "defaultValue": "25000",
+              "comment": "Mixed learning sample; server memory and row caps apply",
+              "order": 33
+            },
+            {
+              "key": "INPUT.P_EXCLUDE_COLUMNS",
+              "value": "IN VARCHAR2",
+              "defaultValue": "FILE_ROW_NO",
+              "comment": "Columns excluded from mixed learning",
+              "order": 34
+            },
+            {
+              "key": "INPUT.P_MIXED_MAX_VIOLATION_ROWS",
+              "value": "IN NUMBER",
+              "defaultValue": "1000",
+              "comment": "Shared stored preview cap, fairly distributed across rules; full violations and distinct source rows are counted",
+              "order": 35
+            }
+          ]
+        }
+      ]
+    },
     {
       "groupName": "Mixed XAI Python API",
       "resources": [

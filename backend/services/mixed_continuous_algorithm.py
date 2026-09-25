@@ -104,7 +104,7 @@ def _finite_array(rows, name, *, numeric_text=False):
 
 
 def _rank_targets(numeric, eligible, fit_indices, unit_screen=None):
-    """Training-only correlation ranking keeps column order out of the cap."""
+    """Training-only evidence and variation keep survey codes out of every slot."""
     if len(eligible) <= 1 or len(numeric) <= 1:
         return eligible
     sampled = fit_indices[np.linspace(0, len(fit_indices) - 1, min(2048, len(fit_indices)), dtype=int)]
@@ -125,9 +125,12 @@ def _rank_targets(numeric, eligible, fit_indices, unit_screen=None):
     np.fill_diagonal(coefficients, 0)
     scores = {name: float(coefficients[index].max()) ** 2 for index, name in enumerate(names)}
     unit_errors = {name: unit_screen.priority(name) if unit_screen else float("inf") for name in eligible}
-    # A cancellation identity can have virtually no marginal correlation. Give
-    # near-exact pair evidence a place before imposing the target-count budget.
-    return sorted(eligible, key=lambda name: (unit_errors[name] > 1e-8,
+    varied_numeric = {name: len(np.unique(numeric[name][fit_indices][np.isfinite(numeric[name][fit_indices])])) >= 16
+                      for name in eligible}
+    # Preserve near-exact small-count/cancellation identities first. Otherwise
+    # reserve priority for varied measurements before correlated ordinal codes;
+    # this is ranking only, never a relaxed eligibility or acceptance threshold.
+    return sorted(eligible, key=lambda name: (unit_errors[name] > 1e-8, not varied_numeric[name],
         -max(scores[name], 1 - min(unit_errors[name], 1.) ** 2), name))
 
 
@@ -285,7 +288,7 @@ def _expression_array(expression, numeric):
         return {"ADD": np.add, "SUBTRACT": np.subtract, "MULTIPLY": np.multiply, "DIVIDE": np.divide}[expression["operator"]](left, right)
 
 
-def _cohort_metrics(indices, condition, actual, expected, tolerance, scale):
+def _cohort_metrics(indices, condition, actual, expected, tolerance, scale, invalid_actual=None):
     matching = indices[condition[indices]]
     finite = np.isfinite(actual[matching]) & np.isfinite(expected[matching])
     errors = actual[matching][finite] - expected[matching][finite]
@@ -306,13 +309,42 @@ def _cohort_metrics(indices, condition, actual, expected, tolerance, scale):
     finite_errors = np.isfinite(maximum)
     mae = float(np.mean(np.abs(errors) / maximum) * maximum) if maximum and finite_errors else (0. if len(errors) and finite_errors else None)
     rmse = float(np.sqrt(np.mean((errors / maximum) ** 2)) * maximum) if maximum and finite_errors else (0. if len(errors) and finite_errors else None)
+    invalid_count = int(invalid_actual[matching].sum()) if invalid_actual is not None else 0
     return {"conditionCount": len(matching), "supportCount": support, "totalCount": len(indices),
             "resultCount": None, "lift": None, "confidence": support / len(matching) if len(matching) else None,
             "support": support / len(indices) if len(indices) else None, "r2": r2(values, errors),
             "inlierR2": r2(values[accepted], errors[accepted]), "mae": mae,
             "rmse": rmse,
             "normalizedMae": mae / scale if mae is not None and np.isfinite(mae / scale) else None,
-            "finiteActualCount": int(finite.sum()), "missingActualCount": int((~finite).sum())}
+            "finiteActualCount": int(finite.sum()), "missingActualCount": int((~finite).sum()),
+            "invalidNumericTextCount": invalid_count}
+
+
+def _restrict_global_rule(rule, alternatives, condition, actual, expected, scale, partitions, invalid_actual):
+    """Keep a global relation from flagging a validated alternative regime.
+
+    Only the IF scope and its metrics change. Coefficients and calibration
+    tolerance remain exactly the ones learned before subgroup exploration.
+    """
+    from backend.services.mixed_pattern_algorithm import pattern_expression
+
+    complements = [_group("OR", [_atom(atom["column"], "IS_NULL"), {**atom, "operator": "!="}])
+                   for atom in alternatives]
+    rule["predicate"] = _group("AND", [rule["predicate"], *complements])
+    rule["expression"] = pattern_expression(rule["predicate"])
+    rule["fullText"] = f"IF {rule['expression']} THEN {rule['resultText']}"
+    tolerance = rule["resultPredicate"]["absoluteTolerance"]
+    train, calibration, validation = [_cohort_metrics(indices, condition, actual, expected, tolerance, scale, invalid_actual)
+                                      for indices in partitions]
+    profile = {**rule["validation"], **validation, "train": train, "calibration": calibration,
+               "scopePolicy": "EXCLUDES_VALIDATED_ALTERNATIVE_GROUPS", "alternativeGroupCount": len(alternatives)}
+    rule.update({key: train[key] for key in ("supportCount", "conditionCount", "totalCount", "confidence", "support")})
+    rule["validation"] = profile
+    rule["formulaDiagnostics"] = {"train": train, "calibration": calibration,
+                                  "validation": dict(profile, train=None, calibration=None)}
+    digest = hashlib.sha256(json.dumps([rule["predicate"], rule["resultPredicate"]], sort_keys=True).encode()).hexdigest()[:24].upper()
+    rule["ruleId"] = "MIXED_FORMULA_" + digest
+    return rule
 
 
 def discover_continuous_rules(rows, columns, train_indices, validation_indices, options=None):
@@ -342,6 +374,7 @@ def discover_continuous_rules(rows, columns, train_indices, validation_indices, 
     calibration_size = max(12, int(math.ceil(len(shuffled) * calibration_fraction)))
     calibration_indices, fit_indices = np.sort(shuffled[:calibration_size]), np.sort(shuffled[calibration_size:])
     numeric, metadata, excluded_numeric, numeric_text = {}, [], [], set()
+    numeric_invalid = {}
     column_diagnostics, target_diagnostics = [], {}
     eligibility_reasons, rejection_reasons = {}, {}
     physical_numeric_count = inferred_text_count = 0
@@ -381,6 +414,14 @@ def discover_continuous_rules(rows, columns, train_indices, validation_indices, 
             exclude(name, kind, "UNSUPPORTED_PHYSICAL_TYPE")
             continue
         values = _finite_array(rows, name, numeric_text=name in numeric_text)
+        if name in numeric_text:
+            # This explicit mask preserves the distinction between a source
+            # blank and an unparseable original; neither is imputed for fitting.
+            source_present = np.asarray([row.get(name) is not None and not (
+                isinstance(row.get(name), str) and not row[name].strip(" ")) for row in rows], dtype=bool)
+            numeric_invalid[name] = source_present & ~np.isfinite(values)
+            evidence["invalidTextAssessment"] = {label: int(numeric_invalid[name][indices].sum())
+                for label, indices in (("fit", fit_indices), ("calibration", calibration_indices), ("validation", validation_indices))}
         present = values[fit_indices][np.isfinite(values[fit_indices])]
         distinct = len(np.unique(present))
         evidence.update(fitNonNullCount=len(present), fitDistinctCount=distinct)
@@ -432,7 +473,7 @@ def discover_continuous_rules(rows, columns, train_indices, validation_indices, 
     targets = ranked_targets[:max_targets]
     for name in ranked_targets[max_targets:]:
         target_diagnostics[name].update(status="CAPPED", reason="CONTINUOUS_TARGET_LIMIT")
-    group_cohorts = []
+    group_cohorts, group_memberships = [], set()
     # Group membership is independent of the result target. Inspect it once,
     # stopping after a fifth distinct value rather than rescanning all source
     # rows/columns for every target. Keep four extra groups for target exclusion.
@@ -449,6 +490,10 @@ def discover_continuous_rules(rows, columns, train_indices, validation_indices, 
         for category in sorted(categories, key=str):
             mask = np.asarray([row.get(name) == category for row in rows], dtype=bool)
             if mask[fit_indices].sum() >= minimum and mask[calibration_indices].sum() >= 12:
+                membership = np.packbits(mask[fit_indices]).tobytes()
+                if membership in group_memberships:
+                    continue
+                group_memberships.add(membership)
                 value = float(category) if kind in _NUMERIC_TYPES else category
                 group_cohorts.append((name, _atom(name, "=", value, "NUMBER" if kind in _NUMERIC_TYPES else None), mask))
         if len(group_cohorts) >= max_groups + 4:
@@ -468,11 +513,22 @@ def discover_continuous_rules(rows, columns, train_indices, validation_indices, 
         cohorts = [(None, np.ones(len(rows), dtype=bool))]
         cohorts.extend((atom, mask) for name, atom, mask in group_cohorts if name != target)
         cohorts = cohorts[:max_groups + 1]
-        global_accepted = False
+        global_rule, global_condition, global_expected = None, None, None
+        alternatives = []
+        invalid_actual = numeric_invalid.get(target)
         for subgroup, cohort in cohorts:
-            if subgroup is not None and global_accepted:
-                break
             selection = fit_indices[cohort[fit_indices]]
+            global_group_metrics = None
+            if subgroup is not None and global_rule is not None:
+                if int((global_condition & cohort)[fit_indices].sum()) < minimum:
+                    diagnostic["redundantGroupCount"] = diagnostic.get("redundantGroupCount", 0) + 1
+                    continue
+                global_group_metrics = _cohort_metrics(fit_indices, global_condition & cohort, actual,
+                    global_expected, global_rule["resultPredicate"]["absoluteTolerance"], target_scale, invalid_actual)
+                if ((global_group_metrics["confidence"] or 0) >= .98
+                        and global_group_metrics["conditionCount"] >= minimum):
+                    diagnostic["redundantGroupCount"] = diagnostic.get("redundantGroupCount", 0) + 1
+                    continue
             ranked = sorted(((_corr(values[selection], actual[selection]), name) for name, values in numeric.items() if name != target), reverse=True)
             predictor_names = [name for _, name in ranked[:max(4, max_features)]]
             if not predictor_names:
@@ -568,9 +624,9 @@ def discover_continuous_rules(rows, columns, train_indices, validation_indices, 
                 if not np.isfinite(tolerance) or tolerance >= 1e125 or tolerance > target_scale * max_fraction:
                     reject(diagnostic, "TOLERANCE_TOO_WIDE")
                     continue
-                train = _cohort_metrics(fit_indices, condition, actual, expected, tolerance, target_scale)
-                validation = _cohort_metrics(validation_indices, condition, actual, expected, tolerance, target_scale)
-                calibration_metrics = _cohort_metrics(calibration_indices, condition, actual, expected, tolerance, target_scale)
+                train = _cohort_metrics(fit_indices, condition, actual, expected, tolerance, target_scale, invalid_actual)
+                validation = _cohort_metrics(validation_indices, condition, actual, expected, tolerance, target_scale, invalid_actual)
+                calibration_metrics = _cohort_metrics(calibration_indices, condition, actual, expected, tolerance, target_scale, invalid_actual)
                 failed_evidence = []
                 if train["conditionCount"] < minimum or validation["conditionCount"] < 10:
                     failed_evidence.append("INSUFFICIENT_VALIDATION_ROWS")
@@ -582,6 +638,13 @@ def discover_continuous_rules(rows, columns, train_indices, validation_indices, 
                     failed_evidence.append("TRAIN_R2_BELOW_MINIMUM")
                 if validation["inlierR2"] is None or validation["inlierR2"] < min_r2:
                     failed_evidence.append("VALIDATION_R2_BELOW_MINIMUM")
+                if global_group_metrics is not None:
+                    if train["confidence"] < (global_group_metrics["confidence"] or 0) + .05:
+                        failed_evidence.append("CONDITIONAL_GAIN_TOO_SMALL")
+                    comparison = _cohort_metrics(validation_indices, global_condition & cohort, actual,
+                        global_expected, global_rule["resultPredicate"]["absoluteTolerance"], target_scale, invalid_actual)
+                    if (validation["confidence"] or 0) < (comparison["confidence"] or 0) + .05:
+                        failed_evidence.append("CONDITIONAL_VALIDATION_GAIN_TOO_SMALL")
                 if failed_evidence:
                     for reason in failed_evidence:
                         reject(diagnostic, reason)
@@ -612,7 +675,8 @@ def discover_continuous_rules(rows, columns, train_indices, validation_indices, 
                     "validation": validation, "validationStatus": "VALIDATED", "status": "PATTERN",
                     "metricMeaning": "WITHIN_CALIBRATED_NUMERIC_TOLERANCE_NOT_ERROR_PROBABILITY",
                     "formulaDiagnostics": {"train": train, "calibration": calibration_metrics, "validation": dict(validation, train=None, calibration=None)},
-                    "formulaFeatures": names, "formulaComplexity": len(names), "fitSource": "TRAIN_FIT", "toleranceSource": "CALIBRATION"})
+                    "formulaFeatures": names, "formulaComplexity": len(names), "fitSource": "TRAIN_FIT", "toleranceSource": "CALIBRATION",
+                    "_conditionMask": condition})
             if accepted:
                 best_error = min(item["validation"]["selectionError"] for item in accepted)
                 best_floor = min(item["validation"]["numericalToleranceFloor"] for item in accepted if item["validation"]["selectionError"] == best_error)
@@ -621,11 +685,31 @@ def discover_continuous_rules(rows, columns, train_indices, validation_indices, 
                     item["validation"]["coefficientPolicy"] != "CANONICAL_SIMPLE", item["formulaComplexity"],
                     item["validation"]["discoveryMethod"] != "SUM_DIFFERENCE",
                     item["validation"]["selectionError"], -item["confidence"], item["ruleId"]))
-                rules.append(accepted[0])
+                best = accepted[0]
+                best_condition = best.pop("_conditionMask")
+                rules.append(best)
                 diagnostic["acceptedRuleCount"] += 1
                 diagnostic["status"] = "ACCEPTED"
                 if subgroup is None:
-                    global_accepted = True
+                    global_rule, global_condition = best, best_condition
+                    global_expected = _expression_array(best["resultPredicate"]["expression"], numeric)
+                elif global_rule is not None:
+                    alternatives.append(subgroup)
+                    global_condition &= ~cohort
+                    best["validation"]["scopePolicy"] = "VALIDATED_ALTERNATIVE_GROUP"
+                    best["formulaDiagnostics"]["validation"]["scopePolicy"] = "VALIDATED_ALTERNATIVE_GROUP"
+                    diagnostic["alternativeGroupCount"] = len(alternatives)
+        if global_rule is not None and alternatives:
+            _restrict_global_rule(global_rule, alternatives, global_condition, actual, global_expected, target_scale,
+                                  (fit_indices, calibration_indices, validation_indices), invalid_actual)
+            profile = global_rule["validation"]
+            if (global_rule["conditionCount"] < minimum or profile["conditionCount"] < 10
+                    or (global_rule["confidence"] or 0) < min_confidence
+                    or (profile["confidence"] or 0) < min_validation
+                    or (profile["train"]["inlierR2"] or 0) < min_r2 or (profile["inlierR2"] or 0) < min_r2):
+                rules.remove(global_rule)
+                diagnostic["acceptedRuleCount"] -= 1
+                reject(diagnostic, "GLOBAL_REMAINDER_NOT_VALIDATED")
         if diagnostic["status"] == "ATTEMPTED":
             diagnostic["status"] = "REJECTED"
     rules.sort(key=lambda rule: (-rule["confidence"], -rule["supportCount"], rule["formulaComplexity"], rule["ruleId"]))
@@ -636,6 +720,12 @@ def discover_continuous_rules(rows, columns, train_indices, validation_indices, 
         warnings.append("EXTREME_NUMERIC_FORMULA_COLUMNS_SKIPPED")
     if numeric_text:
         warnings.append("NUMERIC_TEXT_INTERPRETED_WITH_EXPLICIT_SAFE_CONVERSION")
+    if any(item.get("eligible") and item.get("invalidCount", 0) for item in column_diagnostics):
+        warnings.append("DIRTY_NUMERIC_TEXT_RETAINED_AS_INVALID")
+    if any(item.get("alternativeGroupCount") for item in target_diagnostics.values()):
+        warnings.append("GLOBAL_FORMULA_SCOPED_AROUND_VALIDATED_GROUPS")
+    if len(rules) > max_rules:
+        warnings.append("CONTINUOUS_RULE_LIMIT")
     return {"rules": rules[:max_rules], "metrics": {"diagnosticVersion": 1, "enabled": True,
             "status": "RULES_AVAILABLE" if rules else "NO_ELIGIBLE_TARGETS" if not eligible_targets else "NO_VALIDATED_RULES",
             "sourceColumnCount": len(columns), "physicalNumericColumnCount": physical_numeric_count,
@@ -647,9 +737,14 @@ def discover_continuous_rules(rows, columns, train_indices, validation_indices, 
             "targetDiagnostics": list(target_diagnostics.values()),
             "testedCandidateCount": sum(item["proposalCount"] for item in target_diagnostics.values()),
             "fittedCandidateCount": sum(item["fittedModelCount"] for item in target_diagnostics.values()),
-            "acceptedRuleCount": len(rules), "targetSelection": "TRAIN_ONLY_PAIR_EVIDENCE_AND_RELATION_STRENGTH",
+            "acceptedRuleCount": len(rules), "targetSelection": "TRAIN_ONLY_UNIT_IDENTITIES_THEN_NUMERIC_VARIATION_AND_RELATION_STRENGTH",
+            "varyingNumericPriorityMinDistinct": 16,
             "unitSearch": {"maxTerms": max_features, "sampleRows": UNIT_SAMPLE_ROWS, "beamWidth": UNIT_BEAM_WIDTH,
                            "candidateLimitPerCohort": UNIT_CANDIDATE_LIMIT, "fitSource": "TRAIN_FIT"},
+            "conditionalSearch": {"maxGroupsPerTarget": max_groups, "minimumCoverageGain": .05,
+                                  "alreadyExplainedCoverage": .98, "groupSelectionSource": "TRAIN_FIT",
+                                  "deduplicatedBy": "TRAIN_GROUP_MEMBERSHIP",
+                                  "scopePolicy": "EXCLUDE_VALIDATED_ALTERNATIVE_GROUPS_FROM_GLOBAL"},
             "fitRows": len(fit_indices), "calibrationRows": len(calibration_indices), "validationRows": len(validation_indices),
             "ruleCount": min(len(rules), max_rules), "candidateRuleCount": len(rules), "minFormulaConfidence": min_confidence,
             "minFormulaValidationConfidence": min_validation, "minFormulaR2": min_r2, "maxToleranceFraction": max_fraction,

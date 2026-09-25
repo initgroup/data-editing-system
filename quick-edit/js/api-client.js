@@ -16,6 +16,8 @@
             this.apiBase = String(options.apiBase || "/api").replace(/\/$/, "");
             this.targetConnectionId = null;
             this.session = null;
+            this.pendingRequestCount = 0;
+            this.contextInvalidated = false;
         }
 
         async bootstrapSession() {
@@ -34,6 +36,28 @@
         }
 
         async request(path, options = {}) {
+            const targetRequired = options.targetRequired !== false;
+            const interrupted = () => Object.assign(new Error("The session or Target DB context changed. Local requests were stopped; a server run may still be active."), {name: "AbortError"});
+            if (targetRequired && this.contextInvalidated) throw interrupted();
+            this.pendingRequestCount += 1;
+            try {
+                const payload = await this.requestCore(path, options);
+                if (targetRequired && this.contextInvalidated) throw interrupted();
+                return payload;
+            } catch (error) {
+                if (targetRequired && (error?.status === 401 || (error?.status === 409 && /^Target DB (context changed|session is not selected)/i.test(error.message || "")))) {
+                    this.contextInvalidated = true;
+                    window.QuickEditWorkspace?.onContextLoss?.(error);
+                    throw interrupted();
+                }
+                throw error;
+            } finally {
+                this.pendingRequestCount -= 1;
+                window.setTimeout(() => window.QuickEditWorkspace?.onRequestSettled?.(), 0);
+            }
+        }
+
+        async requestCore(path, options = {}) {
             const normalizedPath = path.startsWith("/") ? path : `/${path}`;
             const url = `${this.apiBase}${normalizedPath}`;
             const headers = new Headers(options.headers || {});
@@ -72,6 +96,7 @@
             }
 
             const contentType = response.headers.get("content-type") || "";
+            window.QuickEditWorkspace?.onSessionResponse?.(response);
             let payload = null;
             if (contentType.includes("application/json")) {
                 try {
@@ -251,8 +276,21 @@
             return this.request(`/M04001/flow/${encodeURIComponent(flowId)}`);
         }
 
-        getMixedXaiResults(flowRunId, targetOwner, targetTable) {
-            return this.request(this.buildPath("/mlAnalysis/mixed-xai-results", { flowRunId, targetOwner, targetTable }));
+        getMixedXaiResults(flowRunId, targetOwner, targetTable, options = {}) {
+            return this.request(this.buildPath("/mlAnalysis/mixed-xai-results", {
+                flowRunId, targetOwner, targetTable, page: options.page || 1, pageSize: 20,
+                includeViolations: options.includeViolations === true,
+                view: options.view, ruleId: options.ruleId
+            }), {signal: options.signal});
+        }
+
+        getEditingResults(params, options = {}) {
+            return this.request(this.buildPath("/mlAnalysis/editing-results", {
+                flowRunId: params.flowRunId, targetOwner: params.targetOwner, targetTable: params.targetTable,
+                view: params.view || "rules", family: params.family || "CONDITION", source: params.source || "ALL",
+                page: params.page || 1, pageSize: 20, ruleKey: params.ruleKey,
+                conditionCount: params.conditionCount || "ALL", excludeZero: params.excludeZero === true
+            }), { signal: options.signal });
         }
 
         getMixedFormulaSample(params, options = {}) {
@@ -429,6 +467,9 @@
             return this.request(this.buildPath("/M04002/symbolic-rule-sample", {
                 owner: params.owner,
                 ruleId: params.ruleId,
+                targetOwner: params.targetOwner,
+                targetTable: params.targetTable,
+                targetColumn: params.targetColumn,
                 runSourceType: "FLOW_WORK",
                 runId: params.flowRunId,
                 sampleLimit: params.sampleLimit || 200
@@ -436,14 +477,16 @@
         }
 
         getViolationRows(params) {
-            if (params.objectName === "INIT$_TB_RULEVIOL_XAI" || params.mixedPattern) {
-                return this.getMixedXaiResults(params.flowRunId, params.targetOwner, params.targetTable).then((response) => {
-                    const rows = window.RuleResultCommon.candidateRows(response.data, params.ruleId);
-                    const pageSize = Number(params.pageSize) || 20;
-                    const page = Math.max(1, Math.min(Number(params.page) || 1, Math.ceil(rows.length / pageSize) || 1));
-                    const pattern = window.RuleResultCommon.isPattern(response.data);
-                    return { status: "success", mixedXai: !pattern, mixedPattern: pattern, data: rows.slice((page - 1) * pageSize, page * pageSize),
-                        columns: [...new Set(rows.flatMap(Object.keys))], page, pageSize, total: rows.length };
+            if (params.objectName === "INIT$_TB_RULEVIOL_XAI") {
+                return this.getMixedXaiResults(params.flowRunId, params.targetOwner, params.targetTable, {
+                    view: "violations", ruleId: params.ruleId, page: params.page || 1, includeViolations: false
+                }).then((response) => {
+                    const payload = response.data || {};
+                    const rows = window.RuleResultCommon.candidateRows(payload, params.ruleId);
+                    return {status: "success", mixedXai: true, data: rows,
+                        columns: [...new Set(rows.flatMap(Object.keys))], page: payload.page || params.page || 1,
+                        pageSize: payload.pageSize || 20, total: payload.total ?? rows.length,
+                        hasMore: payload.hasMore, previewOnly: true};
                 });
             }
             return this.request(this.buildPath("/M04002/result-table", {

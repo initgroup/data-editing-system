@@ -229,6 +229,60 @@ class MixedContinuousPipelineTests(unittest.TestCase):
         self.assertFalse(result["continuous"]["enabled"])
         self.assertEqual(result["continuous"]["status"], "DISABLED")
 
+    def test_uploaded_dirty_numeric_and_minority_regime_keep_sql_and_final_edit_scope(self):
+        rng = np.random.default_rng(303)
+        count = 3000
+        train = np.sort(np.random.default_rng(42).permutation(count)[count // 4:])
+        fit = np.random.default_rng(43).permutation(train)[int(np.ceil(len(train) * .25)):]
+        majority_fit = [int(index) for index in fit if index % 25]
+        invalid_target, invalid_predictor = majority_fit[:2]
+        numeric_corruption = 0  # A minority row; both regimes need real checks.
+        rows = []
+        for index, x in enumerate(rng.uniform(5, 100, count)):
+            group = "B" if index % 25 == 0 else "A"
+            y = 5 * x - 10 if group == "B" else 2 * x + 3
+            if index == numeric_corruption:
+                y += 25
+            rows.append((group, "001", index + 1,
+                         "bad input" if index == invalid_predictor else format(x, ".17g"),
+                         "bad result" if index == invalid_target else format(y, ".17g")))
+        conn = UploadedNumericConnection(rows)
+        self.addCleanup(conn.db.close)
+        discovery = xai.discover(conn, {**PAYLOAD, "targetColumns": ["Y"], "sampleRows": count})
+        self.assertEqual(2, discovery["formulaRuleCount"])
+        inference = {item["column"]: item for item in discovery["continuous"]["columnInference"]}
+        self.assertEqual(1, inference["Y"]["invalidCount"])
+        self.assertEqual(1, inference["X"]["invalidCount"])
+        xai.detect(conn, {**PAYLOAD, "maxViolationRows": 1000})
+        data = self.read_results(conn)
+        violations = data["violations"]
+        expected_ids = {str(invalid_target + 1), str(numeric_corruption + 1)}
+        self.assertEqual(expected_ids, {row["CASE_ID"] for row in violations})
+        self.assertEqual(2, len(violations))
+        invalid = next(row for row in violations if row["CASE_ID"] == str(invalid_target + 1))
+        self.assertEqual("bad result", invalid["ACTUAL_VALUE"])
+        self.assertIsNone(invalid["ABS_ERROR"])
+        self.assertNotIn(str(invalid_predictor + 1), expected_ids)
+
+        columns = {name: {"COLUMN_NAME": name, "DATA_TYPE": "NUMBER" if name == "FILE_ROW_NO" else "VARCHAR2"}
+                   for name in ("GROUP_CODE", "REGION", "FILE_ROW_NO", "X", "Y")}
+        live_ids = set()
+        for number, stored in enumerate(conn.records(patterns.RULE_TABLE), start=1):
+            if stored["RESULT_KIND"] != "FORMULA":
+                continue
+            result = json.loads(stored["RESULT_JSON"])
+            self.assertTrue(result["numericText"])
+            reviewed = {**stored, "EDIT_RULE_ID": number, "SOURCE_RULE_TYPE": "ASSOCIATION", "USER_RULE_YN": "N",
+                        "SOURCE_OBJECT_NAME": stored["MODEL_NAME"], "SOURCE_RULE_ID": stored["RULE_ID"],
+                        "TARGET_COLUMN": "Y", "CASE_ID_COLUMN": "FILE_ROW_NO",
+                        "CONDITION_AST": json.loads(stored["CONDITION_JSON"]), "RESULT_AST": result}
+            sql, binds = editing._build_live_rule_violation_sql(None, reviewed, None, table_columns_override=columns)
+            adapted = adapt_numeric_text_sql(sqlite_statement(sql)).replace('"APP_OWNER"."SOURCE_DATA"', "SOURCE_UPLOADED")
+            cursor = conn.db.execute(adapted, {key: float(value) if isinstance(value, Decimal) else value for key, value in binds.items()})
+            live = [dict(zip([column[0] for column in cursor.description], row)) for row in cursor.fetchall()]
+            live_ids.update(row["CASE_ID"] for row in live)
+        self.assertEqual(expected_ids, live_ids)
+
     def test_small_additive_component_survives_varchar_discovery_sql_and_final_edit_review(self):
         rng = np.random.default_rng(202610)
         source = np.column_stack([rng.uniform(-1000, 1000, 800), rng.uniform(-3, 3, 800)])

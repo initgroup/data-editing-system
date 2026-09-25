@@ -41,6 +41,7 @@
             return text;
         };
         const getText = (fallback = "", values = {}) => getMessage(fallback, fallback, values);
+        const getEditingText = (text) => window.EditingResultView?.t(text, { t: getText }) || getText(text);
         const emptyState = (key, fallback) => `<div class="table-empty">${escapeHtmlText(getLabel(key, fallback))}</div>`;
     const GENERIC_TABLE_RESULT_LAYOUT = Object.freeze({
         kind: "TABLE",
@@ -217,6 +218,15 @@
         nodeResultCache: new Map(),
         selectedResultObjectNames: new Map(),
         runtimeParamPresetMap: new Map(),
+        editingResultsMode: "FINAL",
+        editingFamily: "CONDITION",
+        editingSource: "ALL",
+        editingResultData: null,
+        editingConditionCount: "ALL",
+        editingExcludeZero: false,
+        editingListContext: null,
+        editingDetailData: null,
+        editingResultBinding: null,
 
         async init() {
             this.loadSelectedResultObjectNames();
@@ -249,6 +259,13 @@
         },
 
         destroy() {
+            this.editingResultBinding?.();
+            this.editingResultBinding = null;
+            this.editingResultData = null;
+            this.editingConditionCount = "ALL";
+            this.editingExcludeZero = false;
+            this.editingListContext = null;
+            this.editingDetailData = null;
             window.DescriptiveStatistics?.close?.();
             this.runs = [];
             this.nodes = [];
@@ -326,18 +343,20 @@
 
         rememberSelectedNodeResult(node = this.selectedNode) {
             const key = this.getNodeCacheKey(node?.FLOW_NODE_RUN_ID);
-            const objectName = String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
-            if (!key || !objectName) return;
+            const selected = this.getActiveNodeResultObject(node);
+            const selectionKey = selected ? this.getNodeResultSelectionKey(selected) : String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
+            if (!key || !selectionKey) return;
             if (!this.selectedResultObjectNames) this.selectedResultObjectNames = new Map();
-            this.selectedResultObjectNames.set(key, objectName);
+            this.selectedResultObjectNames.set(key, selectionKey);
             this.persistSelectedResultObjectNames();
         },
 
         applyRememberedNodeResult(node) {
             const key = this.getNodeCacheKey(node?.FLOW_NODE_RUN_ID);
             const objectName = String(this.selectedResultObjectNames?.get(key) || "").trim().toUpperCase();
-            const results = Array.isArray(node?.RESULT_OBJECTS) ? node.RESULT_OBJECTS : [];
-            let selected = results.find((item) => String(item?.objectName || "").trim().toUpperCase() === objectName);
+            const results = this.getNodeResultObjects(node);
+            let selected = results.find((item) => this.getNodeResultSelectionKey(item) === objectName)
+                || results.find((item) => String(item?.objectName || "").trim().toUpperCase() === objectName);
             if (!selected) return false;
             if (this.isIntegratedRuleDiscoveryNode(node)
                 && this.getIntegratedRuleDiscoveryGroup(selected) === "CATEGORICAL") {
@@ -346,15 +365,13 @@
                     results.filter((item) => this.getIntegratedRuleDiscoveryGroup(item) === "CATEGORICAL")
                 ) || selected;
             }
-            node.RESULT_KIND = String(selected.kind || "TABLE").toUpperCase();
-            node.RESULT_OWNER = String(selected.owner || node.RESULT_OWNER || "").toUpperCase();
-            node.RESULT_OBJECT_NAME = String(selected.objectName || "").toUpperCase();
-            if (node.RESULT_OBJECT_NAME !== objectName) this.rememberSelectedNodeResult(node);
+            this.setNodeResultObject(node, selected);
+            if (this.getNodeResultSelectionKey(selected) !== objectName) this.rememberSelectedNodeResult(node);
             return true;
         },
 
         applyDefaultNodeResult(node) {
-            const results = Array.isArray(node?.RESULT_OBJECTS) ? node.RESULT_OBJECTS : [];
+            const results = this.getNodeResultObjects(node);
             const runProfile = results.find((item) => (
                 String(item?.artifact || "").trim().toUpperCase() === "PREDICTED_TYPE_RUN"
                 || String(item?.objectName || "").trim().toUpperCase() === "INIT$_TB_COLTYPE_RESULT"
@@ -384,9 +401,7 @@
                 ? runProfile
                 : (relationMatrix && hasIntegratedRelationResults ? relationMatrix : integratedCategoricalRule);
             if (!selected) return false;
-            node.RESULT_KIND = String(selected.kind || "TABLE").toUpperCase();
-            node.RESULT_OWNER = String(selected.owner || node.RESULT_OWNER || "").toUpperCase();
-            node.RESULT_OBJECT_NAME = String(selected.objectName || "").toUpperCase();
+            this.setNodeResultObject(node, selected);
             return true;
         },
 
@@ -406,6 +421,7 @@
             if (!this.nodeResultCache) this.nodeResultCache = new Map();
             this.nodeResultCache.set(key, {
                 html: panel.innerHTML,
+                resultSelectionKey: this.getNodeResultSelectionKey(this.getActiveNodeResultObject() || {}),
                 resultPage: this.resultPage,
                 resultPageSize: this.resultPageSize,
                 excludeEmptyConsequent: this.excludeEmptyConsequent,
@@ -422,6 +438,12 @@
                 predictedTypeViewMode: this.predictedTypeViewMode,
                 ruleSummaryFilters: this.cloneCacheValue(this.ruleSummaryFilters),
                 mixedRuleFamily: this.mixedRuleFamily || "VALUE",
+                editingResultsMode: this.editingResultsMode,
+                editingFamily: this.editingFamily,
+                editingSource: this.editingSource,
+                editingResultData: this.cloneCacheValue(this.editingResultData),
+                editingConditionCount: this.editingConditionCount, editingExcludeZero: this.editingExcludeZero,
+                editingDetailData: this.cloneCacheValue(this.editingDetailData),
                 violationRuleFilters: this.cloneCacheValue(this.violationRuleFilters),
                 symbolicRuleFilters: this.cloneCacheValue(this.symbolicRuleFilters),
                 symbolicViolationFilters: this.cloneCacheValue(this.symbolicViolationFilters),
@@ -441,6 +463,7 @@
             const cached = key ? this.nodeResultCache?.get(key) : null;
             const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
             if (!cached || !panel) return false;
+            if (cached.resultSelectionKey && cached.resultSelectionKey !== this.getNodeResultSelectionKey(this.getActiveNodeResultObject() || {})) return false;
             this.resultPage = Number(cached.resultPage || 1);
             this.resultPageSize = Number(cached.resultPageSize || this.resultPageSize || 50);
             this.excludeEmptyConsequent = Boolean(cached.excludeEmptyConsequent);
@@ -456,6 +479,13 @@
             this.predictedTypeFilter = cached.predictedTypeFilter || "ALL";
             this.predictedTypeViewMode = cached.predictedTypeViewMode === "SOURCE" ? "SOURCE" : "TYPE";
             this.mixedRuleFamily = cached.mixedRuleFamily === "FORMULA" ? "FORMULA" : "VALUE";
+            this.editingResultsMode = cached.editingResultsMode || "FINAL";
+            this.editingFamily = cached.editingFamily || "CONDITION";
+            this.editingSource = cached.editingSource || "ALL";
+            this.editingResultData = this.cloneCacheValue(cached.editingResultData);
+            this.editingConditionCount = cached.editingConditionCount || "ALL";
+            this.editingExcludeZero = Boolean(cached.editingExcludeZero);
+            this.editingDetailData = this.cloneCacheValue(cached.editingDetailData);
             this.ruleSummaryFilters = {
                 conditionCount: "ALL",
                 confidenceScope: "ALL",
@@ -497,6 +527,7 @@
             this.currentExport = this.cloneCacheValue(cached.currentExport) || { filename: "integrated-result.csv", columns: [], rows: [] };
             panel.classList.remove("is-loading");
             panel.innerHTML = cached.html || emptyState("selectNodeForResult", "Select a node to view result details.");
+            if (this.isEditingRuleResultNode()) this.bindEditingResults();
             this.prependNodeResultSwitcher();
             this.renderNodes();
             return true;
@@ -892,6 +923,18 @@
             }
         },
 
+        getRunDisplayMessage(run = this.selectedRun) {
+            const message = String(run?.MESSAGE || "").trim();
+            const completed = message.match(/^Flow execution completed\. (\d+) node\(s\) executed, (\d+) skipped\.$/);
+            if (completed) return getText("Flow execution completed. {executed} node(s) executed, {skipped} skipped.", { executed: completed[1], skipped: completed[2] });
+            const partial = message.match(/^Flow execution completed with failures\. (\d+) node\(s\) succeeded, (\d+) failed, (\d+) skipped\. First failed node: ([^.]+)\.\s*([\s\S]*)$/);
+            if (partial) return [
+                getText("Flow execution completed with failures. {succeeded} node(s) succeeded, {failed} failed, {skipped} skipped.", { succeeded: partial[1], failed: partial[2], skipped: partial[3] }),
+                getText("First failed node: {node}.", { node: partial[4] }), partial[5]
+            ].filter(Boolean).join(" ");
+            return message;
+        },
+
         renderRunSummary() {
             const el = getContainerEl("#runSummary-${PAGE_CODE}");
             const run = this.selectedRun;
@@ -900,7 +943,7 @@
                 el.innerHTML = emptyState("selectRunHistory", "Select a run history.");
                 return;
             }
-            const runMessage = String(run.MESSAGE || "").trim();
+            const runMessage = this.getRunDisplayMessage(run);
             el.innerHTML = `
                 <article class="is-selected-run">
                     <div>
@@ -1052,13 +1095,14 @@
         },
 
         renderNodeCard(node, index = 0) {
+            const result = node.executionResultSnapshot || { kind: node.RESULT_KIND, objectName: node.RESULT_OBJECT_NAME };
             return `
                 <button type="button" class="anly-work-node-card ${this.getNodeTone(node)} ${this.selectedNode?.FLOW_NODE_RUN_ID === node.FLOW_NODE_RUN_ID ? "is-selected" : ""}" onclick="${PAGE_CODE}.selectNode(${Number(node.FLOW_NODE_RUN_ID)})">
                     <span>
                         <i class="fas ${this.getNodeIcon(node)}"></i>
                         <strong>${this.escapeHtml(node.NODE_NAME || node.NODE_KEY || "-")}</strong>
                         ${this.renderNodeExecutionObject(node)}
-                        <small>${this.escapeHtml(node.RESULT_KIND || "NONE")} ${node.RESULT_OBJECT_NAME ? `· ${this.escapeHtml(node.RESULT_OBJECT_NAME)}` : ""}</small>
+                        <small>${this.escapeHtml(result.kind || "NONE")} ${result.objectName ? `· ${this.escapeHtml(result.objectName)}` : ""}</small>
                         ${this.renderNodeJobDesc(node)}
                     </span>
                     <b class="${this.getStatusClass(node.STATUS)}">${this.escapeHtml(getText(node.STATUS || "-"))}</b>
@@ -1138,7 +1182,18 @@
 
         async selectNode(nodeRunId, page = 1, options = {}) {
             this.closeSymbolicRulePopup();
+            this.editingResultBinding?.();
+            this.editingResultBinding = null;
+            this.editingResultsMode = "FINAL";
+            this.editingResultData = null;
+            this.editingConditionCount = "ALL";
+            this.editingExcludeZero = false;
+            this.editingListContext = null;
+            this.editingDetailData = null;
+            this.editingSource = "ALL";
+            this.nodeResultRequestId = (this.nodeResultRequestId || 0) + 1;
             this.selectedNode = this.nodes.find((node) => Number(node.FLOW_NODE_RUN_ID) === Number(nodeRunId)) || null;
+            this.editingFamily = "CONDITION";
             this.updateDescriptiveStatisticsButton();
             const restoredResult = this.applyRememberedNodeResult(this.selectedNode);
             if (!restoredResult) this.applyDefaultNodeResult(this.selectedNode);
@@ -1175,7 +1230,9 @@
                 return;
             }
             panel.innerHTML = `<div class="table-empty">Loading result...</div>`;
-            if (resultLayout.kind === "MODEL") {
+            if (this.isEditingRuleResultNode()) {
+                await this.loadEditingResults(1);
+            } else if (resultLayout.kind === "MODEL") {
                 await this.loadModelDetailSummary();
             } else {
                 await this.loadResultTable(this.resultPage);
@@ -1184,14 +1241,62 @@
             this.snapshotNodeResultCache();
         },
 
+        getNodeResultObjects(node = this.selectedNode) {
+            const results = Array.isArray(node?.RESULT_OBJECTS) ? node.RESULT_OBJECTS : [];
+            if (!this.isUnifiedEditingNode(node)) return results;
+            const mixed = results.find((item) => ["MIXED_XAI_RULES", "MIXED_XAI_CANDIDATES"].includes(
+                String(item?.artifact || "").trim().toUpperCase()
+            ));
+            if (!mixed) return results;
+            // Shared storage is not a result identity: mixed rules use their scoped analysis API.
+            return results.filter((item) => String(item?.artifact || "").trim().toUpperCase() !== "MIXED_XAI_DIAGNOSTICS")
+                .map((item) => item === mixed ? { ...item, objectName: "INIT$_TB_XAI_RUN" } : item);
+        },
+
         getSelectedNodeResultObjects() {
-            return Array.isArray(this.selectedNode?.RESULT_OBJECTS) ? this.selectedNode.RESULT_OBJECTS : [];
+            return this.getNodeResultObjects();
+        },
+
+        getNodeResultSelectionKey(item = {}) {
+            return [item.kind || "TABLE", item.owner, item.objectName, item.artifact, item.port]
+                .map((value) => String(value || "").trim().toUpperCase()).join("|");
+        },
+
+        getActiveNodeResultObject(node = this.selectedNode) {
+            const results = this.getNodeResultObjects(node);
+            const matches = results.filter((item) => String(item?.objectName || "").trim().toUpperCase()
+                === String(node?.RESULT_OBJECT_NAME || "").trim().toUpperCase());
+            return matches.find((item) => this.getNodeResultSelectionKey(item) === node?.RESULT_OUTPUT_KEY)
+                || matches.find((item) => String(item?.kind || "TABLE").toUpperCase() === String(node?.RESULT_KIND || "TABLE").toUpperCase()
+                    && String(item?.owner || "").toUpperCase() === String(node?.RESULT_OWNER || "").toUpperCase())
+                || matches[0] || null;
+        },
+
+        setNodeResultObject(node, selected) {
+            if (!node.executionResultSnapshot) {
+                node.executionResultSnapshot = { kind: node.RESULT_KIND, objectName: node.RESULT_OBJECT_NAME };
+            }
+            node.RESULT_KIND = String(selected.kind || "TABLE").toUpperCase();
+            node.RESULT_OWNER = String(selected.owner || node.RESULT_OWNER || "").toUpperCase();
+            node.RESULT_OBJECT_NAME = String(selected.objectName || "").toUpperCase();
+            node.RESULT_OUTPUT_KEY = this.getNodeResultSelectionKey(selected);
+        },
+
+        beginNodeResultRequest(node) {
+            const requestId = (this.nodeResultRequestId || 0) + 1;
+            this.nodeResultRequestId = requestId;
+            const outputKey = node?.RESULT_OUTPUT_KEY;
+            const objectName = node?.RESULT_OBJECT_NAME;
+            const runId = this.selectedRun?.FLOW_RUN_ID;
+            return () => this.selectedNode === node && this.nodeResultRequestId === requestId
+                && node?.RESULT_OUTPUT_KEY === outputKey && node?.RESULT_OBJECT_NAME === objectName
+                && this.selectedRun?.FLOW_RUN_ID === runId;
         },
 
         getNodeResultObject(node, objectName = "") {
             const normalizedObjectName = String(objectName || "").trim().toUpperCase();
             if (!normalizedObjectName) return null;
-            return (Array.isArray(node?.RESULT_OBJECTS) ? node.RESULT_OBJECTS : []).find(
+            return this.getNodeResultObjects(node).find(
                 (item) => String(item?.objectName || "").trim().toUpperCase() === normalizedObjectName
             ) || null;
         },
@@ -1201,18 +1306,17 @@
             if (!selected) return false;
             const selectedNodeRunId = Number(this.selectedNode?.FLOW_NODE_RUN_ID || 0);
             const targetNodeRunId = Number(node?.FLOW_NODE_RUN_ID || 0);
-            const normalizedObjectName = String(selected.objectName || "").trim().toUpperCase();
             if (selectedNodeRunId !== targetNodeRunId) {
                 const key = this.getNodeCacheKey(targetNodeRunId);
                 if (key) {
                     if (!this.selectedResultObjectNames) this.selectedResultObjectNames = new Map();
-                    this.selectedResultObjectNames.set(key, normalizedObjectName);
+                    this.selectedResultObjectNames.set(key, this.getNodeResultSelectionKey(selected));
                     this.persistSelectedResultObjectNames();
                 }
                 await this.selectNode(targetNodeRunId, 1, options);
                 return true;
             }
-            if (String(this.selectedNode?.RESULT_OBJECT_NAME || "").trim().toUpperCase() === normalizedObjectName) return false;
+            if (this.getNodeResultSelectionKey(this.getActiveNodeResultObject() || {}) === this.getNodeResultSelectionKey(selected)) return false;
             await this.selectNodeResultObject(selected);
             return true;
         },
@@ -1230,6 +1334,7 @@
         getIntegratedRuleDiscoveryGroup(item = {}) {
             const artifact = String(item?.artifact || "").trim().toUpperCase();
             const objectName = String(item?.objectName || "").trim().toUpperCase();
+            if (artifact.startsWith("MIXED_XAI_")) return "";
             if (["ASSOCIATION_MODEL", "ASSOC_RULE_SUMMARY"].includes(artifact)
                 || objectName === "INIT$_TB_RULEDISC_ASSOC_SUM") {
                 return "CATEGORICAL";
@@ -1243,7 +1348,7 @@
 
         isIntegratedRuleDiscoveryNode(node = this.selectedNode) {
             if (this.nodeWorkContains(node, "INTEGRATED_RULE_DISCOVER")) return true;
-            const groups = new Set((Array.isArray(node?.RESULT_OBJECTS) ? node.RESULT_OBJECTS : [])
+            const groups = new Set(this.getNodeResultObjects(node)
                 .map((item) => this.getIntegratedRuleDiscoveryGroup(item))
                 .filter(Boolean));
             return groups.has("CATEGORICAL") && groups.has("CONTINUOUS");
@@ -1271,8 +1376,7 @@
         getNodeResultSwitcherItems() {
             const results = this.getSelectedNodeResultObjects();
             if (this.isIntegratedRuleDiscoveryNode()) {
-                const activeName = String(this.selectedNode?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
-                const activeResult = results.find((item) => String(item?.objectName || "").trim().toUpperCase() === activeName);
+                const activeResult = this.getActiveNodeResultObject();
                 const activeGroup = this.getIntegratedRuleDiscoveryGroup(activeResult);
                 const insertedGroups = new Set();
                 return results.reduce((items, item) => {
@@ -1320,6 +1424,7 @@
             if (item.integratedNetwork) return getText("Relation network");
             if (item.integratedRuleGroup === "CATEGORICAL") return getText("Categorical automatic rules");
             if (item.integratedRuleGroup === "CONTINUOUS") return getText("Continuous automatic rules");
+            if (this.isUnifiedEditingNode() && item.artifact === "MIXED_XAI_RULES") return getText("Mixed value, range and formula rules");
             const objectName = String(item.objectName || "").trim().toUpperCase();
             const objectLabels = {
                 "INIT$_TB_COLREL_NETWORK_EDGE": "Relation network edges",
@@ -1339,36 +1444,37 @@
 
         prependNodeResultSwitcher() {
             const panel = getContainerEl(`#resultPanel-${PAGE_CODE}`);
+            if (this.isEditingRuleResultNode()) return;
+            if (panel && this.editingResultsMode === "SOURCE" && !panel.querySelector("[data-editing-back]")) {
+                panel.insertAdjacentHTML("afterbegin", `<button type="button" class="table-btn" data-editing-back onclick="${PAGE_CODE}.returnToEditingResults()">${this.escapeHtml(getEditingText("Back to rules"))}</button>`);
+            }
             const results = this.getNodeResultSwitcherItems();
             if (!panel) return;
-            const activeName = String(this.selectedNode?.RESULT_OBJECT_NAME || "").toUpperCase();
             if (results.length > 1 && !panel.querySelector(".anly-work-result-switcher")) {
                 const hasColumnTypeResults = results.some((item) => [
                     "INIT$_TB_COLTYPE_RESULT",
                     "INIT$_TB_COLTYPE_FINAL"
                 ].includes(String(item?.objectName || "").trim().toUpperCase()));
-                const activeResult = this.getSelectedNodeResultObjects().find(
-                    (item) => String(item?.objectName || "").trim().toUpperCase() === activeName
-                );
+                const activeResult = this.getActiveNodeResultObject();
                 const activeRuleGroup = this.getIntegratedRuleDiscoveryGroup(activeResult);
+                const activeKey = this.getNodeResultSelectionKey(activeResult || {});
+                const activeIndex = results.findIndex((item) => item.integratedNetwork
+                    ? this.isRelationNetworkResultObject(activeResult || {})
+                    : item.integratedRuleGroup ? item.integratedRuleGroup === activeRuleGroup
+                        : this.getNodeResultSelectionKey(item) === activeKey);
                 panel.insertAdjacentHTML("afterbegin", `
                     <nav class="anly-work-result-switcher" aria-label="${this.escapeHtml(getText("Integrated result outputs"))}">
                         <strong>${this.escapeHtml(getText("Integrated Results"))}</strong>
                         <div>
                             ${results.map((item, index) => {
-                                const name = String(item.objectName || "").toUpperCase();
                                 const label = this.getNodeResultLabel(item);
-                                const active = item.integratedNetwork
-                                    ? this.isRelationNetworkResultObject({ objectName: activeName })
-                                    : (item.integratedRuleGroup
-                                        ? item.integratedRuleGroup === activeRuleGroup
-                                        : name === activeName);
+                                const active = index === activeIndex;
                                 const icon = item.integratedRuleGroup === "CATEGORICAL"
                                     ? "fa-tags"
                                     : (item.integratedRuleGroup === "CONTINUOUS"
                                         ? "fa-wave-square"
                                         : (String(item.kind).toUpperCase() === "MODEL" ? "fa-brain" : "fa-table"));
-                                return `<button type="button" class="${active ? "is-active" : ""}" onclick="${PAGE_CODE}.selectNodeResult(${index})">
+                                return `<button type="button" class="${active ? "is-active" : ""}" aria-pressed="${active}" onclick="${PAGE_CODE}.selectNodeResult(${index})">
                                     <i class="fas ${icon}"></i>
                                     <span>${this.escapeHtml(label)}</span>
                                 </button>`;
@@ -1385,14 +1491,27 @@
                 `);
             }
             this.prependIntegratedRuleDetailSwitcher(panel);
+            const sourcePage = this.currentModelDetail?.mixedXai?.sourcePage;
+            if (sourcePage && !panel.querySelector("[data-mixed-source-page]")) {
+                const page = Number(sourcePage.page || 1);
+                const note = window.I18nManager?.getSessionLanguage?.() === "en" || window.sessionStorage?.getItem("initLanguageCode") === "en"
+                    ? "These summaries and filters cover the current rule page. Select a rule to load its saved violations."
+                    : "아래 요약과 필터는 현재 규칙 페이지 범위입니다. 저장된 위반 행은 규칙을 선택하면 조회합니다.";
+                panel.insertAdjacentHTML("afterbegin", `<section data-mixed-source-page class="anly-work-readable-stats"><p>${this.escapeHtml(note)}</p>
+                    <nav class="anly-work-result-detail-switcher"><div>
+                    <button type="button" ${page <= 1 ? "disabled" : ""} onclick="${PAGE_CODE}.loadMixedXaiAnalysis(${PAGE_CODE}.selectedNode, ${page - 1})">${this.escapeHtml(getEditingText("Previous"))}</button>
+                    <span>${this.escapeHtml(window.EditingResultView?.t("Rows {start}–{end} of {total}", { t: getText }, {
+                        start: sourcePage.total ? (page - 1) * (sourcePage.pageSize || 20) + 1 : 0,
+                        end: Math.min(page * (sourcePage.pageSize || 20), Number(sourcePage.total || 0)), total: sourcePage.total || 0 }) || `${page} / ${sourcePage.total || 0}`)}</span>
+                    <button type="button" ${!sourcePage.hasMore ? "disabled" : ""} onclick="${PAGE_CODE}.loadMixedXaiAnalysis(${PAGE_CODE}.selectedNode, ${page + 1})">${this.escapeHtml(getEditingText("Next"))}</button>
+                    </div></nav></section>`);
+            }
         },
 
         prependIntegratedRuleDetailSwitcher(panel = getContainerEl(`#resultPanel-${PAGE_CODE}`)) {
             if (!panel || panel.querySelector(".anly-work-result-detail-switcher") || !this.isIntegratedRuleDiscoveryNode()) return;
             const activeName = String(this.selectedNode?.RESULT_OBJECT_NAME || "").trim().toUpperCase();
-            const activeResult = this.getSelectedNodeResultObjects().find(
-                (item) => String(item?.objectName || "").trim().toUpperCase() === activeName
-            );
+            const activeResult = this.getActiveNodeResultObject();
             const activeGroup = this.getIntegratedRuleDiscoveryGroup(activeResult);
             const groupResults = this.getIntegratedRuleDiscoveryResults(activeGroup);
             if (activeGroup === "CATEGORICAL") return;
@@ -1434,19 +1553,25 @@
                         || this.getPreferredIntegratedRuleResult(selected.integratedRuleGroup, groupResults)
                         || selected);
             }
+            this.violationRuleFilters = { ruleId: "", conditionCount: "ALL", confidenceScope: "NON_PERFECT", resultScope: "HIT", page: 1, pageSize: 20 };
             await this.selectNodeResultObject(resolved);
         },
 
         async selectNodeResultObject(selected) {
             if (!selected || !this.selectedNode) return;
             this.closeSymbolicRulePopup();
-            this.selectedNode.RESULT_KIND = String(selected.kind || "TABLE").toUpperCase();
-            this.selectedNode.RESULT_OWNER = String(selected.owner || this.selectedNode.RESULT_OWNER || "").toUpperCase();
-            this.selectedNode.RESULT_OBJECT_NAME = String(selected.objectName || "").toUpperCase();
+            this.setNodeResultObject(this.selectedNode, selected);
+            const selectionId = (this.resultSelectionRequestId || 0) + 1;
+            this.resultSelectionRequestId = selectionId;
             this.rememberSelectedNodeResult();
             this.resultPage = 1;
             this.currentModelDetail = null;
             this.lastResultTableJson = null;
+            this.lastViolationSummary = null;
+            this.lastSymbolicViolationSummary = null;
+            this.lastSymbolicRuleSummary = null;
+            this.ruleSummaryFilters = { conditionCount: "ALL", confidenceScope: "ALL", resultColumn: "ALL", conditionColumn: "ALL",
+                resultHasValueYn: "ALL", page: 1, pageSize: this.ruleSummaryFilters?.pageSize || 20, resultColumnPage: 1 };
             const restoreScroll = this.preserveResultScroll();
             try {
                 if (this.selectedNode.RESULT_KIND === "MODEL") {
@@ -1454,11 +1579,12 @@
                 } else {
                     await this.loadResultTable(1);
                 }
+                if (this.resultSelectionRequestId !== selectionId) return;
                 this.prependNodeResultSwitcher();
                 this.snapshotNodeResultCache();
                 this.renderNodes();
             } finally {
-                this.restoreResultScrollAfterRender(restoreScroll);
+                if (this.resultSelectionRequestId === selectionId) this.restoreResultScrollAfterRender(restoreScroll);
             }
         },
 
@@ -1480,13 +1606,30 @@
             await this.selectNodeResultObject(selected);
         },
 
-        async openViolationForRule(ruleId, conditionCount = "ALL") {
+        async openViolationForRule(ruleId, conditionCount = "ALL", editingRuleKey = "") {
+            const sourcePayload = this.currentModelDetail?.mixedXai;
+            if (sourcePayload?.sourcePage && ruleId) {
+                if (window.RuleResultCommon.isPattern(sourcePayload)) {
+                    const matches = (sourcePayload.catalogData?.rules || []).filter((item) => String(item.scope?.ruleId) === String(ruleId));
+                    const entry = editingRuleKey ? matches.find((item) => item.key === editingRuleKey) : (matches.length === 1 ? matches[0] : null);
+                    if (!entry) return;
+                    this.editingResultData = sourcePayload.catalogData;
+                    this.editingFamily = entry.family;
+                    this.editingSource = "MIXED_PATTERN";
+                    this.editingResultsMode = "FINAL";
+                    return this.openEditingRule(entry.key);
+                }
+                return this.loadHistoricalRuleViolations(ruleId, 1);
+            }
             const mixed = Boolean(this.currentModelDetail?.mixedXai) && !window.RuleResultCommon.isPattern(this.currentModelDetail.mixedXai);
+            const unifiedMixed = Boolean(this.currentModelDetail?.mixedXai) && this.isUnifiedEditingNode(this.selectedNode);
             const normalizedRuleId = String(ruleId || "").trim();
             const mixedRule = this.currentModelDetail?.mixedXai?.ruleSummary?.rules?.find((r) => String(r.RULE_ID) === normalizedRuleId);
             if (mixedRule && window.RuleResultCommon.isPattern(mixedRule)) this.mixedRuleFamily = window.RuleResultCommon.isFormula(mixedRule) ? "FORMULA" : "VALUE";
             if (!normalizedRuleId && !mixed) return;
-            const violationNode = mixed ? (this.nodes || []).find((n) => this.getNodeResultObject(n, "INIT$_TB_RULEVIOL_XAI") || n.RESULT_OBJECT_NAME === "INIT$_TB_RULEVIOL_XAI") : this.findViolationNode();
+            const violationNode = unifiedMixed
+                ? (this.nodes || []).find((n) => /UNIFIED_EDITING_DETECT/.test([n.EXEC_METHOD, n.EXEC_OBJECT_NAME].join(" ")))
+                : mixed ? (this.nodes || []).find((n) => this.getNodeResultObject(n, "INIT$_TB_RULEVIOL_XAI") || n.RESULT_OBJECT_NAME === "INIT$_TB_RULEVIOL_XAI") : this.findViolationNode();
             if (!violationNode) {
                 alert(getText("No rule violation detection node was found in the current flow."));
                 return;
@@ -1505,7 +1648,7 @@
             };
             const activated = await this.activateNodeResultObject(
                 violationNode,
-                mixed || violationNode.RESULT_OBJECT_NAME === "INIT$_TB_RULEVIOL_XAI" ? "INIT$_TB_RULEVIOL_XAI" : "INIT$_TB_RULEVIOL_ASSOC",
+                unifiedMixed ? "INIT$_TB_XAI_RUN" : mixed || violationNode.RESULT_OBJECT_NAME === "INIT$_TB_RULEVIOL_XAI" ? "INIT$_TB_RULEVIOL_XAI" : "INIT$_TB_RULEVIOL_ASSOC",
                 { preserveViolationRuleFilter: true, forceRefresh: true }
             );
             if (activated) return;
@@ -1648,13 +1791,222 @@
             return params;
         },
 
-        async loadMixedXaiAnalysis(node, page = 1) {
+        isEditingRuleResultNode(node = this.selectedNode) {
+            if (this.editingResultsMode === "SOURCE" || !node?.TARGET_OWNER || !node?.TARGET_TABLE || !this.selectedRun?.FLOW_RUN_ID) return false;
+            const method = [node.EXEC_METHOD, node.EXEC_OBJECT_NAME].join(" ").toUpperCase();
+            if (/UNIFIED_EDITING_(DISCOVER|DETECT)/.test(method)) return true;
+            if (this.mixedEarlyStageKind(node)) return false;
+            if (this.isMixedScenarioNode(node) || this.isIntegratedRuleDiscoveryNode(node)) return true;
+            const objectName = String(node.RESULT_OBJECT_NAME || "").toUpperCase();
+            return ["INIT$_TB_RULEDISC_ASSOC_SUM", "INIT$_TB_RULEDISC_SYMBOLIC", "INIT$_TB_RULEVIOL_ASSOC", "INIT$_TB_RULEVIOL_SYMBOLIC", "INIT$_TB_RULEDISC_XAI", "INIT$_TB_RULEVIOL_XAI"].includes(objectName)
+                || (String(node.RESULT_KIND).toUpperCase() === "MODEL" && this.isAssociationRuleNode(node));
+        },
+
+        editingResultParams(view = "rules", page = 1) {
+            return new URLSearchParams({
+                flowRunId: String(this.selectedRun?.FLOW_RUN_ID || ""),
+                targetOwner: this.selectedNode?.TARGET_OWNER || "",
+                targetTable: this.selectedNode?.TARGET_TABLE || "",
+                view, family: this.editingFamily || "CONDITION", source: this.editingSource || "ALL",
+                conditionCount: this.editingConditionCount || "ALL", excludeZero: String(Boolean(this.editingExcludeZero)),
+                page: String(Math.max(1, Number(page || 1))), pageSize: "20"
+            });
+        },
+
+        async loadEditingResults(page = 1) {
+            this.editingListContext = null;
+            const node = this.selectedNode;
+            if (!node) return;
+            this.editingResultsMode = "FINAL";
+            this.editingDetailData = null;
+            this.currentExport = { filename: "editing-results.csv", columns: [], rows: [] };
+            this.closeSymbolicRulePopup();
+            const isCurrent = this.beginNodeResultRequest(node);
+            const params = this.editingResultParams("rules", page);
+            this.renderEditingResults({ loading: true });
+            try {
+                const response = await CommonUtils.request(`${API_BASE_URL}/mlAnalysis/editing-results?${params}`, {
+                    method: "GET", showLoading: false,
+                    timeoutMs: CommonUtils.getRuntimeSetting("APP_RULE_SUMMARY_TIMEOUT_MS", 60000, 12000, 300000)
+                });
+                if (!isCurrent()) return;
+                this.editingResultData = { ...(response.data || response), family: this.editingFamily, source: this.editingSource };
+                this.setEditingResultExport();
+                this.renderEditingResults();
+                this.snapshotNodeResultCache();
+            } catch (error) {
+                if (isCurrent()) this.renderEditingResults({ error: error.message || getText("Rule summary load failed.") });
+            }
+        },
+
+        setEditingResultExport() {
+            const detail = this.editingDetailData;
+            const rows = detail ? (detail.violations || []).map((row) => ({
+                ...row, SOURCE: detail.rule?.source, RULE_KEY: detail.rule?.key, MODEL_NAME: detail.rule?.scope?.modelName
+            })) : (this.editingResultData?.rules || []).map((item) => ({
+                ...item.row, SOURCE: item.source, RULE_KEY: item.key
+            }));
+            this.currentExport = { filename: `editing-${this.editingFamily.toLowerCase()}-${detail ? "violation-preview" : "rules"}.csv`,
+                columns: [...new Set(rows.flatMap((row) => Object.keys(row)))], rows };
+        },
+
+        renderEditingResults(options = {}) {
+            const panel = getContainerEl(`#resultPanel-${PAGE_CODE}`);
+            if (!panel) return;
+            this.editingResultBinding?.();
+            this.editingResultBinding = null;
+            panel.classList.remove("is-loading");
+            const data = { ...(this.editingResultData || {}), ...(options.loading || options.error ? { rules: [] } : {}), family: this.editingFamily, source: this.editingSource };
+            panel.innerHTML = `<header class="anly-work-result-header"><div>
+                    <strong class="anly-work-result-exec-object">${this.escapeHtml(this.getNodeExecutionTitle(this.selectedNode, this.selectedNode?.NODE_NAME || getText("Integrated Results")))}</strong>
+                    <small>${this.escapeHtml(this.selectedNode?.TARGET_OWNER)}.${this.escapeHtml(this.selectedNode?.TARGET_TABLE)} · ${this.escapeHtml(getText("Flow Run ID"))} ${this.escapeHtml(this.selectedRun?.FLOW_RUN_ID)}</small>
+                    ${this.renderSelectedNodeJobDesc()}</div></header>
+                <div data-editing-list>${window.EditingResultView.render(data, { family: this.editingFamily, filters: {conditionCount: this.editingConditionCount, excludeZero: this.editingExcludeZero}, ...options, t: getText })}</div>`;
+            this.bindEditingResults();
+        },
+
+        bindEditingResults() {
+            this.editingResultBinding?.();
+            const panel = getContainerEl(`#resultPanel-${PAGE_CODE}`);
+            if (!panel || !window.EditingResultView) return;
+            this.editingResultBinding = window.EditingResultView.bind(panel, {
+                onFamily: (family) => {
+                    if (!["CONDITION", "FORMULA"].includes(family)) return;
+                    this.editingFamily = family;
+                    this.editingConditionCount = "ALL";
+                    this.editingSource = "ALL";
+                    this.loadEditingResults(1);
+                },
+                onSource: (source) => {
+                    this.editingSource = ["LEGACY_ASSOC", "LEGACY_SYMBOLIC", "MIXED_PATTERN"].includes(source) ? source : "ALL";
+                    this.loadEditingResults(1);
+                },
+                onCondition: (count) => {this.editingConditionCount = count; this.loadEditingResults(1);},
+                onExcludeZero: (exclude) => {this.editingExcludeZero = exclude; this.loadEditingResults(1);},
+                onPage: (page) => this.loadEditingResults(page),
+                onRule: (key) => this.openEditingRule(key),
+                onRetry: () => this.loadEditingResults(this.editingResultData?.page || 1),
+                onLegacy: () => this.openEditingHistoricalExplanation()
+            });
+        },
+
+        async openEditingRule(key, page = 1) {
+            const item = (this.editingResultData?.rules || []).find((rule) => rule.key === key)
+                || (this.editingDetailData?.rule?.key === key ? this.editingDetailData.rule : null);
+            if (!item) return;
+            const panel = getContainerEl(`#resultPanel-${PAGE_CODE}`);
+            if (panel?.querySelector("[data-editing-list]")) {
+                this.editingListContext = {data: this.editingResultData, node: {...this.selectedNode}, family: this.editingFamily,
+                    source: this.editingSource, conditionCount: this.editingConditionCount, excludeZero: this.editingExcludeZero,
+                    position: window.EditingResultView.capturePosition(panel, key)};
+            }
+            this.closeSymbolicRulePopup();
+            this.editingDetailData = null;
+            this.currentExport = { filename: "editing-violation-preview.csv", columns: [], rows: [] };
+            const node = this.selectedNode;
+            const isCurrent = this.beginNodeResultRequest(node);
+            const params = this.editingResultParams("violations", page);
+            params.set("ruleKey", key);
+            params.set("family", item.family);
+            params.set("source", item.source);
+            this.renderEditingRuleDetail({ rule: item, page, violations: [] }, { loading: true });
+            if (page === 1) panel?.scrollIntoView({block: "start", behavior: "instant"});
+            try {
+                const response = await CommonUtils.request(`${API_BASE_URL}/mlAnalysis/editing-results?${params}`, { method: "GET", showLoading: false });
+                if (!isCurrent()) return;
+                this.editingDetailData = response.data || response;
+                this.setEditingResultExport();
+                this.renderEditingRuleDetail(this.editingDetailData);
+                this.snapshotNodeResultCache();
+            } catch (error) {
+                if (isCurrent()) this.renderEditingRuleDetail({ rule: item, page, violations: [] }, { error: error.message });
+            }
+        },
+
+        renderEditingRuleDetail(data, options = {}) {
+            const panel = getContainerEl(`#resultPanel-${PAGE_CODE}`);
+            if (!panel) return;
+            this.editingResultBinding?.();
+            this.editingResultBinding = null;
+            panel.classList.toggle("is-loading", Boolean(options.loading));
+            const item = data.rule;
+            const page = Math.max(1, Number(data.page || 1));
+            panel.innerHTML = `<div class="editing-result-detail">
+                ${window.EditingResultView.detailHeader(item, {t: getText, sourceAnalysis: true})}
+                ${window.EditingResultView.renderCard(item, { showOpen: false, t: getText })}
+                <section class="editing-result-violations">
+                    <h4>${this.escapeHtml(getEditingText("Saved violation preview"))}</h4>
+                    <p>${this.escapeHtml(getEditingText("Saved rows may be limited by the execution settings; this is not a new scan of the source."))}</p>
+                    <p>${this.escapeHtml(getEditingText("The same data row may violate several rules; violation counts are not unique error counts."))}</p>
+                    ${!options.loading && !options.error ? window.EditingResultView.violationNotice(data, {t: getText}) : ""}
+                    ${options.loading ? `<div class="table-empty">${this.escapeHtml(getText("Loading result table..."))}</div>`
+                        : options.error ? `<div class="table-error">${this.escapeHtml(options.error)}</div><button type="button" class="table-btn" onclick="${PAGE_CODE}.openEditingRule('${this.escapeJs(item.key)}', ${page})">${this.escapeHtml(getText("Retry"))}</button>`
+                        : this.renderGrid(data.columns || [], data.violations || [], { ...data, columnComments: item.columnComments || {}, hideProfileBars: true })}
+                    ${!options.loading && !options.error ? `<nav class="anly-work-result-detail-switcher"><div>
+                        <button type="button" ${page <= 1 ? "disabled" : ""} onclick="${PAGE_CODE}.openEditingRule('${this.escapeJs(item.key)}', ${page - 1})">${this.escapeHtml(getEditingText("Previous"))}</button>
+                        <span>${this.escapeHtml(window.EditingResultView.t("{count} saved rows", { t: getText }, { count: this.formatNumber(data.total || 0) }))} · ${page}</span>
+                        <button type="button" ${!data.hasMore ? "disabled" : ""} onclick="${PAGE_CODE}.openEditingRule('${this.escapeJs(item.key)}', ${page + 1})">${this.escapeHtml(getEditingText("Next"))}</button>
+                    </div></nav>` : ""}
+                </section></div>`;
+            this.editingResultBinding = window.EditingResultView.bind(panel, {
+                onBack: () => this.returnToEditingResults(), onSourceAnalysis: () => this.openEditingSourceAnalysis(item.key)
+            });
+        },
+
+        returnToEditingResults() {
+            this.nodeResultRequestId = (this.nodeResultRequestId || 0) + 1;
+            this.closeSymbolicRulePopup();
+            this.editingResultsMode = "FINAL";
+            this.editingDetailData = null;
+            const context = this.editingListContext;
+            if (context) {
+                this.editingResultData = context.data; this.selectedNode = context.node;
+                this.editingFamily = context.family; this.editingSource = context.source;
+                this.editingConditionCount = context.conditionCount; this.editingExcludeZero = context.excludeZero;
+            }
+            if (!this.editingResultData) return this.loadEditingResults(1);
+            this.setEditingResultExport();
+            this.renderEditingResults();
+            window.EditingResultView.restorePosition(getContainerEl(`#resultPanel-${PAGE_CODE}`), context?.position);
+            this.editingListContext = null;
+            this.snapshotNodeResultCache();
+        },
+
+        async openEditingSourceAnalysis(key) {
+            const item = (this.editingResultData?.rules || []).find((rule) => rule.key === key)
+                || (this.editingDetailData?.rule?.key === key ? this.editingDetailData.rule : null);
+            if (!item || !this.selectedNode) return;
+            this.editingResultBinding?.();
+            this.editingResultBinding = null;
+            this.editingResultsMode = "SOURCE";
+            const source = item.source;
+            if (source === "MIXED_PATTERN") this.mixedRuleFamily = item.family === "FORMULA" ? "FORMULA" : "VALUE";
+            const selected = { owner: (source === "LEGACY_ASSOC" ? item.scope?.ruleOwner : item.artifact?.owner) || this.selectedNode.RESULT_OWNER,
+                kind: source === "LEGACY_ASSOC" ? "MODEL" : "TABLE",
+                objectName: source === "LEGACY_ASSOC" ? item.scope.modelName
+                    : source === "LEGACY_SYMBOLIC" ? "INIT$_TB_RULEDISC_SYMBOLIC" : "INIT$_TB_XAI_RUN",
+                artifact: source === "LEGACY_ASSOC" ? "ASSOCIATION_MODEL" : source === "LEGACY_SYMBOLIC" ? "SYMBOLIC_RULE" : "MIXED_XAI_RULES" };
+            await this.selectNodeResultObject(selected);
+        },
+
+        async openEditingHistoricalExplanation() {
+            if (!this.selectedNode) return;
+            this.editingResultsMode = "SOURCE";
+            this.editingResultBinding?.();
+            this.editingResultBinding = null;
+            await this.selectNodeResultObject({ kind: "TABLE", owner: this.selectedNode.RESULT_OWNER,
+                objectName: "INIT$_TB_XAI_RUN", artifact: "MIXED_XAI_RULES" });
+        },
+
+        async loadMixedXaiAnalysis(node, page = 1, activeTab = this.getActiveModelAnalysisTab()) {
+            const isCurrent = this.beginNodeResultRequest(node);
             this.showResultLoading(getText("Loading rule summary..."));
             const params = new URLSearchParams({ flowRunId: this.selectedRun?.FLOW_RUN_ID || "",
-                targetOwner: node.TARGET_OWNER || "", targetTable: node.TARGET_TABLE || "" });
+                targetOwner: node.TARGET_OWNER || "", targetTable: node.TARGET_TABLE || "",
+                page: String(page), pageSize: "20", includeViolations: "false" });
             try {
                 const response = await CommonUtils.request(`${API_BASE_URL}/mlAnalysis/mixed-xai-results?${params}`, { method: "GET", showLoading: false });
-                if (this.selectedNode !== node) return;
+                if (!isCurrent()) return;
                 const payload = response.data || {};
                 const stage = this.mixedEarlyStageKind(node);
                 if (stage) {
@@ -1663,9 +2015,24 @@
                     this.snapshotNodeResultCache();
                     return;
                 }
-                const summary = payload.ruleSummary;
+                let summary = payload.ruleSummary;
                 if (!summary) throw new Error(getText("Rule summary load failed."));
                 const pattern = window.RuleResultCommon.isPattern(payload);
+                if (pattern) {
+                    const catalogParams = new URLSearchParams({ flowRunId: this.selectedRun?.FLOW_RUN_ID || "",
+                        targetOwner: node.TARGET_OWNER || "", targetTable: node.TARGET_TABLE || "", view: "rules",
+                        family: this.mixedRuleFamily === "FORMULA" ? "FORMULA" : "CONDITION", source: "MIXED_PATTERN", page: String(page), pageSize: "20" });
+                    const catalogResponse = await CommonUtils.request(`${API_BASE_URL}/mlAnalysis/editing-results?${catalogParams}`, { method: "GET", showLoading: false });
+                    if (!isCurrent()) return;
+                    const catalog = catalogResponse.data || catalogResponse;
+                    payload.catalogData = catalog;
+                    payload.sourcePage = { page: catalog.page, pageSize: catalog.pageSize, total: catalog.total, hasMore: catalog.hasMore };
+                    summary = window.RuleResultCommon.patternSummary({ ...summary, rules: (catalog.rules || []).map((entry) => ({ ...entry.row, EDITING_RULE_KEY: entry.key })) }, this.mixedRuleFamily || "VALUE");
+                    payload.ruleSummary = summary;
+                } else {
+                    payload.sourcePage = { page: payload.page || page, pageSize: payload.pageSize || 20,
+                        total: payload.total ?? summary.total ?? summary.rules?.length ?? 0, hasMore: payload.hasMore === true };
+                }
                 if (!pattern) summary.columnComments = { ...summary.columnComments, ANOMALY_CANDIDATE: getText("Anomaly candidate") };
                 this.currentModelDetail = { owner: node.RESULT_OWNER, modelName: node.RESULT_OBJECT_NAME,
                     mixedXai: payload, ruleSummary: summary, columnComments: summary.columnComments,
@@ -1673,30 +2040,66 @@
                 this.currentModelDetail.ruleSummary = window.RuleResultCommon.filterSummary(pattern ? window.RuleResultCommon.patternSummary(summary, this.mixedRuleFamily || "VALUE") : summary, this.ruleSummaryFilters, 1);
                 this.currentExport = this.buildRuleSummaryExport(node, this.currentModelDetail.ruleSummary);
                 if (this.isMixedXaiViolationNode(node)) {
-                    if (!this.lastViolationSummary?.mixedXai && !this.lastViolationSummary?.mixedPattern) this.violationRuleFilters.confidenceScope = "ALL";
-                    this.renderMixedXaiViolationResult(payload, page);
+                    this.violationRuleFilters.confidenceScope = "ALL";
+                    this.renderMixedXaiViolationResult(payload, 1);
                     return;
                 }
-
-                this.renderModelAnalysis(this.currentModelDetail, node.RESULT_OBJECT_NAME === "INIT$_TB_RULEVIOL_XAI" ? "detail" : "readable");
+                this.renderModelAnalysis(this.currentModelDetail, activeTab);
                 this.snapshotNodeResultCache();
             } catch (error) {
-                if (this.selectedNode === node) this.renderResultError(error.message);
+                if (isCurrent()) this.renderResultError(error.message);
+            }
+        },
+
+        async loadHistoricalRuleViolations(ruleId, page = 1) {
+            const node = this.selectedNode;
+            const isCurrent = this.beginNodeResultRequest(node);
+            const params = new URLSearchParams({ flowRunId: String(this.selectedRun?.FLOW_RUN_ID || ""),
+                targetOwner: node.TARGET_OWNER, targetTable: node.TARGET_TABLE, view: "violations", ruleId: String(ruleId), page: String(page), pageSize: "20" });
+            this.showResultLoading(getText("Loading result table..."));
+            try {
+                const response = await CommonUtils.request(`${API_BASE_URL}/mlAnalysis/mixed-xai-results?${params}`, { method: "GET", showLoading: false });
+                if (!isCurrent()) return;
+                const payload = response.data || response;
+                const rows = window.RuleResultCommon.candidateRows(payload, ruleId);
+                const columns = [...new Set(rows.flatMap(Object.keys))];
+                const panel = getContainerEl(`#resultPanel-${PAGE_CODE}`);
+                panel.classList.remove("is-loading");
+                panel.innerHTML = `<div class="anly-work-result-detail-switcher"><div>
+                    <button type="button" onclick="${PAGE_CODE}.loadMixedXaiAnalysis(${PAGE_CODE}.selectedNode, ${this.currentModelDetail?.mixedXai?.sourcePage?.page || 1})">${this.escapeHtml(getEditingText("Back to rules"))}</button>
+                    <strong>${this.escapeHtml(getEditingText("Historical anomaly explanations"))} · ${this.escapeHtml(ruleId)}</strong>
+                    </div></div><p>${this.escapeHtml(getEditingText("These explain model anomaly candidates and are separate from actual-value editing rules."))}</p>
+                    ${this.renderGrid(columns, rows, { columnLabels: window.RuleResultCommon.candidateColumnLabels(getText) })}
+                    <nav class="anly-work-result-detail-switcher"><div>
+                    <button type="button" ${page <= 1 ? "disabled" : ""} onclick="${PAGE_CODE}.loadHistoricalRuleViolations('${this.escapeJs(ruleId)}', ${page - 1})">${this.escapeHtml(getEditingText("Previous"))}</button>
+                    <span>${this.formatNumber(payload.total || 0)} · ${page}</span>
+                    <button type="button" ${!payload.hasMore ? "disabled" : ""} onclick="${PAGE_CODE}.loadHistoricalRuleViolations('${this.escapeJs(ruleId)}', ${page + 1})">${this.escapeHtml(getEditingText("Next"))}</button>
+                    </div></nav>`;
+                this.currentExport = { filename: "historical-explanation-preview.csv", columns, rows };
+                this.snapshotNodeResultCache();
+            } catch (error) {
+                if (isCurrent()) this.renderResultError(error.message);
             }
         },
 
         isMixedXaiViolationNode(node = this.selectedNode) {
-            return String(node?.RESULT_OBJECT_NAME || "").toUpperCase() === "INIT$_TB_RULEVIOL_XAI"
+            return (this.isUnifiedEditingNode(node) && this.isMixedScenarioNode(node) && /UNIFIED_EDITING_DETECT/.test([node?.EXEC_METHOD, node?.EXEC_OBJECT_NAME].join(" ")))
+                || (String(node?.RESULT_OBJECT_NAME || "").toUpperCase() === "INIT$_TB_XAI_RUN" && /MIXED_XAI_RULE_DETECT/.test([node?.EXEC_METHOD, node?.EXEC_OBJECT_NAME].join(" ")))
+                || String(node?.RESULT_OBJECT_NAME || "").toUpperCase() === "INIT$_TB_RULEVIOL_XAI"
                 || (this.isMixedScenarioNode(node) && /RULEVIOL_ASSOC$/.test(String(node?.RESULT_OBJECT_NAME || "").toUpperCase()));
         },
 
         isMixedScenarioNode(node = this.selectedNode) {
-            return /MIXED_XAI_(?:RULE_|PROFILE|RELATION)|MIXED_PATTERN_TREE/.test([node?.EXEC_METHOD, node?.EXEC_OBJECT_NAME, node?.MODEL_CODE, node?.MODEL_NAME].filter(Boolean).join(" ").toUpperCase());
+            return (this.isUnifiedEditingNode(node) && String(node?.RESULT_OBJECT_NAME || "").toUpperCase() === "INIT$_TB_XAI_RUN") || /MIXED_XAI_(?:RULE_|PROFILE|RELATION)|MIXED_PATTERN_TREE/.test([node?.EXEC_METHOD, node?.EXEC_OBJECT_NAME, node?.MODEL_CODE, node?.MODEL_NAME].filter(Boolean).join(" ").toUpperCase());
+        },
+
+        isUnifiedEditingNode(node = this.selectedNode) {
+            return /UNIFIED_EDITING_/.test([node?.EXEC_METHOD, node?.EXEC_OBJECT_NAME].filter(Boolean).join(" ").toUpperCase());
         },
 
         mixedEarlyStageKind(node = this.selectedNode) {
             const method = [node?.EXEC_METHOD, node?.EXEC_OBJECT_NAME].filter(Boolean).join(" ").toUpperCase();
-            return method.includes("MIXED_XAI_PROFILE") ? "PROFILE" : method.includes("MIXED_XAI_RELATION") ? "RELATION" : "";
+            return /(?:MIXED_XAI|UNIFIED_EDITING)_PROFILE/.test(method) ? "PROFILE" : /(?:MIXED_XAI|UNIFIED_EDITING)_RELATION/.test(method) ? "RELATION" : "";
         },
 
         renderMixedEarlyStage(payload, kind) {
@@ -1718,7 +2121,7 @@
             const common = window.RuleResultCommon;
             const familySummary = common.patternSummary(payload.ruleSummary, this.mixedRuleFamily || "VALUE");
             const scopedPayload = common.isPattern(payload) ? { ...payload, summary: { ...payload.summary,
-                uniqueViolationCount: familySummary.total === payload.ruleSummary?.rules?.length ? payload.summary?.uniqueViolationCount : null }, ruleSummary: familySummary } : payload;
+                uniqueViolationCount: !payload.sourcePage && familySummary.total === payload.ruleSummary?.rules?.length ? payload.summary?.uniqueViolationCount : null }, ruleSummary: familySummary } : payload;
             const summary = common.violationSummary(scopedPayload, this.violationRuleFilters);
             summary.topRulePage = summary.rulePage;
             summary.topRulePageSize = summary.rulePageSize;
@@ -1731,15 +2134,30 @@
             const totalPages = Math.ceil(rows.length / size) || 1;
             page = Math.min(Math.max(1, Number(page) || 1), totalPages);
             const data = rows.slice((page - 1) * size, page * size);
-            const json = { status: "success", owner: this.selectedNode.RESULT_OWNER, objectName: this.selectedNode.RESULT_OBJECT_NAME,
+            const formula = common.isPattern(payload) && this.mixedRuleFamily === "FORMULA";
+            const columns = [...new Set(data.flatMap(Object.keys))].filter((column) => !formula || column !== "RULE_LIFT");
+            const columnLabels = common.candidateColumnLabels(getText);
+            if (formula) columnLabels.RULE_CONFIDENCE = getText("Within-tolerance rate");
+            const json = { status: "success", owner: this.selectedNode.RESULT_OWNER,
+                objectName: common.isPattern(payload) ? "INIT$_TB_RULEVIOL_ASSOC" : "INIT$_TB_RULEVIOL_XAI",
+                resultLayout: { key: "TABLE:INIT$_TB_RULEVIOL_XAI" },
                 targetOwner: summary.targetOwner, targetTable: summary.targetTable, filteredByTarget: true,
-                data, columns: [...new Set(data.flatMap(Object.keys))], columnComments: summary.columnComments,
-                total: rows.length, page, pageSize: size, columnLabels: common.candidateColumnLabels(getText), violationSummary: summary };
+                data, columns, columnComments: summary.columnComments,
+                total: rows.length, page, pageSize: size, columnLabels, violationSummary: summary };
             this.lastResultTableJson = json;
             this.lastViolationSummary = summary;
             this.currentExport = { filename: "xai-violations.csv", columns: json.columns, rows: data };
             this.renderResultTable(json, "Result Table", "TABLE");
-            if (common.isPattern(payload)) getContainerEl("#resultPanel-${PAGE_CODE}")?.insertAdjacentHTML("afterbegin", this.renderMixedFamilyControls(payload));
+            if (payload.sourcePage) {
+                const body = getContainerEl(`#tableResultBody-${PAGE_CODE}`);
+                if (body) body.innerHTML = `<div class="table-empty">${this.escapeHtml(getEditingText("Rule details and violations"))} →</div>`;
+            }
+            if (common.isPattern(payload)) {
+                const panel = getContainerEl("#resultPanel-${PAGE_CODE}");
+                const switcher = panel?.querySelector(".anly-work-result-switcher");
+                if (switcher) switcher.insertAdjacentHTML("afterend", this.renderMixedFamilyControls(payload));
+                else panel?.insertAdjacentHTML("afterbegin", this.renderMixedFamilyControls(payload));
+            }
             this.snapshotNodeResultCache();
         },
 
@@ -1748,6 +2166,11 @@
             if (!common.isPattern(payload)) return "";
             const family = this.mixedRuleFamily || "VALUE";
             const value = common.patternSummary(payload.ruleSummary, "VALUE"), formula = common.patternSummary(payload.ruleSummary, "FORMULA");
+            if (payload.catalogData) {
+                const counts = payload.catalogData.summary?.sourceCounts || [];
+                value.total = counts.find((item) => item.source === "MIXED_PATTERN" && item.family === "CONDITION")?.ruleCount ?? value.total;
+                formula.total = counts.find((item) => item.source === "MIXED_PATTERN" && item.family === "FORMULA")?.ruleCount ?? formula.total;
+            }
             const active = family === "FORMULA" ? formula : value;
             const diagnostic = common.continuousDiagnostic(payload, getText);
             const ratio = (v) => v == null ? "-" : this.formatPercentMetric(v);
@@ -1761,8 +2184,8 @@
                 { label: getText("Average lift"), value: decimal(active.overview.AVG_LIFT) }
             ];
             const violation = this.isMixedXaiViolationNode();
-            return `<section data-mixed-rule-family><nav class="anly-work-rule-family-switcher" aria-label="${this.escapeHtml(getText("Automatic rule details"))}">
-                <strong>${this.escapeHtml(getText("Automatic rule details"))}</strong><div>
+            return `<section data-mixed-rule-family><nav class="anly-work-rule-family-switcher" aria-label="${this.escapeHtml(getText("Rule type"))}">
+                <strong>${this.escapeHtml(getText("Rule type"))}</strong><div>
                 ${[["VALUE", violation ? "Value and range violations" : "Value and range rules", value.total, "fa-tags"], ["FORMULA", violation ? "Continuous violations" : "Continuous formula rules", formula.total, "fa-wave-square"]].map(([key, label, count, icon]) => `<button type="button" class="${family === key ? "is-active" : ""}" aria-pressed="${family === key}" onclick="${PAGE_CODE}.selectMixedRuleFamily('${key}')"><i class="fas ${icon}" aria-hidden="true"></i><span>${this.escapeHtml(getText(label))} · ${this.formatNumber(count)}</span></button>`).join("")}
                 </div></nav><section class="anly-work-readable-stats"><div class="anly-work-readable-stat-block">
                 <div class="anly-work-readable-stat-metrics">${[...metrics, ...(family === "FORMULA" ? diagnostic.metrics : [])].map((m) => `<span><b>${this.escapeHtml(m.value)}</b><small>${this.escapeHtml(m.label)}</small></span>`).join("")}</div>
@@ -1770,13 +2193,16 @@
         },
 
         selectMixedRuleFamily(family) {
+            const activeTab = this.getActiveModelAnalysisTab();
+            this.closeSymbolicRulePopup();
             this.mixedRuleFamily = family === "FORMULA" ? "FORMULA" : "VALUE";
             this.ruleSummaryFilters = { ...this.ruleSummaryFilters, conditionCount: "ALL", resultColumn: "ALL", conditionColumn: "", confidenceScope: "ALL", page: 1 };
             this.violationRuleFilters = { ...this.violationRuleFilters, conditionCount: "ALL", confidenceScope: "ALL", ruleId: "", page: 1 };
             const payload = this.currentModelDetail?.mixedXai;
             if (!payload) return;
+            if (payload.sourcePage) return this.loadMixedXaiAnalysis(this.selectedNode, 1, activeTab);
             if (this.isMixedXaiViolationNode()) this.renderMixedXaiViolationResult(payload);
-            else this.loadModelRuleSummary(1);
+            else this.loadModelRuleSummary(1, activeTab);
         },
 
         renderMixedXaiDetail(json) {
@@ -1784,34 +2210,51 @@
             const payload = json.mixedXai;
             const summary = json.ruleSummary || {};
             const pattern = common.isPattern(payload);
+            const formula = pattern && this.mixedRuleFamily === "FORMULA";
+            const family = pattern ? common.patternSummary(payload.ruleSummary, formula ? "FORMULA" : "VALUE") : null;
+            const counts = (family?.rules || []).map((rule) => rule.VIOLATION_COUNT ?? rule.MATCH_COUNT);
+            const diagnostics = pattern ? { ...payload.summary, ruleCount: family.total,
+                violationCount: counts.every((value) => value != null) ? counts.reduce((sum, value) => sum + Number(value), 0) : null,
+                ruleMatchCount: null } : payload.summary;
+            const metrics = formula ? common.continuousDiagnostic(payload, getText).metrics : common.diagnostics(diagnostics, getText);
+            const columns = pattern ? common.patternColumns.filter((column) => formula ? column !== "RULE_LIFT"
+                : !["VALIDATION_R2", "VALIDATION_MAE", "VALIDATION_RMSE", "ABSOLUTE_TOLERANCE", "RELATIVE_TOLERANCE"].includes(column)) : common.columns;
+            const columnLabels = pattern ? common.patternColumnLabels(getText) : common.columnLabels(getText);
+            if (formula) {
+                columnLabels.RULE_CONFIDENCE = getText("Within-tolerance rate");
+                columnLabels.VALIDATION_CONFIDENCE = getText("Validation within-tolerance rate");
+            }
             const ruleRows = (summary.rules || []).map((r) => ({ ...r, RESULT_TEXT: pattern ? r.RESULT_TEXT : getText("Anomaly candidate"),
                 VALIDATION_STATUS: common.validationStatus(r.VALIDATION_STATUS, getText) }));
             return `<section class="anly-work-readable-stats"><div class="anly-work-readable-stat-block">
                 <strong>${this.escapeHtml(getText("Validation diagnostics"))}</strong>
-                <div class="anly-work-readable-stat-metrics">${common.diagnostics(payload.summary, getText).map((m) => `<span><b>${this.escapeHtml(m.value)}</b><small>${this.escapeHtml(m.label)}</small></span>`).join("")}</div>
-                <p>${this.escapeHtml(common.notes(payload.summary, getText))}</p>
+                <div class="anly-work-readable-stat-metrics">${metrics.map((m) => `<span><b>${this.escapeHtml(m.value)}</b><small>${this.escapeHtml(m.label)}</small></span>`).join("")}</div>
+                <p>${this.escapeHtml(formula ? common.continuousDiagnostic(payload, getText).message : common.notes(diagnostics, getText))}</p>
                 </div></section>
                 <h4>${this.escapeHtml(getText("Rule summary table"))}</h4>
-                ${this.renderGrid(pattern ? common.patternColumns : common.columns, ruleRows, { ...summary, mixedFormulaGraphActions: pattern, columnLabels: pattern ? common.patternColumnLabels(getText) : common.columnLabels(getText) })}`;
+                ${this.renderGrid(columns, ruleRows, { ...summary, mixedFormulaGraphActions: pattern, columnLabels })}`;
         },
 
         async loadResultTable(page = 1) {
             const node = this.selectedNode;
             if (!node) return;
+            if (this.isEditingRuleResultNode(node)) return this.loadEditingResults(page);
             if (this.isMixedScenarioNode(node) || ["INIT$_TB_RULEDISC_XAI", "INIT$_TB_XAI_RUN", "INIT$_TB_RULEVIOL_XAI"].includes(String(node.RESULT_OBJECT_NAME || "").toUpperCase())) {
                 return this.loadMixedXaiAnalysis(node, page);
             }
             this.resultPage = Math.max(1, Number(page || 1));
+            const isCurrent = this.beginNodeResultRequest(node);
             this.showResultLoading(getText("Loading result table..."));
             const params = this.buildResultTableParams(node, this.resultPage);
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/result-table?${params.toString()}`, { method: "GET", showLoading: false });
-                if (this.selectedNode !== node) return;
+                if (!isCurrent()) return;
                 this.lastResultTableJson = json;
                 this.currentExport = { filename: `${node.RESULT_OBJECT_NAME || "result"}.csv`, columns: json.columns || [], rows: json.data || [] };
                 const resultLayout = this.getTableResultLayout(node, json);
                 this.renderResultTable(json, resultLayout.title, resultLayout.kind);
             } catch (error) {
+                if (!isCurrent()) return;
                 this.renderResultError(error.message || "Result table load failed.");
             }
         },
@@ -1824,6 +2267,7 @@
                 await this.loadResultTable(page);
                 return;
             }
+            const isCurrent = this.beginNodeResultRequest(node);
             this.resultPage = Math.max(1, Number(page || 1));
             const restoreScroll = this.preserveResultScroll();
             const previousMinHeight = body.style.minHeight;
@@ -1835,7 +2279,7 @@
             const params = this.buildResultTableParams(node, this.resultPage);
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/result-table?${params.toString()}`, { method: "GET", showLoading: false });
-                if (this.selectedNode !== node) return;
+                if (!isCurrent()) return;
                 const restoreAfterLoad = this.preserveResultScroll();
                 this.lastResultTableJson = {
                     ...(this.lastResultTableJson || {}),
@@ -1860,6 +2304,7 @@
                 });
                 this.snapshotNodeResultCache();
             } catch (error) {
+                if (!isCurrent()) return;
                 body.classList.remove("is-loading");
                 body.style.minHeight = previousMinHeight;
                 body.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Result table load failed.")}</div>`;
@@ -1870,6 +2315,7 @@
         async loadModelView(viewType = "VR", page = 1) {
             const node = this.selectedNode;
             if (!node) return;
+            const isCurrent = this.beginNodeResultRequest(node);
             this.showResultLoading(getText("Loading {viewType} view...", { viewType }), viewType);
             const params = new URLSearchParams({
                 owner: node.RESULT_OWNER,
@@ -1880,10 +2326,11 @@
             });
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/model-view?${params.toString()}`, { method: "GET", showLoading: false });
-                if (this.selectedNode !== node) return;
+                if (!isCurrent()) return;
                 this.currentExport = { filename: `${json.viewName || node.RESULT_OBJECT_NAME || "model-view"}.csv`, columns: json.columns || [], rows: json.data || [] };
                 this.renderModelView(json);
             } catch (error) {
+                if (!isCurrent()) return;
                 this.renderResultError(error.message || "Model view load failed.");
             }
         },
@@ -1891,6 +2338,8 @@
         async loadModelDetailSummary() {
             const node = this.selectedNode;
             if (!node) return;
+            if (this.isEditingRuleResultNode(node)) return this.loadEditingResults(1);
+            const isCurrent = this.beginNodeResultRequest(node);
             this.showResultLoading(getText("Loading model detail analysis..."));
             const params = new URLSearchParams({
                 owner: node.RESULT_OWNER,
@@ -1912,7 +2361,7 @@
                     timeoutMs: CommonUtils.getRuntimeSetting("APP_RULE_SUMMARY_TIMEOUT_MS", 60000, 12000, 300000),
                     timeoutMessage: getText("Model result lookup took too long and was stopped.")
                 });
-                if (this.selectedNode !== node) return;
+                if (!isCurrent()) return;
                 const detail = combined.detail;
                 if (!detail) throw new Error(combined.detailError || "Model detail summary load failed.");
                 this.currentModelDetail = detail;
@@ -1930,21 +2379,23 @@
                 this.renderModelAnalysis(this.currentModelDetail, "readable");
                 this.snapshotNodeResultCache();
             } catch (error) {
+                if (!isCurrent()) return;
                 console.warn(`[${PAGE_CODE}] combined model result failed; using compatible individual APIs.`, error);
                 try {
                     const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/model-detail-summary?${params.toString()}`, { method: "GET", showLoading: false });
-                    if (this.selectedNode !== node) return;
+                    if (!isCurrent()) return;
                     this.currentModelDetail = json;
                     this.currentExport = { filename: `${node.RESULT_OBJECT_NAME || "model-detail"}.csv`, columns: [], rows: [] };
                     this.renderModelAnalysis(json, "readable");
                     this.loadModelRuleSummary(1);
                 } catch (fallbackError) {
+                    if (!isCurrent()) return;
                     this.renderResultError(fallbackError.message || "Model detail summary load failed.");
                 }
             }
         },
 
-        async loadModelRuleSummary(page = 1) {
+        async loadModelRuleSummary(page = 1, activeTab = this.getActiveModelAnalysisTab()) {
             const node = this.selectedNode;
             if (!node || !this.currentModelDetail) return;
             if (this.currentModelDetail.mixedXai) {
@@ -1954,11 +2405,13 @@
                 this.currentModelDetail.ruleSummary = summary;
                 this.ruleSummaryFilters.page = summary.page;
                 this.currentExport = this.buildRuleSummaryExport(node, summary);
-                this.renderModelAnalysis(this.currentModelDetail, "readable");
+                this.renderModelAnalysis(this.currentModelDetail, activeTab);
                 this.snapshotNodeResultCache();
                 return;
             }
             const filters = this.ruleSummaryFilters || {};
+            const isCurrent = this.beginNodeResultRequest(node);
+            const detail = this.currentModelDetail;
             this.currentModelDetail.ruleSummaryLoading = true;
             this.currentModelDetail.ruleSummaryError = "";
             this.renderModelAnalysis(this.currentModelDetail, this.getActiveModelAnalysisTab());
@@ -1986,7 +2439,7 @@
                     timeoutMs: CommonUtils.getRuntimeSetting("APP_RULE_SUMMARY_TIMEOUT_MS", 60000, 12000, 300000),
                     timeoutMessage: getText("Rule summary lookup took too long and was stopped.")
                 });
-                if (this.selectedNode !== node || !this.currentModelDetail) return;
+                if (!isCurrent() || this.currentModelDetail !== detail) return;
                 this.currentModelDetail.ruleSummary = json;
                 this.currentModelDetail.ruleSummaryLoading = false;
                 this.ruleSummaryFilters.page = Number(json.page || page || 1);
@@ -1996,7 +2449,7 @@
                 this.renderModelAnalysis(this.currentModelDetail, this.getActiveModelAnalysisTab());
                 this.snapshotNodeResultCache();
             } catch (error) {
-                if (this.selectedNode !== node || !this.currentModelDetail) return;
+                if (!isCurrent() || this.currentModelDetail !== detail) return;
                 this.currentModelDetail.ruleSummaryLoading = false;
                 this.currentModelDetail.ruleSummaryError = error.message || "Rule summary load failed.";
                 this.renderModelAnalysis(this.currentModelDetail, this.getActiveModelAnalysisTab());
@@ -2036,7 +2489,7 @@
                     <div>
                         <span>Oracle ML Model View</span>
                         <strong class="anly-work-result-exec-object">${this.escapeHtml(executionTitle)}</strong>
-                        <small>Result Model ${this.escapeHtml(json.owner)}.${this.escapeHtml(json.modelName)} · ${this.escapeHtml(json.viewName || "")} · ${this.formatNumber(json.total)} rows</small>
+                        <small>${this.escapeHtml(getText("Result Model"))} ${this.escapeHtml(json.owner)}.${this.escapeHtml(json.modelName)} · ${this.escapeHtml(json.viewName || "")} · ${this.escapeHtml(getText("{count} rows", { count: this.formatNumber(json.total) }))}</small>
                         ${this.renderSelectedNodeJobDesc()}
                     </div>
                     <nav>
@@ -2075,6 +2528,8 @@
             const modelHeaderLabel = this.getModelHeaderLabel(json);
             const modelOwner = json.owner || this.selectedNode?.RESULT_OWNER || "";
             const modelName = json.modelName || this.selectedNode?.RESULT_OBJECT_NAME || "";
+            const resultName = json.mixedXai ? (window.RuleResultCommon.isPattern(json.mixedXai)
+                ? "INIT$_TB_RULEDISC_ASSOC_SUM" : "INIT$_TB_RULEDISC_XAI") : modelName;
             const executionTitle = this.getNodeExecutionTitle(this.selectedNode, `${modelOwner}.${modelName}`);
             panel.innerHTML = `
                 ${json.mixedXai ? this.renderMixedFamilyControls(json.mixedXai) : ""}
@@ -2082,7 +2537,7 @@
                     <div>
                         <span>${this.escapeHtml(this.selectedNode?.NODE_NAME || (json.mixedXai ? getText("IF–THEN rules") : "Oracle ML Model View"))}</span>
                         <strong class="anly-work-result-exec-object">${this.escapeHtml(executionTitle)}</strong>
-                        <small>${this.escapeHtml(getText(json.mixedXai ? "Result Table" : "Result Model"))} ${this.escapeHtml(modelOwner)}.${this.escapeHtml(modelName)}</small>
+                        <small>${this.escapeHtml(getText(json.mixedXai ? "Result Table" : "Result Model"))} ${this.escapeHtml(modelOwner)}.${this.escapeHtml(resultName)}</small>
                         ${this.renderSelectedNodeJobDesc()}
                     </div>
                     <em>${this.escapeHtml(modelHeaderLabel)}</em>
@@ -2108,7 +2563,7 @@
 
         getActiveModelAnalysisTab() {
             const active = getContainerEl("#resultPanel-${PAGE_CODE} .anly-work-model-tab-panel.is-active");
-            return active?.dataset.modelTab === "detail" ? "detail" : "readable";
+            return active?.dataset?.modelTab === "detail" ? "detail" : "readable";
         },
 
         getModelDetailView(viewType, json = this.currentModelDetail) {
@@ -2136,6 +2591,8 @@
         async loadModelAnalysisViewPage(viewType, page = 1, pageSize = 8, activeTab = "detail") {
             const node = this.selectedNode;
             if (!node) return;
+            const isCurrent = this.beginNodeResultRequest(node);
+            const detail = this.currentModelDetail;
             const nextPage = Math.max(1, Number(page || 1));
             this.showResultLoading(getText("Loading {viewType} sample page...", { viewType }));
             const params = new URLSearchParams({
@@ -2147,7 +2604,7 @@
             });
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/model-view?${params.toString()}`, { method: "GET", showLoading: false });
-                if (this.selectedNode !== node || !this.currentModelDetail) return;
+                if (!isCurrent() || this.currentModelDetail !== detail) return;
                 this.replaceModelDetailView({
                     viewType: json.viewType || viewType,
                     viewName: json.viewName || `DM$${viewType}${node.RESULT_OBJECT_NAME || ""}`,
@@ -2167,6 +2624,7 @@
                 this.renderModelAnalysis(this.currentModelDetail, activeTab);
                 this.snapshotNodeResultCache();
             } catch (error) {
+                if (!isCurrent()) return;
                 this.renderResultError(error.message || "Model view page load failed.");
             }
         },
@@ -2599,6 +3057,7 @@
                 return {
                     ruleId: `Rule #${rawRuleId}`,
                     rawRuleId,
+                    editingRuleKey: row.EDITING_RULE_KEY || "",
                     isFormula: window.RuleResultCommon.isFormula(row),
                     formulaRule: window.RuleResultCommon.isFormula(row) ? row : null,
                     confidenceValue: row.RULE_CONFIDENCE,
@@ -2712,7 +3171,9 @@
         },
 
         getModelHeaderLabel(json = {}) {
-            if (json.mixedXai) return window.RuleResultCommon.isPattern(json.mixedXai) ? getText((json.mixedXai.ruleSummary?.rules || []).some(window.RuleResultCommon.isFormula) ? "Pattern rules and numeric formulas" : "Pattern decision tree") : "Isolation Forest / Decision Tree";
+            if (json.mixedXai) return window.RuleResultCommon.isPattern(json.mixedXai)
+                ? getText(this.mixedRuleFamily === "FORMULA" ? "Continuous formula rules" : "Value and range rules")
+                : "Isolation Forest / Decision Tree";
             const metadata = json.modelMetadata || {};
             const miningFunction = String(metadata.MINING_FUNCTION || "").trim();
             const algorithm = String(metadata.ALGORITHM || "").trim();
@@ -2756,9 +3217,9 @@
                         <span class="anly-work-rule-card-actions">
                             <em>${this.escapeHtml(rule.mappingLabel)}</em>
                             ${this.renderAprioriClusterReference(rule)}
-                            ${rule.isFormula ? `<button type="button" class="anly-work-rule-open-link" onclick="${PAGE_CODE}.openMixedFormulaPopup('${this.escapeJs(plainRuleId)}')">${this.escapeHtml(getText("View formula graph"))}</button>` : ""}
+                            ${rule.isFormula ? `<button type="button" class="anly-work-rule-open-link" onclick="${PAGE_CODE}.openMixedFormulaPopup('${this.escapeJs(plainRuleId)}', '${this.escapeJs(rule.editingRuleKey || "")}')">${this.escapeHtml(getText("View formula graph"))}</button>` : ""}
                             ${rule.canOpenViolation
-                                ? `<button type="button" class="anly-work-rule-open-link" title="${this.escapeHtml(getText(rule.isMixedXai ? "View candidates" : "Search violation detection results with this RULE ID"))}" onclick="${PAGE_CODE}.openViolationForRule('${this.escapeJs(plainRuleId)}', '${this.escapeJs(rule.conditionCount)}')">${this.escapeHtml(getText(rule.isMixedXai ? "View candidates" : "View violations"))}</button>`
+                                ? `<button type="button" class="anly-work-rule-open-link" title="${this.escapeHtml(getText(rule.isMixedXai ? "View candidates" : "Search violation detection results with this RULE ID"))}" onclick="${PAGE_CODE}.openViolationForRule('${this.escapeJs(plainRuleId)}', '${this.escapeJs(rule.conditionCount)}', '${this.escapeJs(rule.editingRuleKey || "")}')">${this.escapeHtml(getText(rule.isMixedXai ? "View candidates" : "View violations"))}</button>`
                                 : ""}
                         </span>
                     </header>
@@ -2790,8 +3251,8 @@
                         <button type="button" class="anly-work-rule-copy-btn" title="${this.escapeHtml(getText("Copy RULE ID"))}" onclick="${PAGE_CODE}.copyRuleId('${this.escapeJs(ruleId)}', event)"><i class="far fa-copy"></i></button>
                     </span></span>
                     <span class="anly-work-symbolic-rule-actions">
-                        <button type="button" title="${this.escapeHtml(getText("View formula graph"))}" aria-label="${this.escapeHtml(getText("View formula graph"))}" onclick="${PAGE_CODE}.openMixedFormulaPopup('${this.escapeJs(ruleId)}')"><i class="fas fa-chart-line" aria-hidden="true"></i></button>
-                        <button type="button" onclick="${PAGE_CODE}.openViolationForRule('${this.escapeJs(ruleId)}', '${this.escapeJs(rule.conditionCount)}')">${this.escapeHtml(getText("View violations"))}</button>
+                        <button type="button" title="${this.escapeHtml(getText("View formula graph"))}" aria-label="${this.escapeHtml(getText("View formula graph"))}" onclick="${PAGE_CODE}.openMixedFormulaPopup('${this.escapeJs(ruleId)}', '${this.escapeJs(rule.editingRuleKey || "")}')"><i class="fas fa-chart-line" aria-hidden="true"></i></button>
+                        <button type="button" onclick="${PAGE_CODE}.openViolationForRule('${this.escapeJs(ruleId)}', '${this.escapeJs(rule.conditionCount)}', '${this.escapeJs(rule.editingRuleKey || "")}')">${this.escapeHtml(getText("View violations"))}</button>
                     </span>
                 </header>
                 <div class="anly-work-symbolic-y-panel"><small>${this.escapeHtml(getText("Y result value"))}</small><strong>${this.renderColumnAwareCell(saved.RESULT_COLUMN)}</strong></div>
@@ -3096,11 +3557,11 @@
             panel.innerHTML = `
                 <header class="anly-work-result-header">
                     <div>
-                        <span>${this.escapeHtml(type)}</span>
+                        <span>${this.escapeHtml(getText(type))}</span>
                         <strong class="anly-work-result-exec-object">${this.escapeHtml(executionTitle)}</strong>
-                        <small>Result Table ${this.escapeHtml(resultObject)} · ${this.formatNumber(json.total)} rows</small>
-                        ${json.filteredByTarget ? `<small>Target ${this.escapeHtml(json.targetOwner)}.${this.escapeHtml(json.targetTable)}</small>` : ""}
-                        ${json.ruleModelName ? `<small>Rule Model ${this.escapeHtml(json.ruleModelName)}</small>` : ""}
+                        <small>${this.escapeHtml(getText("Result Table"))} ${this.escapeHtml(resultObject)} · ${this.escapeHtml(getText("{count} rows", { count: this.formatNumber(json.total) }))}</small>
+                        ${json.filteredByTarget ? `<small>${this.escapeHtml(getText("Target"))} ${this.escapeHtml(json.targetOwner)}.${this.escapeHtml(json.targetTable)}</small>` : ""}
+                        ${json.ruleModelName ? `<small>${this.escapeHtml(getText("Rule Model"))} ${this.escapeHtml(json.ruleModelName)}</small>` : ""}
                         ${this.renderSelectedNodeJobDesc()}
                     </div>
                     ${this.renderSelectedNodeExecutionMeta()}
@@ -3115,8 +3576,9 @@
         },
 
         renderResultTableBody(json = {}) {
+            const mixedViolations = json.violationSummary?.mixedPattern || json.violationSummary?.mixedXai;
             return `
-                ${this.renderResultTableProfile(json.columns || [], json.data || [])}
+                ${mixedViolations ? "" : this.renderResultTableProfile(json.columns || [], json.data || [])}
                 ${this.renderGrid(json.columns || [], json.data || [], json)}
                 ${this.renderResultPager(json.page, json.pageSize, json.total, "${PAGE_CODE}.refreshResultGridOnly(")}
             `;
@@ -3370,8 +3832,8 @@
                                             ` : ""}
                                         </span>
                                         <span class="anly-work-violation-rule-actions">
-                                        ${window.RuleResultCommon.isFormula(rule) ? `<button type="button" title="${this.escapeHtml(getText("View formula graph"))}" aria-label="${this.escapeHtml(getText("View formula graph"))}" onclick="${PAGE_CODE}.openMixedFormulaPopup('${this.escapeJs(ruleId)}')"><i class="fas fa-chart-line" aria-hidden="true"></i></button>` : ""}
-                                        <button type="button" class="${hasViolation ? "" : "is-muted"}" onclick="${PAGE_CODE}.openViolationSqlPopup('rule', '${this.escapeJs(rule.RULE_ID)}')">
+                                        ${window.RuleResultCommon.isFormula(rule) ? `<button type="button" title="${this.escapeHtml(getText("View formula graph"))}" aria-label="${this.escapeHtml(getText("View formula graph"))}" onclick="${PAGE_CODE}.openMixedFormulaPopup('${this.escapeJs(ruleId)}', '${this.escapeJs(rule.EDITING_RULE_KEY || "")}')"><i class="fas fa-chart-line" aria-hidden="true"></i></button>` : ""}
+                                        <button type="button" class="${hasViolation ? "" : "is-muted"}" onclick="${PAGE_CODE}.openViolationSqlPopup('rule', '${this.escapeJs(rule.RULE_ID)}', '${this.escapeJs(rule.EDITING_RULE_KEY || "")}')">
                                             ${hasViolation ? this.escapeHtml(getText("{count} rows", { count: this.formatNumber(rule.VIOLATION_COUNT) })) : (rule.DETECTION_SCANNED_YN === "N" ? this.escapeHtml(getText(summary.mixedXai ? "Not evaluated" : "Excluded by max rules")) : this.escapeHtml(getText("No violation")))}
                                         </button>
                                         </span>
@@ -3558,7 +4020,8 @@
             await this.loadViolationRulePage(input?.value || 1);
         },
 
-        openViolationSqlPopup(kind = "all", value = "") {
+        openViolationSqlPopup(kind = "all", value = "", editingRuleKey = "") {
+            if (kind === "rule" && this.currentModelDetail?.mixedXai?.sourcePage) return this.openViolationForRule(value, "ALL", editingRuleKey);
             const sql = this.createViolationSql(kind, value);
             if (!sql) return;
             const ruleColumnRoles = this.getViolationRuleColumnRoles(kind, value);
@@ -7459,7 +7922,7 @@
                                             ` : ""}
                                         </span>
                                         <span class="anly-work-violation-rule-actions">
-                                            <button type="button" title="${this.escapeHtml(getText("View formula graph"))}" onclick="${PAGE_CODE}.openSymbolicViolationRulePopup('${this.escapeJs(rule.RULE_ID)}')">
+                                            <button type="button" title="${this.escapeHtml(getText("View formula graph"))}" onclick="${PAGE_CODE}.openSymbolicViolationRulePopup('${this.escapeJs(rule.RULE_ID)}', '${this.escapeJs(targetColumn)}')">
                                                 <i class="fas fa-chart-line"></i>
                                             </button>
                                             <button type="button" class="${hasViolation ? "" : "is-muted"}" onclick="${PAGE_CODE}.openViolationSqlPopup('rule', '${this.escapeJs(rule.RULE_ID)}')">
@@ -7550,9 +8013,10 @@
                 .filter(Boolean);
         },
 
-        async openMixedFormulaPopup(ruleId) {
+        async openMixedFormulaPopup(ruleId, editingRuleKey = "") {
             const rule = (this.currentModelDetail?.mixedXai?.ruleSummary?.rules || [])
-                .find((item) => String(item.RULE_ID) === String(ruleId) && window.RuleResultCommon.isFormula(item));
+                .find((item) => String(item.RULE_ID) === String(ruleId) && window.RuleResultCommon.isFormula(item)
+                    && (!editingRuleKey || item.EDITING_RULE_KEY === editingRuleKey));
             if (!rule) return;
             this.closeSymbolicRulePopup();
             const state = { rule, node: this.selectedNode, runId: this.selectedRun?.FLOW_RUN_ID,
@@ -7623,10 +8087,11 @@
             setTimeout(() => { if (state === this.symbolicRuleChartState) this.initializeSymbolicRuleVisualization(); }, 0);
         },
 
-        openSymbolicViolationRulePopup(ruleId) {
+        openSymbolicViolationRulePopup(ruleId, targetColumn = "") {
             const normalizedRuleId = String(ruleId || "").trim();
             const summary = this.lastSymbolicViolationSummary || {};
-            const rule = (summary.topRules || []).find((item) => String(item.RULE_ID) === normalizedRuleId);
+            const rule = (summary.topRules || []).find((item) => String(item.RULE_ID) === normalizedRuleId
+                && (!targetColumn || String(item.TARGET_COLUMN || "") === String(targetColumn)));
             if (!rule) {
                 alert(getText("Selected Symbolic Rule violation summary information could not be found."));
                 return;
@@ -7889,6 +8354,12 @@
             const params = new URLSearchParams({ owner, ruleId, sampleLimit: "300" });
             params.set("runSourceType", runSourceType);
             params.set("runId", String(runId));
+            const targetOwner = state.rule?.TARGET_OWNER || state.rule?.OWNER || state.summary?.targetOwner || this.selectedNode?.TARGET_OWNER;
+            const targetTable = state.rule?.TABLE_NAME || state.rule?.TARGET_TABLE || state.summary?.targetTable || this.selectedNode?.TARGET_TABLE;
+            const targetColumn = state.rule?.TARGET_COLUMN;
+            if (targetOwner) params.set("targetOwner", String(targetOwner));
+            if (targetTable) params.set("targetTable", String(targetTable));
+            if (targetColumn) params.set("targetColumn", String(targetColumn));
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${API_PAGE_CODE}/symbolic-rule-sample?${params.toString()}`, {
                     method: "GET",
@@ -9182,7 +9653,7 @@
                     <header>
                         <div>
                             <strong>${this.escapeHtml(getMessage("predictedTypeSummaryTitle", "Column Type Prediction Summary"))}</strong>
-                            <span>Target ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)}</span>
+                            <span>${this.escapeHtml(getText("Target"))} ${this.escapeHtml(summary.targetOwner)}.${this.escapeHtml(summary.targetTable)}</span>
                         </div>
                         <div class="anly-work-type-summary-actions">
                             <div class="anly-work-corr-metrics">
@@ -9663,7 +10134,6 @@
         renderSelectedNodeExecutionMeta() {
             const node = this.selectedNode;
             if (!node) return "";
-            if (window.RuleResultCommon.isPattern(this.currentModelDetail?.mixedXai)) return this.currentModelDetail.mixedXai.ruleSummary?.rules?.[0]?.MODEL_NAME || this.currentModelDetail.mixedXai.summary?.modelName || `XAI_PATTERN_${Number(this.selectedRun?.FLOW_RUN_ID)}`;
             const payload = this.normalizeObject(node.PAYLOAD);
             const params = this.normalizeObject(node.RUNTIME_PARAMS);
             const getValue = (...keys) => {
@@ -9676,7 +10146,11 @@
             const targetOwner = getValue("TARGET_OWNER", "targetOwner", "INIT$TargetOwner", "ownerName", "OWNER_NAME");
             const targetTable = getValue("TARGET_TABLE", "targetTable", "INIT$TargetTable", "tableName", "TABLE_NAME");
             const resultOwner = getValue("RESULT_OWNER", "resultOwner", "ownerName");
-            const resultObject = getValue("RESULT_OBJECT_NAME", "resultTableName", "tableName", "RESULT_TABLE_NAME");
+            const patternResult = this.isMixedScenarioNode(node) && !this.mixedEarlyStageKind(node)
+                && window.RuleResultCommon.isPattern(this.currentModelDetail?.mixedXai);
+            const resultObject = patternResult
+                ? (this.isMixedXaiViolationNode(node) ? "INIT$_TB_RULEVIOL_ASSOC" : "INIT$_TB_RULEDISC_ASSOC_SUM")
+                : getValue("RESULT_OBJECT_NAME", "resultTableName", "tableName", "RESULT_TABLE_NAME");
             const resultMode = getValue("RESULT_CREATE_YN", "resultCreateYn");
             const resultModeLabel = String(resultMode || "").toUpperCase() === "M"
                 ? getMessage("resultModeModel", "M (Model)")
@@ -9719,14 +10193,13 @@
 
         getSelectedNodeRuleModelName(node = this.selectedNode) {
             if (!node) return "";
-            if (window.RuleResultCommon.isPattern(this.currentModelDetail?.mixedXai)) return this.currentModelDetail.mixedXai.ruleSummary?.rules?.[0]?.MODEL_NAME || this.currentModelDetail.mixedXai.summary?.modelName || `XAI_PATTERN_${Number(this.selectedRun?.FLOW_RUN_ID)}`;
+            if (node === this.selectedNode && this.isMixedScenarioNode(node) && window.RuleResultCommon.isPattern(this.currentModelDetail?.mixedXai)) return this.currentModelDetail.mixedXai.ruleSummary?.rules?.[0]?.MODEL_NAME || this.currentModelDetail.mixedXai.summary?.modelName || `XAI_PATTERN_${Number(this.selectedRun?.FLOW_RUN_ID)}`;
             const payload = this.normalizeObject(node.PAYLOAD);
             const params = this.normalizeObject(node.RUNTIME_PARAMS);
             const runOutput = this.normalizeObject(node.RUN_OUTPUT);
             const apiResult = this.normalizeObject(runOutput.apiResult);
-            const resultItems = Array.isArray(apiResult.results)
-                ? apiResult.results
-                : (Array.isArray(runOutput.results) ? runOutput.results : []);
+            const legacy = this.normalizeObject(apiResult.legacy);
+            const resultItems = [apiResult.results, legacy.results, runOutput.results].flatMap((items) => Array.isArray(items) ? items : []);
             const categoricalResult = resultItems
                 ? resultItems.find((item) => String(item?.task || "").toUpperCase() === "CATEGORICAL_RULE_VIOLATION")
                 : null;
@@ -9734,6 +10207,7 @@
                 this.lastViolationSummary?.ruleModelName,
                 categoricalResult?.modelName,
                 apiResult.modelName,
+                legacy.modelName,
                 runOutput.modelName,
                 params.P_RULE_MODEL_NAME,
                 params.pRuleModelName,
@@ -9743,9 +10217,17 @@
                 payload.pRuleModelName,
                 payload.ruleModelName
             ];
+            const resultTables = new Set([
+                "INIT$_TB_RULEDISC_ASSOC_SUM",
+                ...Object.keys(TABLE_RESULT_LAYOUTS),
+                ...this.getNodeResultObjects(node).filter((item) => String(item.kind || "TABLE").toUpperCase() === "TABLE")
+                    .map((item) => String(item.objectName || "").trim().toUpperCase())
+            ]);
             for (const value of candidates) {
                 const normalized = this.normalizeIdentifierParam(value);
-                if (normalized) return normalized;
+                if (!normalized || resultTables.has(normalized)) continue;
+                if (this.isUnifiedEditingNode(node) && normalized.startsWith("XAI_PATTERN_")) continue;
+                return normalized;
             }
             return "";
         },
@@ -10549,7 +11031,7 @@
                                         const value = column === "ACTUAL_VALUE" ? window.RuleResultCommon.actualValue(raw, getText) : column === "VIOLATION_REASON" ? window.RuleResultCommon.violationReason(raw, row, getText) : raw ?? "";
                                         const expressionClass = column === "RESULT_TEXT" && window.RuleResultCommon.isFormula(row) ? ' class="is-rule-expression"' : "";
                                         const graphButton = source?.mixedFormulaGraphActions && column === "RULE_ID" && window.RuleResultCommon.isFormula(row)
-                                            ? ` <button type="button" class="anly-work-rule-open-link" onclick="${PAGE_CODE}.openMixedFormulaPopup('${this.escapeJs(row.RULE_ID)}')">${this.escapeHtml(getText("View formula graph"))}</button>` : "";
+                                            ? ` <button type="button" class="anly-work-rule-open-link" onclick="${PAGE_CODE}.openMixedFormulaPopup('${this.escapeJs(row.RULE_ID)}', '${this.escapeJs(row.EDITING_RULE_KEY || "")}')">${this.escapeHtml(getText("View formula graph"))}</button>` : "";
                                         return `<td${expressionClass} title="${this.escapeHtml(value)}">${this.renderColumnAwareCell(value, source)}${graphButton}</td>`;
                                     }).join("")}
                                 </tr>

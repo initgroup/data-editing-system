@@ -39,17 +39,29 @@ def parse_numeric_text(value):
     return float(parsed) if parsed is not None else None
 
 
-def inspect_numeric_text(values, min_count=30):
-    """Infer only from the caller's training cohort; never silently discard text."""
+def inspect_numeric_text(values, min_count=30, *, min_numeric_fraction=.98):
+    """Infer a strong numeric majority from the caller's training cohort only.
+
+    Eligibility concerns the column, not the validity of every cell. Invalid
+    originals are still invalid under the shared parser, SQL and saved AST;
+    they must never be replaced with zero or a fitted value. Leading-zero
+    identifiers remain protected even when they are a small minority.
+    """
+    values = list(values)
+    if not .5 < min_numeric_fraction <= 1:
+        raise ValueError("Numeric-text inference requires a majority threshold above .5 and at most 1.")
     present = [value for value in values if value is not None and not (isinstance(value, str) and not value.strip(" "))]
     converted = [parse_numeric_decimal(value) for value in present]
     valid = [value for value in converted if value is not None]
     leading = sum(isinstance(value, str) and bool(_LEADING_ZERO.match(value.strip(" "))) for value in present)
-    reason = ("LEADING_ZERO_CODE" if leading else "NON_NUMERIC_TEXT" if len(valid) != len(present)
+    ratio = len(valid) / len(present) if present else 0.
+    reason = ("LEADING_ZERO_CODE" if leading else "NON_NUMERIC_TEXT" if present and ratio < min_numeric_fraction
               else "INSUFFICIENT_NUMERIC_TEXT" if len(valid) < min_count else None)
     return {"eligible": reason is None, "reason": reason, "nonNullCount": len(present),
             "numericCount": len(valid), "invalidCount": len(present) - len(valid),
-            "distinctCount": len(set(valid)), "leadingZeroCount": leading}
+            "distinctCount": len(set(valid)), "leadingZeroCount": leading,
+            "missingCount": len(values) - len(present), "numericRatio": ratio,
+            "minimumNumericRatio": min_numeric_fraction, "inferencePolicy": "STRICT_NUMERIC_MAJORITY"}
 
 
 def numeric_text_sql(reference):

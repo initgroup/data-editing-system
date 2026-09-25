@@ -1,0 +1,10 @@
+{
+  "language": "en",
+  "pageCode": "M00001",
+  "labels": {
+    "title": "Quick Editing",
+    "loading": "Loading Quick Editing…",
+    "busy": "Finish the current Quick Editing task before closing, refreshing or changing the Target DB.",
+    "requestsPending": "Wait for the other page requests to finish, then reconnect Quick Editing."
+  }
+}

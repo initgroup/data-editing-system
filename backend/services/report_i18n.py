@@ -21,7 +21,7 @@ REPORT_CATALOG_EN: dict[str, tuple[str, str]] = {
     "R07": ("Relationship network and clusters", "Shows relationship-network cluster sizes and highly central columns."),
     "R08": ("Categorical association rules", "Reports Support, Confidence, and Lift for categorical IF/THEN rules on a consistent scale."),
     "R09": ("LASSO important features", "Summarizes important features, coefficients, selection status, and explanatory power by continuous target."),
-    "R10": ("Symbolic formula rules", "Shows f(x)=y formula rules, variables, scores, and complexity."),
+    "R10": ("Continuous formula rules", "Shows Symbolic and integrated/mixed formula rules with their method-specific quality metrics."),
     "R11": ("Rule violation status", "Aggregates categorical and continuous rule violations by type, table, and target column."),
     "R12": ("Discovered-rule decisions", "Summarizes selected, rejected, and pending discovered rules and their quality indicators."),
     "R13": ("Final rule master", "Shows the scope of final discovered rules and user-defined rules."),
@@ -33,6 +33,22 @@ REPORT_CATALOG_EN: dict[str, tuple[str, str]] = {
     "R19": ("Complete audit history", "Shows major audit events from rule decisions through production application in time order."),
     "R20": ("Project and scenario comparison scorecard", "Compares rule-selection and correction-application rates using the latest successful run and editing session per scenario."),
     "R21": ("Data-profile comparison and descriptive statistics", "Provides a full printable change map, priority-ranked columns, before-and-after descriptive statistics, and same-bin distribution comparisons."),
+}
+
+# Persisted KPI codes also identify custom-report blocks. Keep those codes while
+# describing the categorical/formula totals now shared by all execution modes.
+REPORT_KPI_LABELS_EN = {
+    "R10": {
+        "SYMBOLIC_RULE_COUNT": "Formula rules",
+        "SELECTED_RULE_COUNT": "Symbolic-selected formulas",
+        "MIXED_FORMULA_COUNT": "Integrated/mixed formulas",
+        "TARGET_COUNT": "Prediction targets",
+    },
+    "R11": {
+        "VIOLATION_COUNT": "Total violations",
+        "ASSOCIATION_VIOLATION_COUNT": "Categorical violations",
+        "SYMBOLIC_VIOLATION_COUNT": "Continuous violations",
+    },
 }
 
 SECTION_TITLES_EN = {
@@ -58,6 +74,7 @@ SECTION_TITLES_EN = {
     "범주형 연관규칙 표본": "Categorical association-rule sample",
     "LASSO 중요변수 표본": "LASSO important-feature sample",
     "Symbolic 수식 규칙 표본": "Symbolic formula-rule sample",
+    "연속형 수식 규칙 표본": "Continuous formula-rule sample",
     "규칙 위반 집계": "Rule violation summary",
     "판단 상태 요약": "Decision status summary",
     "발굴 규칙 판단 상세": "Discovered-rule decision details",
@@ -89,6 +106,8 @@ SECTION_TITLES_EN = {
 }
 
 TEXT_EN = {
+    "대상 컬럼·Symbolic 선정 순으로 최대 300개 수식의 원문을 표시합니다. 통합·혼합 수식의 Confidence는 발굴 시 학습 표본, 탐지 후 전체 원본에서 IF 조건을 충족한 행 중 허용오차 이내 행의 비율이며 검증 표본 점수·Symbolic 점수와 합산하지 않습니다. 선정 여부는 Symbolic 발굴 결과에만 적용되며 최종 사용자 선정과 구분합니다.": "Shows complete expressions for up to 300 formulas ordered by target column and Symbolic discovery selection. Integrated/mixed Confidence is the within-tolerance share of rows satisfying IF, using the training sample at discovery and the full source after detection. It is not combined with validation-sample or Symbolic scores. Selection applies only to Symbolic discovery and is separate from final user selection.",
+    "저장된 규칙×행 위반을 집계합니다. 통합·혼합 결과는 저장 표본 제한이 적용될 수 있으며 전체 원본 위반 건수와 다를 수 있습니다. 점수가 없는 위반은 평균 점수에서 제외합니다.": "Counts persisted rule-by-row violations. Integrated/mixed results may have a storage sample limit and differ from full-source violation counts. Violations without scores are excluded from average scores.",
     "본 보고서는 IN-DEPS 시스템에서 제공합니다.": "This report is provided by the IN-DEPS system.",
     "기본형 보고서 통합본": "All Basic Reports",
     "선택한 동일 기준으로 생성한 고정 21종 기본형 보고서를 한 번에 제공합니다.": "Provides all 21 fixed Basic Reports generated from the same selected basis.",
@@ -121,6 +140,8 @@ TEXT_EN = {
     "데이터 없음": "No data",
     "해당 없음": "Not applicable",
     "Symbolic 점수": "Symbolic score",
+    "수식 Confidence": "Formula Confidence",
+    "통합·혼합 수식의 IF 조건을 충족한 행 중 허용오차 이내 행의 비율입니다. 발굴 시 학습 표본, 탐지 후 전체 원본 기준이며 검증 표본 점수와 구분합니다.": "The within-tolerance share of rows satisfying IF for integrated/mixed formulas. It uses the training sample at discovery and the full source after detection, separately from validation-sample scores.",
     "비율 지표": "Rate indicator",
     "보고서를 생성한 시각이며 실행·세션 식별자와 함께 결과 기준을 고정합니다.": "The report generation time; together with run and session identifiers it fixes the result basis.",
     "보고서를 생성한 시각이며 선택한 분석 Run·수정 작업 식별자와 함께 결과 기준을 고정합니다.": "The report generation time; together with the selected analysis run and edit-operation identifier it fixes the result basis.",
@@ -248,9 +269,12 @@ def localize_report_document(document: dict[str, Any], language: str) -> dict[st
     if isinstance(availability, dict):
         availability["reason"] = TEXT_EN.get(availability.get("reason"), availability.get("reason"))
 
+    report_code = str(report.get("code") or report.get("reportCode") or "").upper() if isinstance(report, dict) else ""
+    kpi_labels = REPORT_KPI_LABELS_EN.get(report_code, {})
     for kpi in result.get("kpis") or []:
         if isinstance(kpi, dict):
-            kpi["label"] = _english_label(str(kpi.get("code") or kpi.get("label") or "KPI"))
+            key = str(kpi.get("code") or kpi.get("label") or "KPI")
+            kpi["label"] = kpi_labels.get(key, _english_label(key))
 
     for section in result.get("sections") or []:
         if not isinstance(section, dict):

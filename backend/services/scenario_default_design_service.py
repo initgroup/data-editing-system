@@ -101,10 +101,22 @@ MIXED_XAI_STAGES = (
 )
 
 
+UNIFIED_STAGES = tuple({
+    "menuCode": f"M0300{index}", "modelName": f"UNIFIED_EDITING_{method}",
+    "sourceType": "WEB_API", "label": label, "resultCreateYn": "T",
+    "resultName": result, "jobSuffix": "UNIFIED_V1",
+} for index, (method, label, result) in enumerate((
+    ("PROFILE", "컬럼 유형·기초통계 분석", "INIT$_TB_COLTYPE_FINAL"),
+    ("RELATION", "범주형·연속형·혼합형 관계 분석", "INIT$_TB_COLREL_NETWORK_EDGE"),
+    ("DISCOVER", "OML·혼합형 규칙 통합 발굴", "INIT$_TB_RULEDISC_ASSOC_SUM"),
+    ("DETECT", "OML·혼합형 규칙 통합 위반 탐지", "INIT$_TB_RULEVIOL_ASSOC"),
+), start=1))
+
+
 def normalize_process_type(value: Any = "LEGACY") -> str:
     process_type = str(value or "LEGACY").strip().upper()
-    if process_type not in {"LEGACY", "MIXED_XAI"}:
-        raise HTTPException(status_code=422, detail="processType must be LEGACY or MIXED_XAI.")
+    if process_type not in {"LEGACY", "MIXED_XAI", "UNIFIED"}:
+        raise HTTPException(status_code=422, detail="processType must be LEGACY, MIXED_XAI or UNIFIED.")
     return process_type
 
 
@@ -118,7 +130,7 @@ def provision_default_design(
 ) -> Dict[str, Any]:
     """Create or reuse one independent scenario and its editable default flow."""
     process_type = normalize_process_type(process_type)
-    stages = MIXED_XAI_STAGES if process_type == "MIXED_XAI" else DEFAULT_STAGES
+    stages = {"LEGACY": DEFAULT_STAGES, "MIXED_XAI": MIXED_XAI_STAGES, "UNIFIED": UNIFIED_STAGES}[process_type]
     started_at = time.perf_counter()
     lock_started_at = time.perf_counter()
     context = lock_scenario_table(
@@ -386,7 +398,7 @@ def build_web_api_job_request(
         None,
     )
     if not resource:
-        builtin_stage = next((item for item in MIXED_XAI_STAGES
+        builtin_stage = next((item for item in (*MIXED_XAI_STAGES, *UNIFIED_STAGES)
                               if item["modelName"] == model_name
                               and item["menuCode"] == stage["menuCode"]), None)
         if builtin_stage is None:
@@ -442,7 +454,7 @@ def build_web_api_job_request(
         "adapter": spec.get("adapter") or "INTERNAL_PYTHON_API",
         "output": {
             "resultCreateYn": result_mode,
-            "resultOwner": owner_name,
+            "resultOwner": result_owner,
             result_key: result_name,
             "persistMode": output.get("persistMode") or "SERVICE_MANAGED",
         },
@@ -587,7 +599,7 @@ def ensure_default_flow(
     process_type: str = "LEGACY",
 ) -> tuple[Dict[str, Any], bool]:
     process_type = normalize_process_type(process_type)
-    flow_type = "MIXED_XAI_SCENARIO" if process_type == "MIXED_XAI" else FLOW_TYPE
+    flow_type = {"MIXED_XAI": "MIXED_XAI_SCENARIO", "UNIFIED": "UNIFIED_EDITING_SCENARIO"}.get(process_type, FLOW_TYPE)
     flow_name = create_flow_name(table_name, process_type)
     marker = create_flow_marker(scenario_table_id, process_type)
     flows = flow_work.list_flows(conn, FLOW_MENU_CODE, project_id, scenario_id).get("data", [])
@@ -838,12 +850,12 @@ def create_job_name(menu_code: str, table_name: str, suffix: str = "AUTO") -> st
 
 
 def create_flow_name(table_name: str, process_type: str = "LEGACY") -> str:
-    label = "혼합형 XAI 규칙발굴 4단계" if process_type == "MIXED_XAI" else "기본 규칙발굴"
+    label = {"MIXED_XAI": "혼합형 XAI 규칙발굴 4단계", "UNIFIED": "통합 에디팅 4단계"}.get(process_type, "기본 규칙발굴")
     return f"{table_name} {label} FLOW"[:200]
 
 
 def create_flow_marker(scenario_table_id: int, process_type: str = "LEGACY") -> str:
-    suffix = ":MIXED_XAI:V3" if process_type == "MIXED_XAI" else ""
+    suffix = {"MIXED_XAI": ":MIXED_XAI:V3", "UNIFIED": ":UNIFIED:V1"}.get(process_type, "")
     return f"[{FLOW_DESCRIPTION_MARKER}:{scenario_table_id}{suffix}]"
 
 

@@ -113,7 +113,7 @@ class QuickEditControlTests(unittest.TestCase):
              patch.object(stats, "resolve_registered_pair", return_value={"SOURCE_OWNER": "OWNER", "SOURCE_TABLE": "SOURCE", "EDIT_OWNER": "OWNER", "EDIT_TABLE": "EDIT"}), \
              patch.object(stats, "build_statistics", return_value={"available": True, "columns": []}) as build, \
              patch.object(stats, "load_violation_column_insights") as legacy_insights, \
-             patch("backend.services.mixed_xai_service.read_results", return_value={"data": {"ruleSummary": {"rules": [{"CONDITION_COLUMNS": ["VALUE"], "MATCH_COUNT": 12}]}}}) as mixed:
+             patch("backend.services.mixed_xai_service.read_column_insights", return_value=([{"COLUMN_NAME": "VALUE", "VIOLATION_COUNT": 12, "RULE_COUNT": 1}], False)) as mixed:
             result = analysis.get_descriptive_statistics(1, object())
         self.assertTrue(result["data"]["available"])
         self.assertEqual("MIXED_XAI", result["data"]["context"]["processType"])

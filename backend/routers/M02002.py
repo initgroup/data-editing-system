@@ -47,7 +47,7 @@ class ScenarioDefaultDesignRequest(BaseModel):
     projectId: int
     scenarioId: int
     scenarioTableId: int
-    processType: Literal["LEGACY", "MIXED_XAI"] = "LEGACY"
+    processType: Literal["LEGACY", "MIXED_XAI", "UNIFIED"] = "LEGACY"
     model_config = ConfigDict(extra="forbid")
 
 
@@ -68,7 +68,7 @@ class ScenarioTableRequest(BaseModel):
     useYn: Optional[str] = "Y"
     sortOrder: Optional[int] = None
     autoDesignYn: Optional[str] = "N"
-    processType: Literal["LEGACY", "MIXED_XAI"] = "LEGACY"
+    processType: Literal["LEGACY", "MIXED_XAI", "UNIFIED"] = "LEGACY"
     model_config = ConfigDict(extra="allow")
 
 

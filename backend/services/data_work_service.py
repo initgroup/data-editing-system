@@ -132,7 +132,9 @@ def load_importable_job(
         "JOB_NAME": job.get("JOB_NAME") or "",
         "JOB_DESC": job.get("JOB_DESC") or "",
         "EXEC_SOURCE_TYPE": job.get("EXEC_SOURCE_TYPE") or "DB_OBJECT",
+        "EXEC_RESOURCE_ID": job.get("EXEC_RESOURCE_ID"),
         "EXEC_METHOD": job.get("EXEC_METHOD") or "",
+        "EXEC_SPEC_JSON": job.get("EXEC_SPEC_JSON") or "",
         "EXEC_OWNER": job.get("EXEC_OWNER") or "",
         "EXEC_OBJECT_TYPE": job.get("EXEC_OBJECT_TYPE") or "",
         "EXEC_OBJECT_NAME": job.get("EXEC_OBJECT_NAME") or "",
@@ -237,7 +239,7 @@ def save_job(
     exec_source_type = normalize_exec_source_type(req.execSourceType)
     exec_resource_id = require_positive_optional_int(req.execResourceId, "execResourceId")
     if exec_source_type == "WEB_API":
-        exec_plsql = normalize_text(req.execPlsql, "", 4000)
+        exec_plsql = read_lob(req.execPlsql).strip()
     else:
         exec_plsql = normalize_required_executable_script(req.execPlsql)
         validation_plsql = prepare_executable_script_for_validation(
@@ -260,7 +262,7 @@ def save_job(
         "execSourceType": exec_source_type,
         "execResourceId": exec_resource_id,
         "execMethod": normalize_optional_token(req.execMethod),
-        "execSpecJson": normalize_text(req.execSpecJson, "", 4000),
+        "execSpecJson": read_lob(req.execSpecJson).strip(),
         "execObjectId": req.execObjectId if exec_source_type == "DB_OBJECT" else None,
         "execOwner": normalize_optional_identifier(req.execOwner) if exec_source_type == "DB_OBJECT" else None,
         "execObjectType": normalize_optional_token(req.execObjectType),
@@ -336,7 +338,7 @@ def build_draft_job(
     exec_source_type = normalize_exec_source_type(req.execSourceType)
     exec_resource_id = require_positive_optional_int(req.execResourceId, "execResourceId")
     if exec_source_type == "WEB_API":
-        exec_plsql = normalize_text(req.execPlsql, "", 4000)
+        exec_plsql = read_lob(req.execPlsql).strip()
     else:
         exec_plsql = normalize_required_executable_script(req.execPlsql)
         validation_plsql = prepare_executable_script_for_validation(
@@ -360,7 +362,7 @@ def build_draft_job(
         "EXEC_SOURCE_TYPE": exec_source_type,
         "EXEC_RESOURCE_ID": exec_resource_id,
         "EXEC_METHOD": normalize_optional_token(req.execMethod),
-        "EXEC_SPEC_JSON": normalize_text(req.execSpecJson, "", 4000),
+        "EXEC_SPEC_JSON": read_lob(req.execSpecJson).strip(),
         "EXEC_OBJECT_ID": req.execObjectId if exec_source_type == "DB_OBJECT" else None,
         "EXEC_OWNER": normalize_optional_identifier(req.execOwner) if exec_source_type == "DB_OBJECT" else None,
         "EXEC_OBJECT_TYPE": normalize_optional_token(req.execObjectType),

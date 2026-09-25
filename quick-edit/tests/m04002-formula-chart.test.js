@@ -5,6 +5,10 @@ const test = require("node:test");
 const {chromium} = require("playwright");
 const root = path.resolve(__dirname, "../..");
 
+function formulaButton(tab, ruleId) {
+    return tab.locator(`[onclick^="M04002.openMixedFormulaPopup('${ruleId}'"]`);
+}
+
 async function openPage(language = "ko", realRenderer = false) {
     const browser = await chromium.launch({headless: true});
     const tab = await browser.newPage({viewport: {width: 1440, height: 1100}});
@@ -12,9 +16,9 @@ async function openPage(language = "ko", realRenderer = false) {
     tab.on("pageerror", (error) => errors.push(error.message));
     await tab.route("**/*", (route) => route.abort());
     await tab.setContent('<div class="page-container table-page anly-work-page" id="container-M04002"><main class="anly-work-detail-panel"><div id="resultPanel-M04002"></div></main></div>');
-    for (const file of ["frontend/css/styletail.css", "frontend/css/style.css", "frontend/css/styleMenu.css", "frontend/css/pages/MCOM_ANLY_WORK.css", "frontend/css/grid-custom.css"]) await tab.addStyleTag({path: path.join(root, file)});
+    for (const file of ["frontend/css/styletail.css", "frontend/css/style.css", "frontend/css/styleMenu.css", "frontend/css/pages/MCOM_ANLY_WORK.css", "frontend/css/editing-result-view.css", "frontend/css/grid-custom.css"]) await tab.addStyleTag({path: path.join(root, file)});
     await tab.evaluate(() => {window.API_BASE_URL = "/api"; window.PageManager = {createHelper: () => ({getContainerEl: (selector) => document.querySelector(selector)})};});
-    for (const file of ["frontend/js/rule-result-common.js", "frontend/js/MCOM_ANLY_WORK.js"]) await tab.addScriptTag({path: path.join(root, file)});
+    for (const file of ["frontend/js/rule-result-common.js", "frontend/js/editing-result-view.js", "frontend/js/MCOM_ANLY_WORK.js"]) await tab.addScriptTag({path: path.join(root, file)});
     if (realRenderer) {
         await tab.addStyleTag({path: path.join(root, "frontend/css/rule-chart-controls.css")});
         await tab.addStyleTag({path: path.join(root, "frontend/css/formula-rule-chart.css")});
@@ -31,9 +35,10 @@ async function openPage(language = "ko", realRenderer = false) {
         window.CommonUtils = {request: (url, options) => {window.requests.push({url, options}); return new Promise((resolve, reject) => window.pending.push({resolve, reject}));}};
         if (!realRenderer) window.FormulaRuleChart = {mount: (el, data) => {window.mounted.push(data); el.textContent = "chart:" + data.rule.ruleId; return {destroy: () => {window.destroyed += 1;}};}};
         const p = window.MCOMMON.createAnlyWorkPage({pageCode: "M04002"});
+        p.editingResultsMode = "SOURCE";
         const base = {RULE_KIND: "MIXED_PATTERN_TREE", RULE_SOURCE: "MIXED_PATTERN_TREE", MODEL_NAME: "XAI_PATTERN_41", RESULT_KIND: "FORMULA", CONDITION_TEXT: "B IS NOT NULL AND C IS NOT NULL", CONDITION_COUNT: 2,
             RESULT_TEXT: "A ≈ B + C (±2)", RESULT_COLUMN: "A", RESULT_HAS_VALUE_YN: "Y", RULE_CONFIDENCE: .99, RULE_LIFT: null, VIOLATION_COUNT: 1, FORMULA_METHOD: "SUM_DIFFERENCE"};
-        const rules = ["R1", "R2"].map((RULE_ID) => ({...base, RULE_ID}));
+        const rules = ["R1", "R2"].map((RULE_ID) => ({...base, RULE_ID, EDITING_RULE_KEY: `saved-key-${RULE_ID}`}));
         p.currentModelDetail = {mixedXai: {summary: {algorithm: "MIXED_PATTERN_TREE"}, ruleSummary: {rules}}};
         p.selectedRun = {FLOW_RUN_ID: 41};
         p.selectedNode = {FLOW_NODE_RUN_ID: 3, TARGET_OWNER: "OWNER", TARGET_TABLE: "SOURCE", RESULT_OWNER: "OWNER", RESULT_OBJECT_NAME: "INIT$_TB_RULEDISC_ASSOC_SUM"};
@@ -55,7 +60,7 @@ function sample(ruleId = "R1") {
 test("M04002 mixed formula popup scopes the current-source API and ignores replaced, closed and destroyed responses", async () => {
     const {browser, tab, errors} = await openPage();
     try {
-        await tab.locator('[onclick="M04002.openMixedFormulaPopup(\'R1\')"]').click();
+        await formulaButton(tab, "R1").click();
         assert.match(await tab.locator("#M04002MixedFormulaChart").textContent(), /현재 원본 표본/);
         const request = await tab.evaluate(() => window.requests[0]);
         const url = new URL(request.url, "http://localhost");
@@ -84,7 +89,7 @@ test("M04002 mixed formula popup scopes the current-source API and ignores repla
 test("M04002 mixed formula sample errors are escaped and retry the same rule without a legacy sample request", async () => {
     const {browser, tab, errors} = await openPage("en");
     try {
-        await tab.locator('[onclick="M04002.openMixedFormulaPopup(\'R1\')"]').click();
+        await formulaButton(tab, "R1").click();
         await tab.evaluate(() => window.pending[0].reject(new Error("<script>bad source</script>")));
         await tab.waitForSelector("#M04002MixedFormulaChart .table-error");
         assert.equal(await tab.locator("#M04002MixedFormulaChart script").count(), 0);
@@ -97,6 +102,26 @@ test("M04002 mixed formula sample errors are escaped and retry the same rule wit
     } finally {await browser.close();}
 });
 
+test("M04002 source graph keeps the clicked saved key when two models reuse a rule ID", async () => {
+    const {browser, tab, errors} = await openPage("en");
+    try {
+        await tab.evaluate(() => {
+            const p = window.M04002, rules = p.currentModelDetail.mixedXai.ruleSummary.rules;
+            rules.push({...rules[0], MODEL_NAME: "SECOND_MODEL", EDITING_RULE_KEY: "second-model-key", RESULT_TEXT: "A ≈ B - C (±2)"});
+            document.querySelector("#resultPanel-M04002").innerHTML = p.buildSummaryRuleCards(rules).map((rule) => p.renderReadableRuleCard(rule)).join("");
+        });
+        await formulaButton(tab, "R1").last().click();
+        const request = await tab.evaluate(() => window.requests[0]);
+        const params = new URL(request.url, "http://localhost").searchParams;
+        assert.equal(params.get("ruleId"), "R1");
+        assert.equal(params.get("modelName"), "SECOND_MODEL");
+        assert.equal(await tab.evaluate(() => M04002.mixedFormulaPopupState.rule.EDITING_RULE_KEY), "second-model-key");
+        await tab.evaluate((data) => window.pending[0].resolve({status: "success", data}), sample());
+        await tab.waitForFunction(() => window.mounted.length === 1);
+        assert.deepEqual(errors, []);
+    } finally {await browser.close();}
+});
+
 test("M04002 stage 4 formula graph uses the same saved model and closes before a cached node result replaces it", async () => {
     const {browser, tab, errors} = await openPage();
     try {
@@ -104,7 +129,7 @@ test("M04002 stage 4 formula graph uses the same saved model and closes before a
             const p = window.M04002, rules = p.currentModelDetail.mixedXai.ruleSummary.rules;
             document.querySelector("#resultPanel-M04002").innerHTML = p.renderViolationSummary({mixedPattern: true, topRules: rules, overview: {}, topColumns: []});
         });
-        await tab.locator('[onclick="M04002.openMixedFormulaPopup(\'R1\')"]').click();
+        await formulaButton(tab, "R1").click();
         await tab.evaluate(() => {
             const p = window.M04002;
             p.applyRememberedNodeResult = () => true;
@@ -129,7 +154,7 @@ test("M04002 detailed rule table exposes the same formula graph action without t
             document.querySelector("#resultPanel-M04002").innerHTML = p.renderMixedXaiDetail({mixedXai: payload, ruleSummary: payload.ruleSummary});
         });
         assert.equal(await tab.locator("#resultPanel-M04002 [onclick*=openMixedFormulaPopup]").count(), 2);
-        await tab.locator('[onclick="M04002.openMixedFormulaPopup(\'R2\')"]').click();
+        await formulaButton(tab, "R2").click();
         await tab.evaluate((data) => window.pending[0].resolve({status: "success", data}), sample("R2"));
         await tab.waitForFunction(() => window.mounted.length === 1);
         assert.equal(await tab.locator("#M04002MixedFormulaChart").textContent(), "chart:R2");
@@ -141,7 +166,7 @@ test("M04002 actual formula chart renders current samples, saved boundaries and 
     for (const language of ["ko", "en"]) {
         const {browser, tab, errors} = await openPage(language, true);
         try {
-            await tab.locator('[onclick="M04002.openMixedFormulaPopup(\'R1\')"]').click();
+            await formulaButton(tab, "R1").click();
             await tab.evaluate((data) => window.pending[0].resolve({status: "success", data}), sample());
             await tab.waitForSelector("#M04002MixedFormulaChart .formula-chart__point");
             assert.equal(await tab.locator(".formula-chart__point").count(), 3);

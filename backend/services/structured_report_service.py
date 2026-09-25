@@ -14,7 +14,7 @@ from typing import Any, Iterable
 from fastapi import HTTPException, Request
 
 from backend.auth_context import get_request_role_code, get_request_user_id
-from backend.database_helper import execute_query
+from backend.database_helper import SqlLoader, execute_query
 from backend.target_database import get_target_db_connection
 from backend.services import descriptive_statistics_service as descriptive_statistics
 from backend.services.report_i18n import (
@@ -30,6 +30,15 @@ _BATCH_CACHEABLE_SQL_IDS = {
     "M06001_TARGET_TABLE_LIST",
     "M06001_CHANGE_SUMMARY",
     "M06001_CHANGE_DETAIL",
+    "M06001_RESULT_KIND_COLUMN",
+}
+_SEMANTIC_RULE_SQL_IDS = {
+    "M06001_AVAILABILITY_COUNTS",
+    "M06001_ASSOC_RULE_SUMMARY",
+    "M06001_ASSOC_RULE_AGGREGATE",
+    "M06001_MIXED_FORMULA_RULE_SUMMARY",
+    "M06001_SYMBOLIC_RULE_AGGREGATE",
+    "M06001_VIOLATION_SUMMARY",
 }
 _BATCH_QUERY_CACHE: ContextVar[dict[tuple[str, str], list[dict[str, Any]]] | None] = ContextVar(
     "m06001_batch_query_cache",
@@ -37,7 +46,7 @@ _BATCH_QUERY_CACHE: ContextVar[dict[tuple[str, str], list[dict[str, Any]]] | Non
 )
 
 REPORT_SCHEMA_VERSION = "1.0"
-REPORT_DEFINITION_VERSION = "M06001_STRUCTURED_REPORT_V4"
+REPORT_DEFINITION_VERSION = "M06001_STRUCTURED_REPORT_V5"
 REPORT_PROVIDER = {
     "name": "IN-DEPS",
     "statement": "본 보고서는 IN-DEPS 시스템에서 제공합니다.",
@@ -120,8 +129,8 @@ REPORT_CATALOG: tuple[dict[str, Any], ...] = (
     {
         "code": "R10",
         "group": "M04002",
-        "title": "Symbolic 수식 규칙",
-        "description": "f(x)=y 형태의 수식 규칙, 사용 변수, 점수와 복잡도를 제공합니다.",
+        "title": "연속형 수식 규칙",
+        "description": "Symbolic 및 통합·혼합 분석에서 발굴한 수식과 각 방법의 품질 지표를 제공합니다.",
         "icon": "fa-square-root-variable",
         "requirement": "SYMBOLIC_RULE_COUNT",
     },
@@ -602,7 +611,7 @@ def _request_access(request: Request) -> dict[str, Any]:
 
 
 def _query(conn, sql_id: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    query_params = params or {}
+    query_params = dict(params or {})
     cache = _BATCH_QUERY_CACHE.get()
     cache_key: tuple[str, str] | None = None
     if cache is not None and sql_id in _BATCH_CACHEABLE_SQL_IDS:
@@ -613,6 +622,15 @@ def _query(conn, sql_id: str, params: dict[str, Any] | None = None) -> list[dict
         if cache_key in cache:
             return deepcopy(cache[cache_key])
 
+    if sql_id in _SEMANTIC_RULE_SQL_IDS:
+        columns = _first(_query(conn, "M06001_RESULT_KIND_COLUMN")) or {}
+        fragment_id = (
+            "REPORT_FORMULA_KIND_CURRENT" if _as_int(columns.get("HAS_RESULT_KIND"))
+            else "REPORT_FORMULA_KIND_LEGACY"
+        )
+        # Only these server-owned expressions may enter the SQL template. The
+        # legacy expression never references the optional RESULT_KIND column.
+        query_params["dynamicColumns"] = SqlLoader.get_sql(fragment_id)
     result = execute_query(conn, sql_id, query_params)
     if result.get("status") != "success":
         message = result.get("message") or result.get("detail") or f"{sql_id} query failed."
@@ -625,6 +643,22 @@ def _query(conn, sql_id: str, params: dict[str, Any] | None = None) -> list[dict
 
 def _first(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     return rows[0] if rows else None
+
+
+def _formula_rule_rows(conn, flow_run_id: Any) -> list[dict[str, Any]]:
+    params = {"flowRunId": flow_run_id}
+    # Separate LOB queries preserve complete expressions and avoid Oracle's LOB
+    # set-operation restriction. Each source has the same 300-row ordering cap.
+    rows = _query(conn, "M06001_SYMBOLIC_RULE_SUMMARY", params)
+    rows += _query(conn, "M06001_MIXED_FORMULA_RULE_SUMMARY", params)
+    rows.sort(key=lambda row: (
+        row.get("TARGET_COLUMN") is None, str(row.get("TARGET_COLUMN") or ""),
+        {"Y": 0, "N": 1}.get(row.get("SELECTED_YN"), 2),
+        row.get("RANK_NO") is None, _as_float(row.get("RANK_NO")),
+        row.get("SCORE") is None, -_as_float(row.get("SCORE")),
+        str(row.get("RULE_ID") or ""),
+    ))
+    return rows[:300]
 
 
 def _as_int(value: Any) -> int:
@@ -2011,6 +2045,13 @@ def _report_definitions(report_code: str) -> list[dict[str, str]]:
                 {"term": "Symbolic 점수", "definition": "Symbolic 모델이 저장한 품질 점수이며 연관규칙 Confidence와 다른 척도로 구분합니다."},
             ]
         )
+    if report_code == "R10":
+        common.extend(
+            [
+                {"term": "수식 Confidence", "definition": "통합·혼합 수식의 IF 조건을 충족한 행 중 허용오차 이내 행의 비율입니다. 발굴 시 학습 표본, 탐지 후 전체 원본 기준이며 검증 표본 점수와 구분합니다."},
+                {"term": "Symbolic 점수", "definition": "Symbolic 모델이 저장한 품질 점수이며 연관규칙 Confidence와 다른 척도로 구분합니다."},
+            ]
+        )
     if report_code in {"R15", "R17", "R20", "R21"}:
         common.append(
             {"term": "비율 지표", "definition": "서로 다른 데이터 규모를 비교할 수 있도록 분자와 분모를 함께 제공합니다."}
@@ -2333,20 +2374,21 @@ def _build_sections_and_kpis(
             )
         )
     elif report_code == "R10":
-        rows = _query(conn, "M06001_SYMBOLIC_RULE_SUMMARY", {"flowRunId": flow_run_id}) if flow_run_id else []
+        rows = _formula_rule_rows(conn, flow_run_id) if flow_run_id else []
         aggregate = _first(_query(conn, "M06001_SYMBOLIC_RULE_AGGREGATE", {"flowRunId": flow_run_id})) if flow_run_id else {}
         aggregate = aggregate or {}
         symbolic_count = _as_int(aggregate.get("SYMBOLIC_RULE_COUNT"))
         kpis = [
             _kpi("SYMBOLIC_RULE_COUNT", "수식 규칙", symbolic_count),
-            _kpi("SELECTED_RULE_COUNT", "선정 수식", _as_int(aggregate.get("SELECTED_RULE_COUNT"))),
+            _kpi("SELECTED_RULE_COUNT", "Symbolic 선정 수식", _as_int(aggregate.get("SELECTED_RULE_COUNT"))),
+            _kpi("MIXED_FORMULA_COUNT", "통합·혼합 발굴 수식", _as_int(aggregate.get("MIXED_FORMULA_COUNT"))),
             _kpi("TARGET_COUNT", "예측 대상", _as_int(aggregate.get("TARGET_COUNT"))),
         ]
         sections.append(
             _table_section(
-                "Symbolic 수식 규칙 표본",
+                "연속형 수식 규칙 표본",
                 rows,
-                note=f"전체 {symbolic_count:,}개 규칙 중 상위 300개까지 표시합니다.",
+                note="대상 컬럼·Symbolic 선정 순으로 최대 300개 수식의 원문을 표시합니다. 통합·혼합 수식의 Confidence는 발굴 시 학습 표본, 탐지 후 전체 원본에서 IF 조건을 충족한 행 중 허용오차 이내 행의 비율이며 검증 표본 점수·Symbolic 점수와 합산하지 않습니다. 선정 여부는 Symbolic 발굴 결과에만 적용되며 최종 사용자 선정과 구분합니다.",
             )
         )
     elif report_code == "R11":
@@ -2359,7 +2401,7 @@ def _build_sections_and_kpis(
             _kpi("ASSOCIATION_VIOLATION_COUNT", "범주형 위반", assoc),
             _kpi("SYMBOLIC_VIOLATION_COUNT", "연속형 위반", symbolic),
         ]
-        sections.append(_table_section("규칙 위반 집계", rows))
+        sections.append(_table_section("규칙 위반 집계", rows, note="저장된 규칙×행 위반을 집계합니다. 통합·혼합 결과는 저장 표본 제한이 적용될 수 있으며 전체 원본 위반 건수와 다를 수 있습니다. 점수가 없는 위반은 평균 점수에서 제외합니다."))
     elif report_code == "R12":
         source_params = {
             "ruleGroup": "ALL",

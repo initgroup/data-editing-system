@@ -277,6 +277,21 @@ class MlAnalysisFreeTierOptimizationTests(unittest.TestCase):
         self.assertIn('WHERE "A" IS NOT NULL', connection.last_sql)
         self.assertNotIn('"B" IS NOT NULL', connection.last_sql)
 
+    def test_numeric_matrix_distinguishes_feature_cap_from_invalid_data(self):
+        connection = MatrixConnection([(1, 2), (2, 4), (3, 6)])
+        with patch.object(ml_analysis_service, "np", numpy), patch.object(
+            ml_analysis_service, "_ml_input_feature_limit", return_value=1
+        ):
+            _, _, features, limits = ml_analysis_service.fetch_numeric_matrix(
+                connection, "OWNER1", "TABLE1", "A", ["B", "C"], 100,
+            )
+        self.assertEqual(features, ["B"])
+        self.assertEqual(limits["truncatedFeatures"], ["C"])
+        self.assertEqual(limits["truncatedFeatureCount"], 1)
+        self.assertEqual(limits["droppedFeatureCount"], 0)
+        self.assertEqual(limits["sampleSelection"], "FIRST_ROWS_WITH_NON_NULL_TARGET")
+        self.assertFalse(limits["sourceRowCountKnown"])
+
     def test_integrated_relation_sample_is_capped_for_free_tier(self):
         connection = ProcedureConnection()
         with patch.object(ml_analysis_service, "_relation_sample_row_limit", return_value=50000), patch.object(

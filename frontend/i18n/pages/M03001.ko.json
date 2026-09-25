@@ -4,6 +4,8 @@
   "pageCode": "M03001",
   "description": "Korean labels that are specific to M03001.",
   "labels": {
+    "workDescriptionEmpty": "저장된 작업을 선택하거나 시나리오 테이블과 분석 모델을 선택하세요.",
+    "executableObjectHint": "DB 객체 기본값은 M90001, API 설정은 M90002 또는 저장된 내장 작업 계약을 사용합니다.",
     "saveWork": "저장",
     "deleteWork": "삭제",
     "testDraft": "테스트",

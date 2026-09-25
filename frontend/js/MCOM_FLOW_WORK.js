@@ -1642,9 +1642,13 @@
             findCurrentJobForImportedNode(node = {}) {
                 const sourceMenuCode = String(node.refMenuCode || "").trim().toUpperCase();
                 const sourceName = String(node.nodeName || "").trim().toUpperCase();
+                const sourceMethod = String(node.execMethod || node.execObjectName || "").trim().toUpperCase();
+                const sourceType = String(node.execSourceType || "").trim().toUpperCase();
                 return (this.flowRegisteredJobs || []).find((job) => (
                     String(job.MENU_CODE || "").trim().toUpperCase() === sourceMenuCode
                     && String(job.JOB_NAME || "").trim().toUpperCase() === sourceName
+                    && (!sourceMethod || String(job.EXEC_METHOD || job.EXEC_OBJECT_NAME || "").trim().toUpperCase() === sourceMethod)
+                    && (!sourceType || String(job.EXEC_SOURCE_TYPE || "").trim().toUpperCase() === sourceType)
                 )) || null;
             },
 
@@ -1696,6 +1700,8 @@
                     const source = json.data || {};
                     const graph = this.createImportedFlowDraft(source);
                     this.newFlow(false);
+                    this.flowType = source.FLOW_TYPE || config.flowType || PAGE_CODE;
+                    this.setValue(`#flowProcessTemplate-${PAGE_CODE}`, this.flowType === "UNIFIED_EDITING_SCENARIO" ? "UNIFIED" : this.flowType === "MIXED_XAI_SCENARIO" ? "MIXED_XAI" : "LEGACY");
                     const importedName = this.getUniqueFlowName(`Copy of ${source.FLOW_NAME || "Flow"}`);
                     this.setValue(`#flowName-${PAGE_CODE}`, importedName);
                     this.flowDisplayName = importedName;
@@ -2127,7 +2133,11 @@
 
             getFirstRegisteredJobsByGroup() {
                 const isMixed = this.flowType === "MIXED_XAI_SCENARIO";
-                const preferredModels = isMixed ? {
+                const isUnified = this.flowType === "UNIFIED_EDITING_SCENARIO";
+                const preferredModels = isUnified ? {
+                    M03001: "UNIFIED_EDITING_PROFILE", M03002: "UNIFIED_EDITING_RELATION",
+                    M03003: "UNIFIED_EDITING_DISCOVER", M03004: "UNIFIED_EDITING_DETECT"
+                } : isMixed ? {
                     M03001: "MIXED_XAI_PROFILE",
                     M03002: "MIXED_XAI_RELATION",
                     M03003: "MIXED_XAI_RULE_DISCOVER",
@@ -2141,13 +2151,13 @@
                 return this.groupRegisteredJobs()
                     .map((group) => {
                         const preferred = preferredModels[String(group.key || "").toUpperCase()];
-                        if (isMixed && !preferred) return null;
+                        if ((isMixed || isUnified) && !preferred) return null;
                         const jobs = group.jobs.filter((job) => (
                             [job.EXEC_OBJECT_NAME, job.EXEC_METHOD].some((name) => String(name || "").toUpperCase().startsWith("MIXED_XAI_")) === isMixed
                         ));
                         return jobs.find((job) => (
                             [job.EXEC_OBJECT_NAME, job.EXEC_METHOD].some((name) => String(name || "").toUpperCase() === preferred)
-                        )) || (isMixed ? null : jobs[0]);
+                        )) || ((isMixed || isUnified) ? null : jobs.find((job) => !String(job.EXEC_METHOD || "").startsWith("UNIFIED_EDITING_")));
                     })
                     .filter(Boolean);
             },
@@ -2155,16 +2165,17 @@
             async prepareProcessTemplate() {
                 if (this.isFlowRunActive() || this.isFlowSaving || this.isProcessTemplatePreparing) return;
                 if (!this.selectedProjectId || !this.selectedScenarioId) {
-                    alert("프로젝트와 시나리오를 먼저 선택하세요.");
+                    alert(this.getMessage("selectProjectScenarioFirst", "Select a project and scenario first."));
                     return;
                 }
                 const source = this.getSelectedScenarioTable()
                     || (this.scenarioTables.length === 1 ? this.scenarioTables[0] : null);
                 if (!source?.SCENARIO_TABLE_ID) {
-                    alert("대상 테이블 목록에서 기본 FLOW를 만들 테이블을 선택하세요.");
+                    alert(this.getMessage("processTemplateSelectTarget", "Select a target table to prepare its default FLOW."));
                     return;
                 }
-                const processType = this.getValue(`#flowProcessTemplate-${PAGE_CODE}`) === "MIXED_XAI" ? "MIXED_XAI" : "LEGACY";
+                const selectedProcess = this.getValue(`#flowProcessTemplate-${PAGE_CODE}`);
+                const processType = ["MIXED_XAI", "UNIFIED"].includes(selectedProcess) ? selectedProcess : "LEGACY";
                 const projectId = Number(this.selectedProjectId);
                 const scenarioId = Number(this.selectedScenarioId);
                 const button = getContainerEl(`#prepareProcessTemplate-${PAGE_CODE}`);
@@ -2176,12 +2187,12 @@
                         body: { projectId, scenarioId, scenarioTableId: Number(source.SCENARIO_TABLE_ID), processType }
                     });
                     const flowId = Number(response.automation?.flowId || 0);
-                    if (!flowId) throw new Error("기본 FLOW 저장 결과를 확인할 수 없습니다.");
+                    if (!flowId) throw new Error(this.getMessage("processTemplateMissingResult", "The saved default FLOW could not be found."));
                     if (projectId !== Number(this.selectedProjectId) || scenarioId !== Number(this.selectedScenarioId)) return;
                     await this.refreshRegisteredJobs();
                     await this.loadFlowVersions(true, { preferredFlowId: flowId, refreshHistory: true });
                 } catch (error) {
-                    alert(error.message || "선택한 시나리오 FLOW를 준비하지 못했습니다.");
+                    alert(error.message || this.getMessage("processTemplateFailed", "The selected scenario FLOW could not be prepared."));
                 } finally {
                     this.isProcessTemplatePreparing = false;
                     if (button) button.disabled = false;
@@ -5216,7 +5227,7 @@
 
             applyFlowData(flow, options = {}) {
                 this.flowType = flow.FLOW_TYPE || config.flowType || PAGE_CODE;
-                this.setValue(`#flowProcessTemplate-${PAGE_CODE}`, this.flowType === "MIXED_XAI_SCENARIO" ? "MIXED_XAI" : "LEGACY");
+                this.setValue(`#flowProcessTemplate-${PAGE_CODE}`, this.flowType === "UNIFIED_EDITING_SCENARIO" ? "UNIFIED" : this.flowType === "MIXED_XAI_SCENARIO" ? "MIXED_XAI" : "LEGACY");
                 this.setValue(`#flowId-${PAGE_CODE}`, flow.FLOW_ID || "NEW");
                 this.flowLayoutGrid = null;
                 this.setValue(`#flowGroup-${PAGE_CODE}`, flow.FLOW_GROUP || config.defaultFlowGroup || PAGE_CODE);
@@ -7913,7 +7924,8 @@
             },
 
             newFlow(clearCanvas = true) {
-                this.flowType = this.getValue(`#flowProcessTemplate-${PAGE_CODE}`) === "MIXED_XAI"
+                const process = this.getValue(`#flowProcessTemplate-${PAGE_CODE}`);
+                this.flowType = process === "UNIFIED" ? "UNIFIED_EDITING_SCENARIO" : process === "MIXED_XAI"
                     ? "MIXED_XAI_SCENARIO" : (config.flowType || PAGE_CODE);
                 this.setValue(`#flowId-${PAGE_CODE}`, "NEW");
                 this.dashedConnectionMode = false;

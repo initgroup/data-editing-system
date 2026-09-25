@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INIT-Data Editing Platform System</title>
     <script>
-        window.APP_CACHE_VERSION = "1.1.384";
+        window.APP_CACHE_VERSION = "1.1.388";
         window.APP_ASSET_VERSION_OVERRIDES = {
-            // 전체 캐시 갱신: APP_CACHE_VERSION만 올립니다.
+            // 공통 캐시 갱신: APP_CACHE_VERSION을 올리고 아래 개별 버전이 있는 수정 파일도 함께 올립니다.
             // 부분 캐시 갱신: "js/M90001.js": "1.0.1" 처럼 파일별 버전을 지정합니다.
             "js/M01001.js": "1.1.2",
             "i18n/pages/M01001.ko.json": "1.1.2",
@@ -15,7 +15,7 @@
             "i18n/pages/M02002.ko.json": "1.1.5",
             "pages/M90001.html": "1.1.2",
             "js/M90001.js": "1.1.2",
-            "js/M90002.js": "1.1.2",
+            "js/M90002.js": "1.1.3",
             "pages/M90003.html": "1.0.1",
             "js/M90003.js": "1.0.4",
             "css/pages/M90003.css": "1.0.1",
@@ -24,17 +24,17 @@
             "css/pages/M90001.css": "1.1.2",
             "i18n/pages/M90001.ko.json": "1.1.2",
             "js/M02001.js": "1.1.2",
-            "js/MCOM_DATA_WORK.js": "1.0.5",
-            "i18n/pages/MCOM_DATA_WORK.ko.json": "1.0.3",
-            "i18n/pages/MCOM_DATA_WORK.en.json": "1.0.1",
-            "i18n/pages/M03003.ko.json": "1.0.2",
-            "i18n/pages/MCOM_FLOW_WORK.ko.json": "1.0.1",
-            "js/MCOM_FLOW_WORK.js": "1.1.26",
-            "config/flow-model-contracts.json": "1.0.4",
-            "js/MCOM_ANLY_WORK.js": "1.1.19",
+            "js/MCOM_DATA_WORK.js": "1.0.6",
+            "i18n/pages/MCOM_DATA_WORK.ko.json": "1.0.4",
+            "i18n/pages/MCOM_DATA_WORK.en.json": "1.0.2",
+            "i18n/pages/M03003.ko.json": "1.0.3",
+            "i18n/pages/MCOM_FLOW_WORK.ko.json": "1.0.2",
+            "js/MCOM_FLOW_WORK.js": "1.1.27",
+            "config/flow-model-contracts.json": "1.0.5",
+            "js/MCOM_ANLY_WORK.js": "1.1.23",
             "css/pages/MCOM_ANLY_WORK.css": "1.0.9",
-            "i18n/pages/MCOM_ANLY_WORK.ko.json": "1.0.11",
-            "i18n/pages/MCOM_ANLY_WORK.en.json": "1.0.11",
+            "i18n/pages/MCOM_ANLY_WORK.ko.json": "1.0.12",
+            "i18n/pages/MCOM_ANLY_WORK.en.json": "1.0.12",
             "pages/MCOM_EDIT_WORK.html": "1.0.2",
             "js/MCOM_EDIT_WORK.js": "1.0.6",
             "css/pages/MCOM_EDIT_WORK.css": "1.0.1",
@@ -56,15 +56,17 @@
             "pages/MCOM_ANLY_WORK.html": "1.1.2",
             "css/pages/descriptive-statistics.css": "1.3.2",
             "css/pages/M02002.css": "1.1.7",
-            "pages/MCOM_FLOW_WORK.html": "1.1.7",
+            "pages/MCOM_FLOW_WORK.html": "1.1.8",
             "css/pages/MCOM_FLOW_WORK.css": "1.0.5",
             "css/style.css": "1.1.12",
             "js/common.js": "1.0.2",
             "css/styleMenu.css": "1.1.88",
             "help/page.html": "1.1.376",
-            "help/in-deps-system-guide.html": "1.0.1"
+            "help/in-deps-system-guide.html": "1.0.2"
         };
         window.APP_PAGE_CSS_FILES = [
+            "./css/pages/M00001.css",
+            "./css/editing-result-view.css",
             "./css/pages/M01002.css",
             "./css/pages/M02001.css",
             "./css/pages/M02002.css",
@@ -353,6 +355,7 @@
             "./js/common.js",
             "./js/regression-diagnostics.js",
             "./js/rule-result-common.js",
+            "./js/editing-result-view.js",
             "./js/formula-rule-chart.js",
             "./js/descriptive-statistics.js",
             "./js/MCOM_DATA_WORK.js",
@@ -436,27 +439,8 @@
         }
 
         function openQuickEditWindow() {
-            const availableWidth = window.screen?.availWidth || window.innerWidth || 1280;
-            const availableHeight = window.screen?.availHeight || window.innerHeight || 820;
-            const width = Math.min(1440, availableWidth);
-            const height = Math.min(940, availableHeight);
-            const left = Math.max(0, Math.round((availableWidth - width) / 2));
-            const top = Math.max(0, Math.round((availableHeight - height) / 2));
-            const features = [
-                "popup=yes",
-                "resizable=yes",
-                "scrollbars=yes",
-                `width=${width}`,
-                `height=${height}`,
-                `left=${left}`,
-                `top=${top}`
-            ].join(",");
-            const quickWindow = window.open("/quick-edit/", "initQuickEdit", features);
-            if (quickWindow) {
-                quickWindow.focus();
-            } else {
-                window.open("/quick-edit/", "_blank");
-            }
+            const menu = window.MENU_PAGE_MAP?.M00001;
+            return PageManager.load("M00001", menu?.title || "Quick Editing");
         }
 
         function applyShellDisplaySettings(settings = {}) {

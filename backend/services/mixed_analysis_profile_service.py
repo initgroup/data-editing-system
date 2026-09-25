@@ -21,10 +21,12 @@ def _run(conn, payload, *, relation):
         summary["profile"] = profile
         if relation:
             summary["relationships"] = relate_rows(rows, eligible, profile=profile)
+            summary["relationships"]["samplingDiagnostics"] = sampling
         xai._execute(cursor, "XAI_UPDATE_RUN" if old else "XAI_INSERT_RUN", {**ctx, "summaryJson": xai._json(summary)})
         return {"status": "success", "algorithm": "MIXED_PROFILE", "version": 3,
             "stage": "MIXED_XAI_RELATION" if relation else "MIXED_XAI_PROFILE",
             "profile": profile, **({"relationships": summary["relationships"]} if relation else {}),
+            "samplingDiagnostics": sampling,
             "sampleCount": len(rows), "columnCount": len(eligible), "resultTable": "INIT$_TB_XAI_RUN", "resultTables": ["INIT$_TB_XAI_RUN"]}
 
 

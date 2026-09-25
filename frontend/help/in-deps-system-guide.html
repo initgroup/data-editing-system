@@ -970,7 +970,7 @@
                     <article class="tab-panel active" id="stage-1" role="tabpanel">
                         <div class="stage-summary">
                             <div class="stage-symbol">1</div>
-                            <div><span class="card-kicker">M03001 · DB_OBJECT</span><h3>컬럼 유형 분석</h3><p>컬럼 프로파일과 규칙 엔진, 활성 컬럼 유형 OML 모델을 결합해 세부 유형과 범주형·연속형·기타 그룹을 판정합니다. 활성 모델이 없거나 사용할 수 없으면 AUTO가 규칙 결과로 안전하게 폴백하며 사용자 확정값은 보존됩니다.</p></div>
+                            <div><span class="card-kicker">M03001 · UNIFIED_EDITING_PROFILE</span><h3>컬럼 유형 분석</h3><p>기존 컬럼 유형 판정과 사용자 확정값 보존을 유지하면서 표본 기초통계·숫자 문자열·변환 불가 값 진단을 보강합니다. 아래 규칙·모델 결합은 기존 Oracle 하위 분석이며, 보강 진단은 원본 자료형과 최종 유형을 변경하지 않습니다.</p></div>
                         </div>
                         <div class="contract-grid">
                             <div class="contract"><h4>프로파일·규칙 입력</h4><ul><li>데이터 타입, NULL, DISTINCT 개수와 전체 행 대비 비율</li><li>최소·최대, 길이, 소수·정수 비율, 수치 변환 비율</li><li>엔트로피·값 분포와 컬럼명 의미 힌트</li><li>예측 방식, 샘플, 신뢰도와 Target DB 활성 모델</li></ul></div>
@@ -978,13 +978,13 @@
                             <div class="contract"><h4>Rule + Model 최종 선택</h4><ul><li>규칙·모델 일치, 한쪽 결과 누락, 신뢰도와 그룹 호환성을 평가</li><li>연속형→범주형 오분류 차단, 식별자·자유 텍스트 보호</li><li>모델 판단 로직 자체는 변경하지 않고 최종 호환성 가드에서 조정</li></ul></div>
                             <div class="contract"><h4>출력·후속 단계</h4><ul><li>이번 Run의 RULE·MODEL·FINAL 유형과 판정 사유</li><li>사용자 확정값을 보존한 최신 최종 유형</li><li>M03002 관계 분석의 유형 기준</li></ul></div>
                         </div>
-                        <div class="artifact-line">INIT$_SP_PREDICTED_TYPE → PREDICTED_TYPE_RUN · PREDICTED_TYPE_FINAL</div>
+                        <div class="artifact-line">UNIFIED_EDITING_PROFILE → PREDICTED_TYPE_RUN · PREDICTED_TYPE_FINAL · MIXED_XAI_PROFILE</div>
                     </article>
 
                     <article class="tab-panel" id="stage-2" role="tabpanel">
                         <div class="stage-summary">
                             <div class="stage-symbol triangle">2</div>
-                            <div><span class="card-kicker">M03002 · INTERNAL_API / DB PROCEDURE</span><h3>컬럼 상관·관계 분석</h3><p>1단계 최종 유형을 기준으로 컬럼 쌍에 적합한 지표를 계산하고, 통과 관계를 네트워크로 구성해 컬럼 군집과 중심성을 산출합니다.</p></div>
+                            <div><span class="card-kicker">M03002 · UNIFIED_EDITING_RELATION</span><h3>컬럼 상관·관계 분석</h3><p>기존 최종 유형 기준의 관계 행렬·네트워크·군집을 유지하고, 별도 표본에서 수치 상관·범주 관계·상관비 η와 결측·중복을 진단합니다. 기존 관계의 통과 기준과 혼합형 표본 진단을 구분해 해석합니다.</p></div>
                         </div>
                         <div class="contract-grid">
                             <div class="contract"><h4>유형별 지표</h4><ul><li>범주형×범주형: Cramér's V와 p-value</li><li>연속형×연속형: Pearson, 선택 시 Spearman과 p-value</li><li>범주형×연속형: Eta Squared</li></ul></div>
@@ -992,13 +992,13 @@
                             <div class="contract"><h4>입력</h4><ul><li>1단계 최신 확정 유형(<code>LATEST_MASTER</code>)</li><li>Target 테이블, 유의수준, 관계 강도, 샘플과 edge 제한</li></ul></div>
                             <div class="contract"><h4>해석</h4><ul><li>상관 통과는 인과관계나 최종 업무 규칙을 의미하지 않음</li><li>기준 미달 관계도 다변량 수식 후보에 필요할 수 있음</li><li>군집은 3단계 규칙 발굴의 선택적 보조 입력</li></ul></div>
                         </div>
-                        <div class="artifact-line">INIT$_SP_CAT_CORR_ANALYZE · INIT$_SP_NUM_CORR_ANALYZE · INIT$_SP_RELATION_MATRIX_ANALYZE → RELATION_PAIR · RELATION_NETWORK</div>
+                        <div class="artifact-line">UNIFIED_EDITING_RELATION → RELATION_PAIR · RELATION_NETWORK · MIXED_XAI_RELATION</div>
                     </article>
 
                     <article class="tab-panel" id="stage-3" role="tabpanel">
                         <div class="stage-summary">
                             <div class="stage-symbol circle">3</div>
-                            <div><span class="card-kicker">M03003 · INTERNAL_API + ORACLE ML</span><h3>자동 규칙 발굴</h3><p>범주형 데이터는 조건–결과 연관 규칙을, 연속형 데이터는 중요변수 선택과 <code>f(x)=y</code> 수식 규칙을 생성합니다. 결과는 자동 확정이 아니라 사람이 검토할 후보입니다.</p></div>
+                            <div><span class="card-kicker">M03003 · UNIFIED_EDITING_DISCOVER</span><h3>자동 규칙 발굴</h3><p>기존 Apriori·LASSO·Symbolic 분석 후 혼합형 실제 값·범위 트리와 수식을 발굴합니다. 최종 결과는 조건규칙과 수식규칙으로 조회하며 원래 발굴 방법과 검증 지표를 유지합니다. 과거 이상 후보 설명은 별도로 구분합니다. 같은 실행에 모델·출처를 구분해 저장하며, 혼합형 성공으로 기존 분석 실패를 덮지 않습니다. 결과는 사람이 검토할 후보입니다.</p></div>
                         </div>
                         <div class="contract-grid">
                             <div class="contract"><h4>범주형 Apriori</h4><ul><li>최소 support·confidence와 규칙 길이·조합 예산 적용</li><li>Oracle ML 연관 모델과 사람이 읽는 IF/THEN 요약 생성</li><li>lift와 표본 건수를 함께 저장</li></ul></div>
@@ -1006,21 +1006,21 @@
                             <div class="contract"><h4>Symbolic 규칙</h4><ul><li>선형·강건·비율·다항 LASSO와 선택적 PySR 후보 비교</li><li>안정성·설명력을 평가하고 Oracle-safe 수식으로 정규화</li><li>수식과 R²를 규칙 후보로 저장</li></ul></div>
                             <div class="contract"><h4>부분 완료</h4><ul><li>범주형·연속형 하위 작업을 독립적으로 검토</li><li>일부만 완료되면 성공 결과와 실패 메시지를 함께 반환</li><li>Flow Node는 FAILED와 검토 메시지로 기록될 수 있음</li></ul></div>
                         </div>
-                        <div class="artifact-line">INIT$_SP_APRIORI_ASSOC_MODEL · run_integrated_rule_discover → ASSOCIATION_MODEL · ASSOC_RULE_SUMMARY · LASSO_FEATURE · SYMBOLIC_RULE</div>
+                        <div class="artifact-line">UNIFIED_EDITING_DISCOVER → ASSOCIATION_MODEL · ASSOC_RULE_SUMMARY · LASSO_FEATURE · SYMBOLIC_RULE · MIXED_XAI_RULES</div>
                     </article>
 
                     <article class="tab-panel" id="stage-4" role="tabpanel">
                         <div class="stage-summary">
                             <div class="stage-symbol diamond"><span>4</span></div>
-                            <div><span class="card-kicker">M03004 · INTERNAL_API + DB PROCEDURE</span><h3>규칙 위반 탐지</h3><p>같은 Run의 범주형·연속형 규칙을 대상 데이터에 적용해 위반 후보와 상세 행을 저장합니다. 탐지 결과는 검토 자료이며 원본 데이터는 자동 수정되지 않습니다.</p></div>
+                            <div><span class="card-kicker">M03004 · UNIFIED_EDITING_DETECT</span><h3>규칙 위반 탐지</h3><p>같은 Run의 기존 범주형·Symbolic 규칙과 혼합형 값·범위·수식 AST를 적용해 출처별 위반 행을 저장합니다. 규칙별 위반 건수는 겹칠 수 있어 고유 오류 행·셀 수로 합산하지 않습니다. 원본 데이터는 자동 수정되지 않습니다.</p></div>
                         </div>
                         <div class="contract-grid">
                             <div class="contract"><h4>범주형 위반</h4><ul><li>규칙 조건 일치 + 결과 NULL 또는 불일치 행 탐지</li><li>confidence·lift를 위반 점수의 보조 지표로 사용</li><li>규칙별 저장·스캔 제한 적용</li></ul></div>
                             <div class="contract"><h4>연속형 위반</h4><ul><li>허용된 수식과 feature만 안전하게 평가</li><li>실제값과 예측값의 상대·절대 오차 임계값 적용</li><li>실제·예측·오차를 상세 결과에 저장</li></ul></div>
                             <div class="contract"><h4>SAME_RUN 입력</h4><ul><li>같은 Run의 연관 모델·범주형 규칙 요약</li><li>같은 Run의 Symbolic 규칙</li><li>규칙 부분, 허용 오차와 결과 제한</li></ul></div>
-                            <div class="contract"><h4>결과 해석</h4><ul><li>SUCCESS이면서 0건은 정상 결과일 수 있음</li><li>FAILED이면 부분 완료 메시지로 유형별 성공 여부 확인</li><li>실제 오류 수정은 M05002의 별도 작업 테이블에서 수행</li></ul></div>
+                            <div class="contract"><h4>결과 해석</h4><ul><li>퀵·상세 결과는 조건규칙·수식규칙을 20개씩 서버에서 조회하고 위반 상세는 선택 시 조회</li><li>SUCCESS이면서 0건은 정상 결과일 수 있음</li><li>FAILED이면 부분 완료 메시지로 유형별 성공 여부 확인</li><li>실제 오류 수정은 M05002의 별도 작업 테이블에서 수행</li></ul></div>
                         </div>
-                        <div class="artifact-line">INIT$_SP_RULE_VIOLATION_DETECT · INIT$_SP_SYMBOLIC_RULE_VIOLATION_DETECT → CAT_RULE_VIOLATION · SYMBOLIC_RULE_VIOLATION</div>
+                        <div class="artifact-line">UNIFIED_EDITING_DETECT → CAT_RULE_VIOLATION · SYMBOLIC_RULE_VIOLATION · MIXED_XAI_CANDIDATES</div>
                     </article>
                 </div>
             </section>
@@ -1060,7 +1060,7 @@
                     </article>
                     <article class="tab-panel" id="resource-api" role="tabpanel">
                         <div class="grid-2">
-                            <div><span class="card-kicker">M90002 · API OBJECT REGISTRY</span><h3>내부 Python API와 외부 JSON API</h3><p>기본 자동 설계의 2~4단계는 WEB_API Job이지만 <strong>INTERNAL_API 어댑터가 같은 WAS의 Python 함수를 직접 호출</strong>하므로 외부 인터넷 요청이 아닙니다. 사용자가 EXTERNAL_API를 등록한 경우에만 원격 HTTP JSON 엔드포인트를 호출합니다.</p></div>
+                            <div><span class="card-kicker">M90002 · API OBJECT REGISTRY</span><h3>내부 Python API와 외부 JSON API</h3><p>신규 통합 1~4단계는 WEB_API Job이며 <strong>INTERNAL_API 어댑터가 같은 WAS의 함수를 직접 호출</strong>합니다. 각 함수는 기존 Oracle 분석과 Python 혼합형 보강을 순차 수행합니다. 미등록 내장 Job은 저장된 계약으로 실행하며 EXTERNAL_API만 원격 HTTP 요청을 사용합니다.</p><p>M90002 기본 생성은 미등록 항목만 추가하고 기존 설정·비활성 상태를 보존합니다. M03001~M03004에서 자동 생성 Job을 열면 중앙 등록 ID가 없어도 저장된 모델·파라미터를 복원합니다.</p></div>
                             <div class="contract"><h4>검증 항목</h4><ul><li>method, endpoint, 입출력·저장 계약</li><li>외부 응답의 시간·크기 제한과 유효 JSON 여부</li><li>EXTERNAL_API 인증 값은 런타임 입력이며 자동 비밀 조회가 아님</li></ul></div>
                         </div>
                     </article>

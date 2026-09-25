@@ -218,6 +218,22 @@ select:disabled {
     backdrop-filter: blur(18px);
 }
 
+.qe-embedded .qe-topbar {
+    position: static;
+    min-height: 48px;
+    justify-content: flex-end;
+    box-shadow: none;
+}
+
+.qe-embedded .qe-brand,
+.qe-embedded .qe-session-status {
+    display: none;
+}
+
+.qe-embedded .qe-main {
+    padding-top: 16px;
+}
+
 .qe-brand,
 .qe-topbar__actions {
     display: flex;
@@ -461,6 +477,10 @@ select:disabled {
     backdrop-filter: blur(12px);
     scrollbar-width: thin;
     scrollbar-color: var(--qe-line) transparent;
+}
+
+.qe-embedded .qe-stepper-wrap {
+    top: 0;
 }
 
 .qe-stepper {
@@ -1249,58 +1269,24 @@ progress::-moz-progress-bar {
     font-weight: 900;
 }
 
-.qe-process-options {
-    display: grid;
-    gap: 8px;
-}
-
-.qe-process-options label {
-    display: flex;
-    align-items: center;
-    gap: 12px;
+.qe-process-summary {
+    margin-top: 25px;
     padding: 12px 14px;
     border: 1px solid var(--qe-line);
     border-radius: 12px;
-    cursor: pointer;
-}
-
-.qe-process-options input {
-    flex: 0 0 auto;
-    width: 18px;
-    height: 18px;
-    margin: 0;
-    accent-color: var(--qe-brand-strong);
-}
-
-.qe-process-options label:has(input:checked) {
-    border-color: var(--qe-brand-strong);
     background: var(--qe-brand-pale);
 }
 
-.qe-process-options label:has(input:disabled) {
-    cursor: default;
-    opacity: 0.72;
-}
-
-.qe-process-options span {
-    display: grid;
-    gap: 3px;
-    min-width: 0;
-}
-
-.qe-process-options strong {
+.qe-process-summary > strong {
+    color: var(--qe-ink-soft);
     font-size: 13px;
-}
-
-.qe-process-options small,
-.qe-process-description {
-    color: var(--qe-muted);
-    font-size: 11px;
-    line-height: 1.6;
 }
 
 .qe-process-description {
     margin: 8px 0 0;
+    color: var(--qe-muted);
+    font-size: 11px;
+    line-height: 1.6;
 }
 
 .qe-workspace-lock-note {
@@ -3307,6 +3293,29 @@ progress::-moz-progress-bar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
     padding: 20px 24px 0;
+}
+
+.qe-result-auxiliary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin: 16px 24px;
+}
+
+#qeEditingResults {
+    margin: 16px 24px;
+}
+
+#qeEditingDetail > section {
+    margin: 16px 24px;
+}
+
+.qe-rule-type-label {
+    margin: 16px 24px -12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--qe-muted);
 }
 
 .qe-tabs button {

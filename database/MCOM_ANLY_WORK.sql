@@ -406,8 +406,11 @@ SELECT *
           FROM {ruleObject} R
          WHERE R.RUN_SOURCE_TYPE = :runSourceType
            AND R.RUN_ID = :runId
-           AND R.RULE_ID = :ruleId
-           AND R.RUN_SOURCE_TYPE = 'FLOW_WORK'
+            AND R.RULE_ID = :ruleId
+            AND (:targetOwner IS NULL OR R.OWNER = :targetOwner)
+            AND (:targetTable IS NULL OR R.TABLE_NAME = :targetTable)
+            AND (:targetColumn IS NULL OR R.TARGET_COLUMN = :targetColumn)
+            AND R.RUN_SOURCE_TYPE = 'FLOW_WORK'
            AND EXISTS (
                 SELECT 1
                   FROM INIT$_TB_FLOW_WORK_RUN FR
@@ -500,7 +503,18 @@ BEGIN
      WHERE RUN_SOURCE_TYPE = :runSourceType
        AND RUN_ID = :runId
        AND TARGET_OWNER = :owner
-       AND TARGET_TABLE = :tableName;
+       AND TARGET_TABLE = :tableName
+       AND NOT EXISTS
+           (
+            SELECT 1
+              FROM "INIT$_TB_RULEDISC_ASSOC_SUM" R
+             WHERE R.RUN_SOURCE_TYPE = "INIT$_TB_RULEVIOL_ASSOC".RUN_SOURCE_TYPE
+               AND R.RUN_ID = "INIT$_TB_RULEVIOL_ASSOC".RUN_ID
+               AND R.TARGET_OWNER = "INIT$_TB_RULEVIOL_ASSOC".TARGET_OWNER
+               AND R.TARGET_TABLE = "INIT$_TB_RULEVIOL_ASSOC".TARGET_TABLE
+               AND R.MODEL_NAME = "INIT$_TB_RULEVIOL_ASSOC".MODEL_NAME
+               AND (R.RULE_SOURCE = 'MIXED_PATTERN_TREE' OR R.MODEL_TYPE = 'MIXED_PATTERN_TREE')
+           );
 
     DELETE /*+ NO_PARALLEL */ FROM "INIT$_TB_RULEDISC_SYMBOLIC"
      WHERE RUN_SOURCE_TYPE = :runSourceType
@@ -518,7 +532,9 @@ BEGIN
      WHERE RUN_SOURCE_TYPE = :runSourceType
        AND RUN_ID = :runId
        AND TARGET_OWNER = :owner
-       AND TARGET_TABLE = :tableName;
+       AND TARGET_TABLE = :tableName
+       AND NVL(RULE_SOURCE, 'OML') <> 'MIXED_PATTERN_TREE'
+       AND NVL(MODEL_TYPE, 'OML') <> 'MIXED_PATTERN_TREE';
 END;
 
 -- [ML_ANALYSIS_RULE_VIOLATION_SCOPE_CLEAR]
@@ -533,7 +549,18 @@ BEGIN
      WHERE RUN_SOURCE_TYPE = :runSourceType
        AND RUN_ID = :runId
        AND TARGET_OWNER = :owner
-       AND TARGET_TABLE = :tableName;
+       AND TARGET_TABLE = :tableName
+       AND NOT EXISTS
+           (
+            SELECT 1
+              FROM "INIT$_TB_RULEDISC_ASSOC_SUM" R
+             WHERE R.RUN_SOURCE_TYPE = "INIT$_TB_RULEVIOL_ASSOC".RUN_SOURCE_TYPE
+               AND R.RUN_ID = "INIT$_TB_RULEVIOL_ASSOC".RUN_ID
+               AND R.TARGET_OWNER = "INIT$_TB_RULEVIOL_ASSOC".TARGET_OWNER
+               AND R.TARGET_TABLE = "INIT$_TB_RULEVIOL_ASSOC".TARGET_TABLE
+               AND R.MODEL_NAME = "INIT$_TB_RULEVIOL_ASSOC".MODEL_NAME
+               AND (R.RULE_SOURCE = 'MIXED_PATTERN_TREE' OR R.MODEL_TYPE = 'MIXED_PATTERN_TREE')
+           );
 END;
 
 -- [ML_ANALYSIS_ASSOC_RULE_MODEL_FOR_RUN]
@@ -548,6 +575,8 @@ SELECT MODEL_NAME
            AND OWNER = :ruleOwner
            AND TARGET_OWNER = :targetOwner
            AND TARGET_TABLE = :targetTable
+           AND NVL(RULE_SOURCE, 'OML') <> 'MIXED_PATTERN_TREE'
+           AND NVL(MODEL_TYPE, 'OML') <> 'MIXED_PATTERN_TREE'
          GROUP BY MODEL_NAME
          ORDER BY LAST_CREATE_DT DESC NULLS LAST
                 , RULE_COUNT DESC
@@ -606,6 +635,37 @@ SELECT *
                 , METRIC_NAME
        )
  WHERE ROWNUM <= :maxRows;
+
+-- [MCOMMON_ANLY_WORK_UNIFIED_ASSOC_RULE_SOURCE]
+SELECT R.*
+  FROM /*OWNER*/."INIT$_TB_RULEDISC_ASSOC_SUM" R
+ WHERE 1=1
+   AND NVL(R.RULE_SOURCE, 'OML') <> 'MIXED_PATTERN_TREE'
+   AND NVL(R.MODEL_TYPE, 'OML') <> 'MIXED_PATTERN_TREE'
+   AND NVL(R.RESULT_KIND, 'VALUE') <> 'FORMULA'
+;
+
+-- [MCOMMON_ANLY_WORK_UNIFIED_ASSOC_VIOLATION_SOURCE]
+SELECT V.*
+  FROM /*OWNER*/."INIT$_TB_RULEVIOL_ASSOC" V
+ WHERE 1=1
+   AND EXISTS
+       (
+        SELECT 1
+          FROM /*OWNER*/."INIT$_TB_RULEDISC_ASSOC_SUM" R
+         WHERE 1=1
+           AND R.RUN_SOURCE_TYPE = V.RUN_SOURCE_TYPE
+           AND R.RUN_ID = V.RUN_ID
+           AND R.OWNER = V.RULE_OWNER
+           AND R.TARGET_OWNER = V.TARGET_OWNER
+           AND R.TARGET_TABLE = V.TARGET_TABLE
+           AND R.MODEL_NAME = V.MODEL_NAME
+           AND R.RULE_ID = V.RULE_ID
+           AND NVL(R.RULE_SOURCE, 'OML') <> 'MIXED_PATTERN_TREE'
+           AND NVL(R.MODEL_TYPE, 'OML') <> 'MIXED_PATTERN_TREE'
+           AND NVL(R.RESULT_KIND, 'VALUE') <> 'FORMULA'
+       )
+;
 
 -- [MCOMMON_ANLY_WORK_MODEL_METADATA]
 SELECT OWNER

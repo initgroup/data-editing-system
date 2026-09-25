@@ -107,6 +107,15 @@
 
         async createDefaultApiObjects() {
             const presets = await this.loadPresets();
+            // Refresh the catalog before deciding what is missing. The server
+            // also enforces createOnly if another admin registers it meanwhile.
+            try {
+                const catalog = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/api-objects`, { method: "GET", showLoading: false });
+                this.savedObjects = Array.isArray(catalog.data) ? catalog.data.map((row) => this.normalizeApiObject(row)) : [];
+            } catch (error) {
+                alert(error.message || getPageLabel("apiObjectLoadFailed", "API object load failed."));
+                return;
+            }
             const defaultApis = [];
             const defaultObjectNames = new Set(
                 (Array.isArray(presets.defaultObjectNames) ? presets.defaultObjectNames : [])
@@ -123,18 +132,15 @@
                     const isDefaultTarget = !defaultObjectNames.size || defaultObjectNames.has(objectNameKey);
                     if (apiObject.objectType === "INTERNAL_API" && isDefaultTarget) {
                         const savedObject = savedByName.get(this.normalizeKey(apiObject.objectName));
-                        if (savedObject?.objectId) {
-                            apiObject.objectId = savedObject.objectId;
-                        }
-                        defaultApis.push({ groupName: group.groupName, resource, apiObject });
+                        if (!savedObject) defaultApis.push({ groupName: group.groupName, resource, apiObject });
                     }
                 });
             });
             if (!defaultApis.length) {
-                alert(getPageLabel("noDefaultPythonApis", "No default Python API objects were found."));
+                alert(getPageLabel("noDefaultPythonApis", "No unregistered default Python API objects remain."));
                 return;
             }
-            const message = getPageLabel("confirmCreateDefaultApis", "Create or update {count} default Python API object(s)?", { count: defaultApis.length });
+            const message = getPageLabel("confirmCreateDefaultApis", "Create {count} unregistered default Python API object(s)? Existing registrations and inactive settings will be preserved.", { count: defaultApis.length });
             if (!(await CommonMessage.confirm(message, { defaultAction: "cancel" }))) return;
 
             const button = getContainerEl("#createDefaultApisBtn-M90002");
@@ -151,16 +157,17 @@
                         method: "POST",
                         showLoading: false,
                         body: {
+                            createOnly: true,
                             apiObject: item.apiObject,
                             details: this.createRowsFromPreset(item.resource)
                         }
                     });
-                    savedCount += 1;
+                    if (!json.skipped) savedCount += 1;
                     lastObjectId = json.objectId || lastObjectId;
                 }
                 await this.loadApiObjects();
                 if (lastObjectId) await this.loadApiObject(lastObjectId);
-                alert(getPageLabel("defaultPythonApisSaved", "{count} default Python API object(s) saved.", { count: savedCount }));
+                alert(getPageLabel("defaultPythonApisSaved", "{count} unregistered default Python API object(s) created.", { count: savedCount }));
             } catch (error) {
                 alert(error.message || getPageLabel("defaultPythonApiSetupFailed", "Default Python API setup failed."));
             } finally {
@@ -389,7 +396,7 @@
                     objectName: apiObject.objectName,
                     objectType: apiObject.objectType || "API"
                 })
-                : getPageLabel("apiRegistryDescription", "Select an API object from the group tree. Input, auth, and output rules will appear here."));
+                : getPageLabel("apiRegistryDescription", "Select an API object from the group tree. Default creation adds only unregistered items and preserves existing settings."));
             this.updatePresetButton();
             this.renderObjectTree();
         },
@@ -730,7 +737,7 @@
                 key: row.key || "",
                 value: row.value || "",
                 comment: row.desc || "",
-                defaultValue: row.defaultValue || ""
+                defaultValue: row.defaultValue ?? ""
             }));
             const input = details.filter((row) => this.getDetailSection(row.key) === "INPUT");
             const authRows = details.filter((row) => this.getDetailSection(row.key) === "AUTH");
@@ -859,7 +866,7 @@
                     key: `INPUT.${name}`,
                     value: `IN ${dataType}`,
                     desc: param.paramDesc || param.comment || "",
-                    defaultValue: param.defaultValue || param.default || "",
+                    defaultValue: param.defaultValue ?? param.default ?? "",
                     order: param.itemOrder || index + 1
                 });
             });
@@ -869,7 +876,7 @@
                     key: rule.key || `OUTPUT.${rule.column || rule.name || `COLUMN_${index + 1}`}`,
                     value: rule.value || rule.path || "",
                     desc: rule.comment || rule.desc || "",
-                    defaultValue: rule.defaultValue || "",
+                    defaultValue: rule.defaultValue ?? "",
                     order: rows.length + 1
                 });
             });
@@ -916,7 +923,7 @@
                     key: row.key || row.KEY || row.paramName || row.PARAM_NAME || "",
                     value: row.value || row.VALUE || row.itemValue || row.ITEM_VALUE || row.dataType || row.DATA_TYPE || "",
                     desc: row.desc || row.comment || row.COMMENT || row.paramDesc || row.PARAM_DESC || "",
-                    defaultValue: row.defaultValue || row.DEFAULT_VALUE || row.itemDefault || row.ITEM_DEFAULT || "",
+                    defaultValue: row.defaultValue ?? row.DEFAULT_VALUE ?? row.itemDefault ?? row.ITEM_DEFAULT ?? "",
                     order: row.order || row.ORDER || row.itemOrder || row.ITEM_ORDER || index + 1
                 }))
                 .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));

@@ -181,6 +181,10 @@
       "label": "메인홈",
       "title": "INIT Data Editing System"
     },
+    "M00001": {
+      "label": "퀵 에디팅",
+      "title": "퀵 에디팅"
+    },
     "project": {
       "label": "프로젝트 관리"
     },

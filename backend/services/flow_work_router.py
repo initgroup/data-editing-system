@@ -74,7 +74,7 @@ def normalize_quick_edit_summary(value: Any) -> Dict[str, Any]:
     return {
         "version": 1,
         "source": "QUICK_EDIT",
-        "processType": "MIXED_XAI" if text_value("processType", 32).upper() == "MIXED_XAI" else "LEGACY",
+        "processType": text_value("processType", 32).upper() if text_value("processType", 32).upper() in {"MIXED_XAI", "UNIFIED"} else "LEGACY",
         "projectCode": text_value("projectCode", 100),
         "projectName": text_value("projectName", 200),
         "projectCreatedAt": text_value("projectCreatedAt", 64),

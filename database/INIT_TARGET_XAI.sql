@@ -75,7 +75,7 @@ CREATE TABLE INIT$_TB_RULEVIOL_XAI (
 END;
 /
 
-COMMENT ON TABLE INIT$_TB_XAI_RUN IS 'Mixed pattern discovery or legacy anomaly diagnostics identified by algorithm version';
+COMMENT ON TABLE INIT$_TB_XAI_RUN IS 'Unified editing and mixed pattern diagnostics, with legacy anomaly results identified by algorithm version';
 COMMENT ON TABLE INIT$_TB_RULEDISC_XAI IS 'Surrogate anomaly candidate predicates; not confirmed business editing rules';
 COMMENT ON COLUMN INIT$_TB_RULEDISC_XAI.RULE_PURITY IS 'Isolation Forest anomaly fraction among matched sampled rows; not business rule confidence';
 COMMENT ON COLUMN INIT$_TB_RULEDISC_XAI.MATCH_COUNT IS 'Whole-source candidate rule matches from the last detection; may overlap other rules';
@@ -129,7 +129,7 @@ END;
 /
 
 COMMENT ON COLUMN INIT$_TB_RULEDISC_ASSOC_SUM.CONDITION_JSON IS 'Versioned pattern antecedent AST; NULL for legacy summaries';
-COMMENT ON COLUMN INIT$_TB_RULEDISC_ASSOC_SUM.RESULT_JSON IS 'Actual consequent predicate AST; equality or numeric range, never an anomaly label';
-COMMENT ON COLUMN INIT$_TB_RULEDISC_ASSOC_SUM.VALIDATION_JSON IS 'Training and independent validation counts and confidence with cohort metadata';
-COMMENT ON COLUMN INIT$_TB_RULEDISC_ASSOC_SUM.RESULT_KIND IS 'Pattern consequent semantics: VALUE or RANGE; a range is not an automatic replacement value';
+COMMENT ON COLUMN INIT$_TB_RULEDISC_ASSOC_SUM.RESULT_JSON IS 'Versioned consequent AST: equality, numeric range or formula with tolerance; never an anomaly label';
+COMMENT ON COLUMN INIT$_TB_RULEDISC_ASSOC_SUM.VALIDATION_JSON IS 'Training, calibration and selection-validation metrics with cohort metadata; not full-source detection counts';
+COMMENT ON COLUMN INIT$_TB_RULEDISC_ASSOC_SUM.RESULT_KIND IS 'Pattern consequent semantics: VALUE, RANGE or FORMULA; NULL for legacy summaries';
 COMMENT ON COLUMN INIT$_TB_RULEDISC_ASSOC_SUM.VIOLATION_COUNT IS 'Whole-source rows satisfying IF and failing THEN; includes NULL consequent failures';

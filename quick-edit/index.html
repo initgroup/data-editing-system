@@ -6,9 +6,10 @@
     <meta name="theme-color" content="#102342">
     <meta name="color-scheme" content="light">
     <title>Quick Editing | IN-DEPS</title>
-    <link rel="stylesheet" href="./css/quick-edit.css?v=1.3.27">
+    <link rel="stylesheet" href="./css/quick-edit.css?v=1.3.29">
     <link rel="stylesheet" href="/css/rule-chart-controls.css?v=1.1.0">
     <link rel="stylesheet" href="/css/formula-rule-chart.css?v=1.2.1">
+    <link rel="stylesheet" href="/css/editing-result-view.css?v=1.0.1">
 </head>
 <body>
     <a class="qe-skip-link" href="#quickEditMain">본문 바로가기</a>
@@ -31,7 +32,7 @@
                 </span>
                 <button id="qeRunHistoryButton" class="qe-history-launch" type="button" title="과거 퀵 에디팅 실행 보기">
                     <span class="qe-glyph" aria-hidden="true">◷</span>
-                    <span>과거 실행</span>
+                    <span data-qe-i18n="Past runs">과거 실행</span>
                 </button>
                 <button id="resetButton" class="qe-icon-button" type="button" title="처음부터 다시 시작" aria-label="처음부터 다시 시작">
                     <span class="qe-glyph qe-glyph--reset" aria-hidden="true">↻</span>
@@ -42,12 +43,17 @@
             </div>
         </header>
 
+        <section id="qeContextRecovery" class="qe-error-note" role="alert" hidden>
+            <p id="qeContextRecoveryMessage"></p>
+            <button id="qeContextRecoveryButton" class="qe-secondary-button" type="button" data-qe-i18n="Reconnect to current session">현재 세션으로 다시 연결</button>
+        </section>
+
         <main id="quickEditMain" class="qe-main" tabindex="-1">
             <section class="qe-intro" aria-labelledby="quickEditTitle">
                 <div>
                     <p class="qe-eyebrow">ONE-CLICK DATA EDITING</p>
-                    <h1 id="quickEditTitle">파일 하나로 규칙 발견까지</h1>
-                    <p class="qe-intro__copy">
+                    <h1 id="quickEditTitle" data-qe-i18n="From one file to discovered rules">파일 하나로 규칙 발견까지</h1>
+                    <p class="qe-intro__copy" data-qe-i18n="Choose a file to automatically prepare the project, models and FLOW, run the analysis, and review the results.">
                         파일을 선택하면 프로젝트부터 모델, FLOW, 실행과 결과 분석까지 필요한 단계를 자동으로 준비합니다.
                     </p>
                 </div>
@@ -72,7 +78,7 @@
                     </div>
                     <div class="qe-intro__badge" aria-label="자동화 범위">
                         <span aria-hidden="true">8</span>
-                        <span>자동 단계</span>
+                        <span data-qe-i18n="automatic stages">자동 단계</span>
                     </div>
                 </div>
             </section>
@@ -82,50 +88,50 @@
                     <li class="qe-step" data-step="0" data-step-key="upload" data-state="current" aria-current="step">
                         <span class="qe-step__index"><span>1</span></span>
                         <span class="qe-step__text">
-                            <strong>파일 업로드</strong>
-                            <small>원본 데이터</small>
+                            <strong data-qe-i18n="File upload">파일 업로드</strong>
+                            <small data-qe-i18n="Source data">원본 데이터</small>
                         </span>
                     </li>
                     <li class="qe-step" data-step="1" data-step-key="project" data-state="waiting">
                         <span class="qe-step__index"><span>2</span></span>
                         <span class="qe-step__text">
-                            <strong>프로젝트</strong>
-                            <small>작업 공간</small>
+                            <strong data-qe-i18n="Project">프로젝트</strong>
+                            <small data-qe-i18n="Workspace">작업 공간</small>
                         </span>
                     </li>
                     <li class="qe-step" data-step="2" data-step-key="scenario" data-state="waiting">
                         <span class="qe-step__index"><span>3</span></span>
                         <span class="qe-step__text">
-                            <strong>시나리오</strong>
-                            <small>분석 기준</small>
+                            <strong data-qe-i18n="Scenario">시나리오</strong>
+                            <small data-qe-i18n="Analysis scope">분석 기준</small>
                         </span>
                     </li>
                     <li class="qe-step" data-step="3" data-step-key="table" data-state="waiting">
                         <span class="qe-step__index"><span>4</span></span>
                         <span class="qe-step__text">
-                            <strong>대상 테이블</strong>
-                            <small>INITUP$ 등록</small>
+                            <strong data-qe-i18n="Target table">대상 테이블</strong>
+                            <small data-qe-i18n="Register INITUP$ table">INITUP$ 등록</small>
                         </span>
                     </li>
                     <li class="qe-step" data-step="4" data-step-key="models" data-state="waiting">
                         <span class="qe-step__index"><span>5</span></span>
                         <span class="qe-step__text">
-                            <strong>모델 설정</strong>
-                            <small>기본값 설계</small>
+                            <strong data-qe-i18n="Model setup">모델 설정</strong>
+                            <small data-qe-i18n="Default settings">기본값 설계</small>
                         </span>
                     </li>
                     <li class="qe-step" data-step="5" data-step-key="flow" data-state="waiting">
                         <span class="qe-step__index"><span>6</span></span>
                         <span class="qe-step__text">
-                            <strong>FLOW 설계</strong>
-                            <small>내부 설계</small>
+                            <strong data-qe-i18n="FLOW design">FLOW 설계</strong>
+                            <small data-qe-i18n="Internal flow">내부 설계</small>
                         </span>
                     </li>
                     <li class="qe-step" data-step="6" data-step-key="execute" data-state="waiting">
                         <span class="qe-step__index"><span>7</span></span>
                         <span class="qe-step__text">
-                            <strong>규칙 발굴 실행</strong>
-                            <small>규칙 발굴</small>
+                            <strong data-qe-i18n="Run discovery">규칙 발굴 실행</strong>
+                            <small data-qe-i18n="Rule discovery">규칙 발굴</small>
                         </span>
                     </li>
                     <li class="qe-step" data-step="7" data-step-key="analysis" data-state="waiting">
@@ -142,11 +148,11 @@
                             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                                 <path d="M14 4h6v6M20 4l-8 8M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6" />
                             </svg>
-                            <span>결과상세</span>
+                            <span data-qe-i18n="Result details">결과상세</span>
                         </button>
                         <span class="qe-step__text">
-                            <strong>결과 분석</strong>
-                            <small>발견 규칙</small>
+                            <strong data-qe-i18n="Results">결과 분석</strong>
+                            <small data-qe-i18n="Discovered rules">발견 규칙</small>
                         </span>
                     </li>
                 </ol>
@@ -206,8 +212,8 @@
                     <div class="qe-card__header">
                         <div>
                             <p class="qe-card__kicker">START</p>
-                            <h2 id="setupTitle">분석할 파일을 선택하세요</h2>
-                            <p>프로젝트와 시나리오를 새로 만들거나 기존 작업 공간을 이어서 사용할 수 있습니다.</p>
+                            <h2 id="setupTitle" data-qe-i18n="Choose a file to analyze">분석할 파일을 선택하세요</h2>
+                            <p data-qe-i18n="Create a project and scenario, or continue in an existing workspace.">프로젝트와 시나리오를 새로 만들거나 기존 작업 공간을 이어서 사용할 수 있습니다.</p>
                         </div>
                         <span class="qe-card__number" aria-hidden="true">01</span>
                     </div>
@@ -223,14 +229,14 @@
                                 </span>
                                 <span class="qe-dropzone__copy">
                                     <strong id="fileName">파일을 놓거나 눌러서 선택</strong>
-                                    <small id="fileDropHelp">CSV, TSV, TXT, XLSX · 대용량 파일도 분할 업로드</small>
+                                    <small id="fileDropHelp" data-qe-i18n="CSV, TSV, TXT, XLSX · chunked upload for large files">CSV, TSV, TXT, XLSX · 대용량 파일도 분할 업로드</small>
                                 </span>
-                                <span class="qe-dropzone__action" aria-hidden="true">파일 찾기</span>
+                                <span class="qe-dropzone__action" aria-hidden="true" data-qe-i18n="Browse files">파일 찾기</span>
                             </label>
                             <p id="fileMeta" class="qe-file-meta" aria-live="polite">아직 선택한 파일이 없습니다.</p>
                             <p id="qeCsvHeaderRequirement" class="qe-csv-header-requirement">
                                 <span aria-hidden="true">!</span>
-                                <span><strong>CSV 필수 조건</strong> 첫 행에 컬럼명(타이틀)이 포함된 파일만 사용할 수 있습니다. 퀵 에디팅은 첫 행을 자동으로 컬럼명으로 처리합니다.</span>
+                                <span data-qe-i18n="CSV requires column names in the first row. Quick Editing automatically uses that row as the header.">CSV 필수 조건: 첫 행에 컬럼명(타이틀)이 포함된 파일만 사용할 수 있습니다. 퀵 에디팅은 첫 행을 자동으로 컬럼명으로 처리합니다.</span>
                             </p>
                             <div class="qe-upload-progress" data-upload-progress hidden>
                                 <span data-upload-progress-label>파일 준비 중</span>
@@ -238,26 +244,10 @@
                             </div>
                         </div>
 
-                        <fieldset id="qeProcessType" class="qe-fieldset" aria-describedby="qeProcessDescription">
-                            <legend>에디팅 프로세스</legend>
-                            <div class="qe-process-options">
-                                <label>
-                                    <input id="qeProcessMixedXai" type="radio" name="processType" value="MIXED_XAI" checked>
-                                    <span>
-                                        <strong>혼합형 XAI 시나리오</strong>
-                                        <small>실제 값·범위 규칙 → 위반 탐지 · 사전 유형 판정 없이 실행</small>
-                                    </span>
-                                </label>
-                                <label>
-                                    <input id="qeProcessLegacy" type="radio" name="processType" value="LEGACY">
-                                    <span>
-                                        <strong>기존 시나리오</strong>
-                                        <small>유형·관계 분석 → 규칙 발굴</small>
-                                    </span>
-                                </label>
-                            </div>
-                            <p id="qeProcessDescription" class="qe-process-description">사전 유형 확정 없이 기초통계를 계산하고 실제 컬럼의 기대값·범위와 이를 위반한 데이터를 확인합니다.</p>
-                        </fieldset>
+                        <div id="qeProcessInfo" class="qe-process-summary" aria-labelledby="qeProcessName">
+                            <strong id="qeProcessName">통합 에디팅 4단계 자동 실행</strong>
+                            <p id="qeProcessDescription" class="qe-process-description">컬럼 유형·기초통계 → 혼합 관계 분석 → OML·혼합형 규칙 발굴 → 통합 위반 탐지를 자동 실행합니다.</p>
+                        </div>
 
                         <a
                             class="qe-sample-download"
@@ -273,20 +263,20 @@
                         </a>
 
                         <fieldset id="workspaceFieldset" class="qe-fieldset" data-workspace-fieldset>
-                            <legend>작업 공간</legend>
+                            <legend data-qe-i18n="Workspace">작업 공간</legend>
                             <div class="qe-segmented" role="radiogroup" aria-label="프로젝트 사용 방식">
                                 <label>
                                     <input id="projectModeNew" type="radio" name="projectMode" value="new" checked>
                                     <span>
-                                        <strong>새로 만들기</strong>
-                                        <small>파일명으로 자동 생성</small>
+                                        <strong data-qe-i18n="Create new">새로 만들기</strong>
+                                        <small data-qe-i18n="Name from the file">파일명으로 자동 생성</small>
                                     </span>
                                 </label>
                                 <label>
                                     <input id="projectModeExisting" type="radio" name="projectMode" value="existing">
                                     <span>
-                                        <strong>기존 작업 사용</strong>
-                                        <small>프로젝트·시나리오 선택</small>
+                                        <strong data-qe-i18n="Use existing workspace">기존 작업 사용</strong>
+                                        <small data-qe-i18n="Choose project and scenario">프로젝트·시나리오 선택</small>
                                     </span>
                                 </label>
                             </div>
@@ -376,7 +366,7 @@
                     <div class="qe-card__header qe-card__header--compact">
                         <div>
                             <p class="qe-card__kicker">LIVE PROGRESS</p>
-                            <h2 id="progressTitle">자동 작업 현황</h2>
+                            <h2 id="progressTitle" data-qe-i18n="Automatic task progress">자동 작업 현황</h2>
                         </div>
                         <span class="qe-live-pill" data-state="idle">
                             <span aria-hidden="true"></span>
@@ -389,7 +379,7 @@
                             <span class="qe-glyph qe-glyph--plus">+</span>
                         </span>
                         <div>
-                            <small>현재 단계</small>
+                            <small data-qe-i18n="Current stage">현재 단계</small>
                             <strong id="currentStage">파일을 선택해 주세요</strong>
                             <p id="currentStageMessage">실행을 시작하면 각 단계의 처리 상황을 여기에서 확인할 수 있습니다.</p>
                         </div>
@@ -545,6 +535,17 @@
                 <p id="resultsWarning" class="qe-error-note" role="status" hidden></p>
 
                 <div id="qeCommonResults">
+                <section id="qeEditingResults" class="qe-result-block" aria-live="polite"></section>
+                <div id="qeEditingDetail"></div>
+                <div class="qe-result-auxiliary">
+                    <button id="qeLoadStatistics" class="qe-secondary-button" type="button" data-qe-i18n="Load statistics">기초통계 조회</button>
+                    <button id="qeLoadColumnTypes" class="qe-secondary-button" type="button" data-qe-i18n="Load column types">컬럼 유형 조회·편집</button>
+                    <button id="qeLoadDiagnostics" class="qe-secondary-button" type="button" data-qe-i18n="Load analysis diagnostics">분석 진단 불러오기</button>
+                    <span id="qeAuxiliaryStatus-statistics" role="status"></span>
+                    <span id="qeAuxiliaryStatus-columnTypes" role="status"></span>
+                    <span id="qeAuxiliaryStatus-diagnostics" role="status"></span>
+                    <span id="qeAuxiliaryStatus" role="status"></span>
+                </div>
                 <section id="qeStatisticsSummary" class="qe-statistics-summary" aria-labelledby="qeStatisticsSummaryTitle" hidden>
                     <div class="qe-statistics-summary__header">
                         <div>
@@ -628,7 +629,9 @@
                     <p id="qeColumnTypeNotice" class="qe-statistics-notice" role="status" hidden></p>
                 </section>
 
-                <div class="qe-tabs" role="tablist" aria-label="규칙 유형" aria-orientation="horizontal">
+                <div id="qeLegacyResultViews" hidden>
+                <p id="qeRuleTypeLabel" class="qe-rule-type-label" data-qe-i18n="Rule type" hidden>규칙 종류</p>
+                <div id="qeRuleTypeTabs" class="qe-tabs" role="tablist" aria-label="규칙 종류" aria-orientation="horizontal">
                     <button id="categoryTab" type="button" role="tab" aria-selected="true"
                             aria-controls="categoryPanel" tabindex="0" data-result-tab="category">
                         <span class="qe-tab__icon" aria-hidden="true">Aa</span>
@@ -776,6 +779,7 @@
                     </section>
                 </div>
                 </div>
+                </div>
             </section>
         </main>
 
@@ -862,11 +866,12 @@
         <button type="button" data-toast-close aria-label="알림 닫기">×</button>
     </div>
 
-    <script src="./js/api-client.js?v=1.4.3" defer></script>
-    <script src="/js/rule-result-common.js?v=1.0.5" defer></script>
+    <script src="./js/api-client.js?v=1.4.7" defer></script>
+    <script src="/js/rule-result-common.js?v=1.0.7" defer></script>
+    <script src="/js/editing-result-view.js?v=1.0.2" defer></script>
     <script src="/js/regression-diagnostics.js?v=1.1.1" defer></script>
     <script src="/js/formula-rule-chart.js?v=1.2.1" defer></script>
-    <script src="./js/renderers.js?v=1.3.14" defer></script>
-    <script src="./js/quick-edit.js?v=1.5.11" defer></script>
+    <script src="./js/renderers.js?v=1.3.16" defer></script>
+    <script src="./js/quick-edit.js?v=1.6.2" defer></script>
 </body>
 </html>

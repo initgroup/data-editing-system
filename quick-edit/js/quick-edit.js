@@ -2,6 +2,7 @@
     "use strict";
 
     const STORAGE_KEY = "init.quick-edit.pipeline.v1";
+    const CONTEXT_NOTICE_KEY = "init.quick-edit.context-notice.v1";
     const TARGET_CONTEXT_CHANNEL_NAME = "init.target-context.v1";
     const MODEL_TRAINING_NAVIGATION_KEY = "init.m90003.navigation.v1";
     const STATE_VERSION = 1;
@@ -17,6 +18,7 @@
         { key: "results", title: "결과 분석", description: "선택한 시나리오에서 발견된 규칙을 요약합니다." }
     ];
     const ALLOWED_EXTENSIONS = new Set(["csv", "tsv", "txt", "xlsx", "xlsm"]);
+    const STEP_TITLES = ["File upload", "Project", "Scenario", "Target table", "Model setup", "FLOW design", "Run discovery", "Results"];
     const COLUMN_TYPE_OPTIONS = [
         ["숫자형식별자", "NUM_IDENTIFIER", "OTHER"],
         ["문자형식별자", "CHAR_IDENTIFIER", "OTHER"],
@@ -43,7 +45,8 @@
 
     const R = window.QuickEditRenderers;
     const client = new window.QuickEditApiClient();
-    let state = loadState();
+    let state = initialState();
+    let verifiedSessionUserId = "";
     let selectedFile = null;
     let projectRows = [];
     let scenarioRows = [];
@@ -94,6 +97,102 @@
     let quickHistoryDetailRunId = null;
     let quickHistoryDetailError = { runId: null, message: "" };
     let quickHistoryError = "";
+    let contextLoss = null;
+    let contextRefreshScheduled = false;
+    let contextAutoRecoveryAttempted = false;
+    let editingResults = null;
+    let editingRequestGeneration = 0;
+    let editingRequestAbort = null;
+    let editingViewCleanup = null;
+    let violationRequestGeneration = 0;
+    let violationRequestAbort = null;
+    let auxiliaryGeneration = 0;
+
+    function getApplicationWindow() {
+        try {
+            const embedded = new URLSearchParams(window.location.search).get("embedded") === "1" && window.parent !== window;
+            const host = embedded ? window.parent : window.opener;
+            return host && !host.closed && host.location.origin === window.location.origin && host.PageManager ? host : null;
+        } catch (_error) {
+            return null;
+        }
+    }
+
+    function isEmbeddedWorkspace() {
+        return window.parent !== window && getApplicationWindow() === window.parent;
+    }
+
+    function getWorkspaceLifecycleState() {
+        const activeRun = !contextLoss && !state.historyView && Boolean(state.flowRunId && state.lastRunStatus) && R.ACTIVE_STATUSES.has(R.normalizeStatus(state.lastRunStatus));
+        const busy = (contextLoss ? client.pendingRequestCount > 0 : pipelineBusy) || controlBusy || columnTypeSaveBusy || activeRun;
+        const dirty = columnTypeDirtyChanges.size > 0;
+        return { busy, dirty, status: state.status, flowRunId: state.flowRunId, canClose: !busy && !dirty,
+            message: contextLoss ? window.RuleResultCommon.t("The session or Target DB changed. Local requests stopped; an existing server run may continue. Refresh after the current request finishes.") : window.RuleResultCommon.t(busy ? "Quick editing is still processing. Pause or stop it before closing, refreshing or changing the Target DB."
+                : dirty ? "Save or discard column type changes before closing or refreshing Quick Editing." : "") };
+    }
+
+    window.QuickEditWorkspace = {
+        getLifecycleState: getWorkspaceLifecycleState,
+        canClose: () => getWorkspaceLifecycleState().canClose,
+        onShow: () => {
+            document.documentElement.lang = sessionStorage.getItem("initLanguageCode") === "en" ? "en" : "ko";
+            renderProcessSelection();
+            renderFile();
+            updateActionState();
+            setText(byId("currentStage", "qeCurrentStepTitle"), window.RuleResultCommon.t(STEP_TITLES[state.currentStep] || STEP_TITLES[0]));
+            if (state.status === "idle") setText(byId("currentStageMessage", "qeCurrentStepDescription"), window.RuleResultCommon.t("Choose a file, then start the automatic workflow. Progress appears here."));
+            if (!pipelineBusy && !columnTypeDirtyChanges.size && state.flowRunId && state.completedSteps.includes(7)) renderResults();
+        },
+        onContextLoss: (error) => invalidateWorkspaceContext(error?.status === 401 ? "SESSION" : "TARGET"),
+        onRequestSettled: () => { if (contextLoss) refreshAfterContextLoss(); },
+        onSessionResponse: (response) => {
+            try {
+                if (response?.ok && response.headers?.get?.("X-INIT-Session-TTL-Seconds")) getApplicationWindow()?.PageManager?.extendSessionFromResponse?.(response);
+            } catch (_error) {
+                // A host display update must not interrupt a completed API request.
+            }
+        }
+    };
+
+    function invalidateWorkspaceContext(kind) {
+        contextLoss = {kind};
+        client.contextInvalidated = true;
+        pollGeneration += 1;
+        cancelContinuousDetailRequest();
+        state.status = "warning";
+        state.error = "";
+        state.resultWarning = window.RuleResultCommon.t("The session or Target DB changed. Local requests stopped; an existing server run may continue. Refresh after the current request finishes.");
+        setText(byId("qeContextRecoveryMessage"), state.resultWarning);
+        setHidden(byId("qeContextRecovery"), false);
+        refreshAfterContextLoss();
+    }
+
+    async function refreshAfterContextLoss(force = false) {
+        if (!contextLoss || contextRefreshScheduled || (!force && contextAutoRecoveryAttempted)) return;
+        const waiting = client.pendingRequestCount > 0 || controlBusy || columnTypeSaveBusy;
+        const button = byId("qeContextRecoveryButton");
+        if (button) button.disabled = waiting;
+        if (waiting || (columnTypeDirtyChanges.size && !force)) return;
+        contextRefreshScheduled = true;
+        contextAutoRecoveryAttempted = true;
+        if (isEmbeddedWorkspace()) {
+            try {
+                const host = getApplicationWindow();
+                const recovered = typeof host?.M00001?.handleContextLoss === "function"
+                    ? await host.M00001.handleContextLoss({kind: contextLoss.kind}) : false;
+                if (recovered !== false) return;
+            } catch (_error) {
+                // Retain the recovery action if another main-window task blocks a reset.
+            }
+            contextRefreshScheduled = false;
+            if (button) button.disabled = false;
+            setText(byId("qeContextRecoveryMessage"), window.RuleResultCommon.t("Reconnect the main workspace before continuing. Finish or save work in other tabs, then retry. The previous server run was not cancelled."));
+            return;
+        }
+        sessionStorage.removeItem(STORAGE_KEY);
+        sessionStorage.setItem(CONTEXT_NOTICE_KEY, "1");
+        window.setTimeout(() => window.location.reload(), 0);
+    }
 
     function createRuleDistributionFilters() {
         return {
@@ -115,7 +214,7 @@
             completedSteps: [],
             stepProgress: 0,
             workspaceMode: "new",
-            processType: "MIXED_XAI",
+            processType: "UNIFIED",
             fileMeta: null,
             uploadId: null,
             projectId: null,
@@ -151,6 +250,7 @@
             historyViewedAt: null,
             historySteps: [],
             targetContextId: null,
+            sessionUserId: "",
             updatedAt: null
         };
     }
@@ -159,10 +259,12 @@
         try {
             const parsed = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null");
             if (!parsed || parsed.version !== STATE_VERSION) return initialState();
+            const savedWork = Boolean(parsed.scenarioTableId || parsed.flowId || parsed.flowRunId || parsed.historyView
+                || (Array.isArray(parsed.jobIds) && parsed.jobIds.length));
             return {
                 ...initialState(),
                 ...parsed,
-                processType: normalizeProcessType(parsed.processType),
+                processType: savedWork ? normalizeProcessType(parsed.processType) : "UNIFIED",
                 completedSteps: Array.isArray(parsed.completedSteps)
                     ? [...new Set(parsed.completedSteps.map(Number).filter((value) => value >= 0 && value < STEP_COUNT))]
                     : [],
@@ -176,6 +278,8 @@
     }
 
     function persistState() {
+        if (!verifiedSessionUserId || contextLoss) return;
+        state.sessionUserId = verifiedSessionUserId;
         state.updatedAt = new Date().toISOString();
         try {
             sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -205,11 +309,24 @@
     }
 
     function normalizeProcessType(value) {
-        return String(value || "").toUpperCase() === "MIXED_XAI" ? "MIXED_XAI" : "LEGACY";
+        const normalized = String(value || "").toUpperCase();
+        return ["UNIFIED", "MIXED_XAI"].includes(normalized) ? normalized : "LEGACY";
     }
 
     function isMixedXai() {
         return state.processType === "MIXED_XAI";
+    }
+
+    function isUnifiedEditing() {
+        return state.processType === "UNIFIED";
+    }
+
+    function hasMixedAnalysis() {
+        return isMixedXai() || isUnifiedEditing();
+    }
+
+    function usesMixedResults() {
+        return isMixedXai() || Boolean(editingResults?.historical);
     }
 
     function modelStageCount() {
@@ -221,32 +338,43 @@
     }
 
     function processLabel() {
-        return isMixedXai() ? "혼합형 XAI" : "기존 유형·관계 분석";
+        return window.RuleResultCommon.t(isUnifiedEditing() ? "Unified editing" : isMixedXai() ? "Mixed XAI" : "Type and relationship analysis");
     }
 
     function renderProcessSelection() {
-        const fieldset = byId("qeProcessType");
-        if (fieldset) {
-            fieldset.disabled = pipelineBusy || state.historyView || Boolean(state.scenarioTableId || state.flowId);
-            fieldset.querySelectorAll('input[name="processType"]').forEach((input) => {
-                input.checked = input.value === normalizeProcessType(state.processType);
-            });
+        const t = window.RuleResultCommon.t;
+        document.documentElement.lang = sessionStorage.getItem("initLanguageCode") === "en" ? "en" : "ko";
+        document.querySelectorAll("[data-qe-i18n]").forEach((element) => setText(element, t(element.dataset.qeI18n)));
+        if (isEmbeddedWorkspace()) {
+            byId("closeButton", "qeCloseButton")?.setAttribute("title", t("Go to Main Home"));
+            byId("closeButton", "qeCloseButton")?.setAttribute("aria-label", t("Go to Main Home"));
         }
+        setText(byId("qeProcessName"), isUnifiedEditing()
+            ? t("Unified editing: four automatic stages") : `${processLabel()} · ${t("Saved work")}`);
         const oldXai = Boolean(resultData.mixedXai) && !window.RuleResultCommon.isPattern(resultData.mixedXai);
-        setText(byId("qeProcessDescription"), isMixedXai()
-            ? (oldXai ? "이 실행은 과거 Isolation Forest 이상 후보 설명 규칙입니다. 실제 값 패턴 규칙은 새 실행에서 발굴합니다." : window.RuleResultCommon.t("Rules predict actual column values, ranges and formulas after basic statistics and relationship analysis."))
-            : "컬럼 유형과 관계를 분석한 후 범주형·연속형 규칙을 발굴합니다.");
+        setText(byId("qeProcessDescription"), isUnifiedEditing()
+            ? t("Run column profiling → mixed relationships → OML and mixed rule discovery → integrated violation detection automatically.")
+            : isMixedXai()
+            ? (oldXai ? t("This saved execution explains Isolation Forest anomaly candidates. Start a new run to discover actual-value patterns.") : window.RuleResultCommon.t("Rules predict actual column values, ranges and formulas after basic statistics and relationship analysis."))
+            : t("Analyze column types and relationships, then discover categorical and continuous rules."));
         setHidden(byId("qeCommonResults"), false);
-        setHidden(byId("qeMixedXaiResults"), !isMixedXai());
-        setHidden(byId("qeMixedEarlyStages"), !isMixedXai());
+        setHidden(byId("qeMixedXaiResults"), !hasMixedAnalysis() || Boolean(editingResults && !editingResults.historical && editingResults.auxiliary.diagnostics !== "loaded"));
+        setHidden(byId("qeMixedEarlyStages"), !hasMixedAnalysis() || Boolean(editingResults && editingResults.auxiliary.diagnostics !== "loaded"));
         setHidden(byId("continuousTab"), false);
-        setText(byId("categoryTab")?.querySelector("strong"), window.RuleResultCommon.t(isMixedXai() && !oldXai ? "Value and range rules" : "IF–THEN rules"));
+        if (editingResults) {
+            setText(byId("qeResultsDescription"), t("Browse conditional and formula rules. Discovery methods and their original metrics remain attached to each rule."));
+            return;
+        }
+        setHidden(byId("qeRuleTypeTabs"), false);
+        setHidden(byId("qeRuleTypeLabel"), !usesMixedResults());
+        byId("qeRuleTypeTabs")?.setAttribute("aria-label", t("Rule type"));
+        setText(byId("categoryTab")?.querySelector("strong"), window.RuleResultCommon.t(usesMixedResults() && !oldXai ? "Value and range rules" : "IF–THEN rules"));
         setText(byId("continuousTab")?.querySelector("strong"), window.RuleResultCommon.t("Continuous formula rules"));
         setText(byId("continuousTab")?.querySelector("small"), window.RuleResultCommon.t("Numeric relationships and formulas"));
-        setText(byId("categoryTab")?.querySelector("small"), isMixedXai() ? window.RuleResultCommon.t(oldXai ? "Candidate rule" : "Pattern rules") : "연관성과 값 패턴");
-        setText(byId("qeResultsDescription"), isMixedXai()
+        setText(byId("categoryTab")?.querySelector("small"), usesMixedResults() ? window.RuleResultCommon.t(oldXai ? "Candidate rule" : "Pattern rules") : t("Relationships and value patterns"));
+        setText(byId("qeResultsDescription"), usesMixedResults()
             ? window.RuleResultCommon.t(oldXai ? "Inspect the rules explaining anomaly candidates and their matching rows." : "Inspect expected values, confidence and rows that violate the IF–THEN patterns.")
-            : "오류가 많은 규칙을 우선 표시합니다. 카드를 누르면 상세 규칙을 확인할 수 있습니다.");
+            : t("Rules with more violations appear first. Select a card to inspect the rule."));
     }
 
     function sqlStringLiteral(value) {
@@ -455,8 +583,8 @@
         const meta = selectedFile
             ? { name: selectedFile.name, size: selectedFile.size }
             : state.fileMeta;
-        setText(byId("fileName", "qeFileName"), meta?.name || "선택된 파일이 없습니다.");
-        setText(byId("fileMeta", "qeFileMeta"), meta ? `${R.formatBytes(meta.size)} · ${getExtension(meta.name).toUpperCase()}` : "CSV 또는 Excel 파일을 선택하세요.");
+        setText(byId("fileName", "qeFileName"), meta?.name || window.RuleResultCommon.t("Drop a file here or click to choose"));
+        setText(byId("fileMeta", "qeFileMeta"), meta ? `${R.formatBytes(meta.size)} · ${getExtension(meta.name).toUpperCase()}` : window.RuleResultCommon.t("Choose a CSV or Excel file."));
         const dropZone = byId("fileDropZone", "qeDropZone");
         dropZone?.classList.toggle("has-file", Boolean(meta));
         if (dropZone) dropZone.dataset.state = meta ? "selected" : "empty";
@@ -833,12 +961,12 @@
         renderHistoryView();
         renderWorkspaceSummary();
         const step = STEPS[state.currentStep] || STEPS[0];
-        setText(byId("currentStage", "qeCurrentStepTitle"), step.title);
+        setText(byId("currentStage", "qeCurrentStepTitle"), window.RuleResultCommon.t(STEP_TITLES[state.currentStep] || STEP_TITLES[0]));
         const controlMessage = state.controlRequest
             ? (state.controlRequest === "STOP" ? window.RuleResultCommon.t("Stop requested. The current task will finish before the pipeline stops.") : window.RuleResultCommon.t("Pause requested. The current task will finish before the pipeline pauses."))
             : (state.status === "paused" ? window.RuleResultCommon.t("Paused. Resume continues from the next unfinished stage.")
                 : (state.status === "stopped" ? window.RuleResultCommon.t("Stopped. Restart runs the saved FLOW from the beginning.") : ""));
-        const description = state.error || controlMessage || message || state.lastRunMessage || step.description;
+        const description = state.error || controlMessage || message || state.lastRunMessage || (state.status === "idle" ? window.RuleResultCommon.t("Choose a file, then start the automatic workflow. Progress appears here.") : step.description);
         setText(byId("currentStageMessage", "qeCurrentStepDescription"), description);
 
         const completed = state.completedSteps.length;
@@ -873,13 +1001,14 @@
     }
 
     function updateActionState() {
+        if (contextLoss) refreshAfterContextLoss();
         const pauseButton = byId("qePauseButton");
         setText(pauseButton, window.RuleResultCommon.t("Pause"));
         setText(byId("qeStopButton"), window.RuleResultCommon.t("Stop"));
         const resumeButton = byId("qeResumeButton");
         const stopButton = byId("qeStopButton");
         const resumable = ["paused", "stopped"].includes(state.status);
-        const activeRun = R.ACTIVE_STATUSES.has(R.normalizeStatus(state.lastRunStatus));
+        const activeRun = Boolean(state.flowRunId && state.lastRunStatus) && R.ACTIVE_STATUSES.has(R.normalizeStatus(state.lastRunStatus));
         const controllable = (pipelineBusy && state.status === "running") || activeRun;
         if (pauseButton) {
             pauseButton.hidden = !controllable;
@@ -915,7 +1044,7 @@
         if (startButton) {
             startButton.disabled = pipelineBusy || (!readOnlyHistory && (!hasInput || !client.targetConnectionId));
             startButton.hidden = resumable || (readOnlyHistory ? false : ["failed", "warning"].includes(state.status));
-            setText(startButton.querySelector("span:first-child") || startButton, readOnlyHistory || state.status === "success" ? "새 작업 시작" : "전체 자동 실행");
+            setText(startButton.querySelector("span:first-child") || startButton, window.RuleResultCommon.t(readOnlyHistory || state.status === "success" ? "Start new work" : "Run all automatically"));
             setRunningState(startButton, PIPELINE_ACTION.FULL_AUTO);
         }
         if (retryButton) {
@@ -1016,6 +1145,7 @@
     }
 
     function controlCheckpoint() {
+        if (contextLoss) throw Object.assign(new Error(state.resultWarning), {name: "AbortError"});
         if (state.controlRequest) haltPipeline(state.controlRequest === "STOP" ? "stopped" : "paused");
     }
 
@@ -1356,7 +1486,7 @@
         return {
             source: "QUICK_EDIT",
             processType: state.processType,
-            flowType: isMixedXai() ? "MIXED_XAI_SCENARIO" : "INTEGRATED_EDITING_SCENARIO",
+            flowType: isUnifiedEditing() ? "UNIFIED_EDITING_SCENARIO" : isMixedXai() ? "MIXED_XAI_SCENARIO" : "INTEGRATED_EDITING_SCENARIO",
             projectCode: state.projectCode,
             projectName: state.projectName,
             projectCreatedAt: state.projectCreatedAt,
@@ -1404,6 +1534,7 @@
     }
 
     async function fetchSnapshot(options = {}) {
+        if (contextLoss) throw Object.assign(new Error(state.resultWarning), {name: "AbortError"});
         if (!state.flowRunId || snapshotBusy) return currentSnapshot;
         snapshotBusy = true;
         try {
@@ -1454,6 +1585,7 @@
             }
             await delay(document.hidden ? 10000 : 3000);
         }
+        if (contextLoss) throw Object.assign(new Error(state.resultWarning), {name: "AbortError"});
         throw new Error("실행 상태 조회가 중단되었습니다.");
     }
 
@@ -1621,6 +1753,7 @@
             panel?.setAttribute("aria-busy", "true");
         }
         try {
+            updateActionState();
             await loadResultsData();
         } finally {
             if (showPanelLoading) {
@@ -1628,170 +1761,267 @@
             } else {
                 panel?.setAttribute("aria-busy", "false");
             }
+            updateActionState();
         }
+    }
+
+    function editingScope() {
+        return { flowRunId: state.flowRunId, targetOwner: state.tableOwner, targetTable: state.tableName };
+    }
+
+    function editingScopeKey() {
+        return JSON.stringify([verifiedSessionUserId, client.targetConnectionId, state.flowRunId, state.tableOwner, state.tableName]);
+    }
+
+    function clearEditingDetail() {
+        cancelContinuousDetailRequest();
+        destroyFormulaChart();
+        violationRequestGeneration += 1;
+        violationRequestAbort?.abort();
+        violationRequestAbort = null;
+        if (editingResults) editingResults.selectedKey = "";
+        byId("qeEditingDetail")?.querySelector(".editing-result-detail-header")?.remove();
+        setHidden(byId("qeEditingDetail"), true);
+        setHidden(byId("qeEditingResults"), false);
+        categoricalDetail = { ruleId: "", ruleIndex: -1 };
+        continuousDetail.ruleId = "";
+        continuousDetail.detailKey = "";
+        setHidden(byId("qeCategoricalDetail"), true);
+        setHidden(byId("qeContinuousDetail"), true);
     }
 
     async function loadResultsData() {
-        if (isMixedXai()) {
-            const [rulesResult, statsResult] = await Promise.allSettled([
-                client.getMixedXaiResults(state.flowRunId, state.tableOwner, state.tableName),
-                client.getDescriptiveStatistics(state.flowRunId)
-            ]);
-            if (rulesResult.status === "rejected") throw rulesResult.reason;
-            const response = rulesResult.value;
-            const statsError = statsResult.status === "rejected" ? (statsResult.reason?.message || "기초통계 조회 실패") : "";
-            const statistics = statsError ? { data: { available: false, notice: statsError } } : statsResult.value;
-            const payload = response.data || {};
-            if (!payload.ruleSummary) throw new Error(window.RuleResultCommon.t("Rule summary is unavailable. Reload after restarting the backend."));
-            const rules = payload.ruleSummary?.rules || [];
-            const pattern = window.RuleResultCommon.isPattern(payload);
-            const categorical = pattern ? window.RuleResultCommon.patternSummary(payload.ruleSummary, "VALUE") : payload.ruleSummary;
-            const continuous = window.RuleResultCommon.continuousSummary(payload);
-            resultData = { mixedXai: payload, categorical, continuous: { symbolicRuleSummary: continuous }, descriptiveStatistics: statistics, columnTypeFinal: null,
-                categoricalViolation: { violationSummary: { topRules: rules, overview: {
-                    VIOLATION_COUNT: payload.summary?.violationCount ?? payload.summary?.ruleMatchCount,
-                    VIOLATED_RULE_COUNT: rules.filter((r) => Number(r.MATCH_COUNT) > 0).length
-                } } } };
-            for (const [kind, familyRules] of [["categorical", categorical.rules || []], ["continuous", continuous.topRules || []]]) {
-                const violationSummary = { topRules: familyRules.map((r) => ({ ...r, VIOLATION_COUNT: r.VIOLATION_COUNT ?? r.MATCH_COUNT })), columnComments: payload.ruleSummary.columnComments, overview: {
-                    VIOLATION_COUNT: familyRules.reduce((n, r) => n + Number(r.VIOLATION_COUNT ?? r.MATCH_COUNT ?? 0), 0),
-                    VIOLATED_RULE_COUNT: familyRules.filter((r) => Number(r.VIOLATION_COUNT ?? r.MATCH_COUNT) > 0).length } };
-                resultData[`${kind}Violation`] = { [kind === "categorical" ? "violationSummary" : "symbolicViolationSummary"]: violationSummary };
-            }
-            if (resultData.categorical && !pattern) resultData.categorical.columnComments = {
-                ...resultData.categorical.columnComments, ANOMALY_CANDIDATE: window.RuleResultCommon.t("Anomaly candidate") };
-            ruleDistributionFilters.categorical = { type: "ALL", value: "", label: "" };
-            ruleDistributionFilters.continuous = { type: "ALL", value: "", label: "" };
-            state.resultArtifacts = { mixedXai: !pattern, mixedPattern: pattern, categorical: { objectName: rules[0]?.MODEL_NAME || payload.summary?.modelName }, categoricalViolation: { owner: state.tableOwner, objectName: pattern ? "INIT$_TB_RULEVIOL_ASSOC" : "INIT$_TB_RULEVIOL_XAI", targetOwner: state.tableOwner, targetTable: state.tableName } };
-            state.resultArtifacts.continuous = { owner: state.tableOwner, objectName: "INIT$_TB_RULEDISC_ASSOC_SUM" };
-            state.resultArtifacts.continuousViolation = { ...state.resultArtifacts.categoricalViolation };
-            state.resultWarning = statsError;
-            columnTypeDirtyChanges.clear();
-            persistState();
-            renderResults();
-            return;
+        editingRequestGeneration += 1;
+        editingRequestAbort?.abort();
+        auxiliaryGeneration += 1;
+        clearEditingDetail();
+        const loadGeneration = editingRequestGeneration;
+        const runId = state.flowRunId;
+        let nodes = Array.isArray(currentSnapshot?.nodes) ? currentSnapshot.nodes : [];
+        if ((!state.tableOwner || !state.tableName) && !nodes.some((node) => node.TARGET_OWNER && node.TARGET_TABLE)) {
+            const response = await client.getRunNodes(runId);
+            if (loadGeneration !== editingRequestGeneration || state.flowRunId !== runId || contextLoss) return;
+            nodes = Array.isArray(response.data) ? response.data : [];
         }
-        const response = await client.getRunNodes(state.flowRunId);
-        const nodes = Array.isArray(response.data) ? response.data : [];
         const artifacts = collectResultArtifacts(nodes);
-        state.resultArtifacts = artifacts;
-        state.resultWarning = "";
-        persistState();
-
-        const requests = [];
-        const keys = [];
-        if (artifacts.categorical?.objectName && artifacts.categorical?.owner) {
-            keys.push("categorical");
-            requests.push(client.getCategoricalRules({
-                owner: artifacts.categorical.owner,
-                modelName: artifacts.categorical.objectName,
-                targetOwner: artifacts.categorical.targetOwner || state.tableOwner,
-                targetTable: artifacts.categorical.targetTable || state.tableName,
-                flowRunId: state.flowRunId
-            }));
-        }
-        if (artifacts.continuous?.objectName && artifacts.continuous?.owner) {
-            keys.push("continuous");
-            requests.push(client.getContinuousRules({
-                owner: artifacts.continuous.owner,
-                objectName: artifacts.continuous.objectName,
-                targetOwner: artifacts.continuous.targetOwner || state.tableOwner,
-                targetTable: artifacts.continuous.targetTable || state.tableName,
-                flowRunId: state.flowRunId
-            }));
-        }
-
-        if (artifacts.categoricalViolation?.objectName && artifacts.categoricalViolation?.owner) {
-            keys.push("categoricalViolation");
-            requests.push(client.getViolationRows({
-                owner: artifacts.categoricalViolation.owner,
-                objectName: artifacts.categoricalViolation.objectName,
-                targetOwner: artifacts.categoricalViolation.targetOwner || state.tableOwner,
-                targetTable: artifacts.categoricalViolation.targetTable || state.tableName,
-                ruleModelName: artifacts.categorical?.objectName,
-                flowRunId: state.flowRunId,
-                balancedRuleSummaryYn: true,
-                page: 1,
-                pageSize: 20
-            }));
-        }
-        if (artifacts.continuousViolation?.objectName && artifacts.continuousViolation?.owner) {
-            keys.push("continuousViolation");
-            requests.push(client.getViolationRows({
-                owner: artifacts.continuousViolation.owner,
-                objectName: artifacts.continuousViolation.objectName,
-                targetOwner: artifacts.continuousViolation.targetOwner || state.tableOwner,
-                targetTable: artifacts.continuousViolation.targetTable || state.tableName,
-                flowRunId: state.flowRunId,
-                balancedRuleSummaryYn: true,
-                page: 1,
-                pageSize: 20
-            }));
-        }
-
-        const statisticsNode = nodes.find((node) => (
-            Number(node.FLOW_NODE_RUN_ID || 0) > 0
-            && node.TARGET_OWNER
-            && node.TARGET_TABLE
-            && String(node.REF_MENU_CODE || "").toUpperCase() === "M03001"
-        )) || nodes.find((node) => (
-            Number(node.FLOW_NODE_RUN_ID || 0) > 0
-            && node.TARGET_OWNER
-            && node.TARGET_TABLE
-        ));
+        const statisticsNode = nodes.find((node) => String(node.REF_MENU_CODE || "").toUpperCase() === "M03001" && node.TARGET_OWNER && node.TARGET_TABLE);
         const columnTypeTarget = resolveColumnTypeTarget(nodes, artifacts, statisticsNode);
         if (columnTypeTarget.owner && columnTypeTarget.tableName) {
-            const targetChanged = state.tableOwner !== columnTypeTarget.owner || state.tableName !== columnTypeTarget.tableName;
             state.tableOwner = columnTypeTarget.owner;
             state.tableName = columnTypeTarget.tableName;
-            if (targetChanged) persistState();
+            persistState();
         }
-        if (statisticsNode) {
-            keys.push("descriptiveStatistics");
-            requests.push(client.getDescriptiveStatistics(
-                state.flowRunId,
-                Number(statisticsNode.FLOW_NODE_RUN_ID)
-            ));
-        }
-
-        if (columnTypeTarget.owner && columnTypeTarget.tableName) {
-            keys.push("columnTypeFinal");
-            requests.push(client.getColumnTypeFinal({
-                owner: columnTypeTarget.owner,
-                whereClause: getColumnTypeWhereClause(columnTypeTarget.owner, columnTypeTarget.tableName),
-                limit: 1000
-            }));
-        }
-
-        resultData = {
-            categorical: null,
-            continuous: null,
-            categoricalViolation: null,
-            continuousViolation: null,
-            descriptiveStatistics: null,
-            columnTypeFinal: null
-        };
+        const scope = editingScopeKey();
+        editingResults = { scope, family: "CONDITION", source: "ALL", page: 1, conditionCount: "ALL", excludeZero: false, cache: new Map(),
+            payload: null, selectedKey: "", loading: false, error: "", auxiliary: {} };
+        resultData = { categorical: null, continuous: null, categoricalViolation: null,
+            continuousViolation: null, descriptiveStatistics: null, columnTypeFinal: null };
         columnTypeDirtyChanges.clear();
-        resetRuleDistributionFilters();
-        const settled = await Promise.allSettled(requests);
-        const errors = [];
-        settled.forEach((result, index) => {
-            const key = keys[index];
-            if (result.status === "fulfilled") resultData[key] = result.value;
-            else errors.push(result.reason?.message || `${key} 결과 조회 실패`);
+        state.resultWarning = "";
+        setHidden(byId("qeLegacyResultViews"), true);
+        setHidden(byId("qeStatisticsSummary"), true);
+        setHidden(byId("qeColumnTypeSummary"), true);
+        setHidden(byId("qeMixedEarlyStages"), true);
+        setHidden(byId("qeMixedXaiResults"), true);
+        ["statistics", "columnTypes", "diagnostics"].forEach((kind) => setText(byId(`qeAuxiliaryStatus-${kind}`), ""));
+        ["qeLoadStatistics", "qeLoadColumnTypes", "qeLoadDiagnostics"].forEach((id) => { if (byId(id)) byId(id).disabled = false; });
+        const detailMount = byId("qeEditingDetail");
+        ["qeCategoricalDetail", "qeContinuousDetail"].forEach((id) => { const panel = byId(id); if (panel) detailMount?.append(panel); });
+        await loadEditingPage("CONDITION", 1, "ALL");
+        if (editingResults?.scope === scope) state.resultWarning = editingResults.error || "";
+    }
+
+    async function loadEditingPage(family = "CONDITION", page = 1, source = "ALL", force = false) {
+        if (!editingResults || contextLoss) return;
+        const browser = editingResults;
+        const cacheKey = `${family}:${source}:${page}:${browser.conditionCount}:${browser.excludeZero}`;
+        browser.family = family === "FORMULA" ? "FORMULA" : "CONDITION";
+        browser.source = source;
+        browser.page = Math.max(1, Number(page) || 1);
+        browser.error = "";
+        browser.historical = false;
+        setText(byId("qeAuxiliaryStatus"), "");
+        setHidden(byId("qeLegacyResultViews"), true);
+        clearEditingDetail();
+        const requestId = ++editingRequestGeneration;
+        editingRequestAbort?.abort();
+        if (!force && browser.cache.has(cacheKey)) {
+            browser.payload = browser.cache.get(cacheKey);
+            browser.loading = false;
+            renderEditingResults();
+            return;
+        }
+        browser.loading = true;
+        browser.payload = { ...(browser.payload || {}), rules: [], family: browser.family, page: browser.page };
+        renderEditingResults();
+        const controller = new AbortController();
+        editingRequestAbort = controller;
+        try {
+            const response = await client.getEditingResults({ ...editingScope(), view: "rules", family: browser.family, page: browser.page, source, conditionCount: browser.conditionCount, excludeZero: browser.excludeZero }, { signal: controller.signal });
+            if (requestId !== editingRequestGeneration || editingResults !== browser || browser.scope !== editingScopeKey()) return;
+            const payload = response?.data;
+            if (!payload || !Array.isArray(payload.rules)) throw new Error(window.RuleResultCommon.t("Rule summary is unavailable. Reload after restarting the backend."));
+            browser.payload = payload;
+            browser.cache.set(cacheKey, payload);
+            state.resultWarning = "";
+            persistState();
+        } catch (error) {
+            if (requestId !== editingRequestGeneration || error?.name === "AbortError") return;
+            browser.error = error.message;
+        } finally {
+            if (requestId === editingRequestGeneration && editingResults === browser) {
+                browser.loading = false;
+                if (editingRequestAbort === controller) editingRequestAbort = null;
+                renderEditingResults();
+            }
+        }
+    }
+
+    function renderEditingResults() {
+        if (!editingResults) return;
+        const browser = editingResults;
+        const target = byId("qeEditingResults");
+        if (!target) return;
+        setHidden(byId("resultsSection", "qeResultsPanel"), false);
+        setHidden(target, false);
+        renderProcessSelection();
+        editingViewCleanup?.();
+        target.innerHTML = window.EditingResultView.render(browser.payload || { rules: [] }, {
+            family: browser.family, source: browser.source, loading: browser.loading, error: browser.error,
+            filters: {conditionCount: browser.conditionCount, excludeZero: browser.excludeZero},
+            showFamilies: true, showSourceFilter: true, t: window.RuleResultCommon.t
         });
-        if (!artifacts.categorical) errors.push("범주형 Association 모델 결과를 찾지 못했습니다.");
-        if (!artifacts.continuous) errors.push("연속형 수식 규칙 결과를 찾지 못했습니다.");
-        if (!artifacts.categoricalViolation) errors.push("범주형 위반 결과 테이블을 찾지 못했습니다.");
-        if (!artifacts.continuousViolation) errors.push("연속형 위반 결과 테이블을 찾지 못했습니다.");
-        if (!statisticsNode) errors.push("기초통계량을 계산할 대상 테이블 연결 정보를 찾지 못했습니다.");
-        if (!columnTypeTarget.owner || !columnTypeTarget.tableName) errors.push("컬럼 유형 FINAL 결과를 조회할 대상 테이블 정보가 없습니다.");
-        state.resultWarning = errors.join(" ");
-        persistState();
-        renderResults();
+        editingViewCleanup = window.EditingResultView.bind(target, {
+            onFamily: (family) => {browser.conditionCount = "ALL"; loadEditingPage(family, 1, "ALL");},
+            onCondition: (count) => {browser.conditionCount = count; loadEditingPage(browser.family, 1, browser.source);},
+            onExcludeZero: (exclude) => {browser.excludeZero = exclude; loadEditingPage(browser.family, 1, browser.source);},
+            onPage: (page) => loadEditingPage(browser.family, page, browser.source),
+            onSource: (source) => loadEditingPage(browser.family, 1, source),
+            onRetry: () => loadEditingPage(browser.family, browser.page, browser.source, true),
+            onRule: (key) => openEditingRule(key),
+            onLegacy: () => openHistoricalExplanations()
+        });
+    }
+
+    function openEditingRule(key) {
+        if (!editingResults || editingResults.loading) return;
+        const entries = editingResults.payload?.rules || [];
+        const index = entries.findIndex((entry) => entry.key === key);
+        const entry = entries[index];
+        if (!entry) return;
+        const list = byId("qeEditingResults");
+        editingResults.listPosition = window.EditingResultView.capturePosition(list, key);
+        clearEditingDetail();
+        const detail = byId("qeEditingDetail");
+        detail.classList.add("editing-result-detail");
+        detail.insertAdjacentHTML("afterbegin", window.EditingResultView.detailHeader(entry, {t: window.RuleResultCommon.t}));
+        detail.querySelector("[data-editing-back]").addEventListener("click", () => {
+            const position = editingResults?.listPosition;
+            clearEditingDetail();
+            window.EditingResultView.restorePosition(list, position);
+        });
+        setHidden(list, true);
+        setHidden(detail, false);
+        editingResults.historical = false;
+        ["qeCategoricalDetail", "qeContinuousDetail"].forEach((id) => { const panel = byId(id); if (panel) byId("qeEditingDetail")?.append(panel); });
+        setHidden(byId("qeLegacyResultViews"), true);
+        editingResults.selectedKey = key;
+        const kind = entry.family === "FORMULA" ? "continuous" : "categorical";
+        const rules = entries.map((item) => ({ ...item.row, _editingEntry: item }));
+        if (kind === "categorical") {
+            resultData.categorical = { rules, columnComments: editingResults.payload.columnComments || {} };
+            renderCategoricalDetail(index);
+        } else {
+            resultData.continuous = { symbolicRuleSummary: { topRules: rules }, columnComments: editingResults.payload.columnComments || {} };
+            const select = byId("qeContinuousRuleSelect");
+            if (select) select.innerHTML = rules.map((rule, i) => `<option value="${i}">${R.escapeHtml(rule.TARGET_COLUMN || rule.RESULT_COLUMN || rule.RULE_ID || i + 1)}</option>`).join("");
+            setHidden(byId("qeContinuousDetail"), false);
+            openInlineRuleDetail("continuous", index);
+        }
+    }
+
+    async function loadResultAuxiliary(kind) {
+        if (!editingResults || contextLoss) return;
+        const browser = editingResults;
+        if (browser.auxiliary[kind] === "loading") return;
+        if (browser.auxiliary[kind] === "loaded") {
+            const section = byId(kind === "statistics" ? "qeStatisticsSummary" : kind === "columnTypes" ? "qeColumnTypeSummary" : "qeMixedEarlyStages");
+            if (section) { section.hidden = false; section.scrollIntoView({behavior: "smooth", block: "start"}); }
+            return;
+        }
+        const button = byId(kind === "statistics" ? "qeLoadStatistics" : kind === "diagnostics" ? "qeLoadDiagnostics" : "qeLoadColumnTypes");
+        const statusTarget = byId(`qeAuxiliaryStatus-${kind}`);
+        const generation = auxiliaryGeneration;
+        browser.auxiliary[kind] = "loading";
+        if (button) button.disabled = true;
+        setText(statusTarget, window.RuleResultCommon.t("Loading…"));
+        try {
+            const response = kind === "statistics" ? await client.getDescriptiveStatistics(state.flowRunId)
+                : kind === "diagnostics" ? await client.getEditingResults({...editingScope(), view: "diagnostics"})
+                : await client.getColumnTypeFinal({ owner: state.tableOwner, whereClause: getColumnTypeWhereClause(), limit: 1000 });
+            if (generation !== auxiliaryGeneration || browser !== editingResults || browser.scope !== editingScopeKey()) return;
+            browser.auxiliary[kind] = "loaded";
+            if (kind === "diagnostics") {
+                resultData.mixedXai = {summary: response.data?.diagnostics?.savedSummary || response.data?.summary || {}};
+                renderMixedXaiResults();
+                const panel = byId("qeMixedXaiResults"), early = byId("qeMixedEarlyStages");
+                if (panel) { byId("qeCommonResults")?.insertBefore(panel, byId("qeLegacyResultViews")); panel.hidden = false; }
+                if (early) { byId("qeCommonResults")?.insertBefore(early, byId("qeLegacyResultViews")); early.hidden = false; }
+            } else {
+                resultData[kind === "statistics" ? "descriptiveStatistics" : "columnTypeFinal"] = response;
+                if (kind === "statistics") renderDescriptiveStatistics(); else renderColumnTypeFinal();
+            }
+            setText(statusTarget, "");
+        } catch (error) {
+            if (generation !== auxiliaryGeneration || error?.name === "AbortError") return;
+            browser.auxiliary[kind] = "error";
+            setText(statusTarget, error.message);
+        } finally {
+            if (generation === auxiliaryGeneration && button) button.disabled = false;
+        }
+    }
+
+    async function openHistoricalExplanations(page = 1) {
+        if (!editingResults || editingResults.loading || editingResults.historicalLoading) return;
+        const browser = editingResults;
+        browser.historicalLoading = true;
+        clearEditingDetail();
+        const scope = browser.scope;
+        const selectionGeneration = violationRequestGeneration;
+        const target = byId("qeLegacyResultViews");
+        setHidden(target, false);
+        setText(byId("qeAuxiliaryStatus"), window.RuleResultCommon.t("Loading…"));
+        try {
+            const response = await client.getMixedXaiResults(state.flowRunId, state.tableOwner, state.tableName, {page, includeViolations: false});
+            if (editingResults !== browser || editingScopeKey() !== scope || selectionGeneration !== violationRequestGeneration) return;
+            const payload = response.data || {};
+            if (window.RuleResultCommon.isPattern(payload)) return;
+            resultData.mixedXai = payload;
+            resultData.categorical = payload.ruleSummary;
+            resultData.categoricalViolation = { violationSummary: { topRules: payload.ruleSummary?.rules || [] } };
+            state.resultArtifacts = { mixedXai: true, categorical: { objectName: payload.ruleSummary?.rules?.[0]?.MODEL_NAME || payload.summary?.modelName },
+                categoricalViolation: { owner: state.tableOwner, objectName: "INIT$_TB_RULEVIOL_XAI", targetOwner: state.tableOwner, targetTable: state.tableName } };
+            browser.historical = true;
+            browser.historicalPage = Number(payload.page || payload.ruleSummary?.page || page);
+            ruleDistributionFilters.categorical = {type: "ALL", value: "", label: ""};
+            byId("categoryPanel")?.append(byId("qeCategoricalDetail"));
+            renderResults();
+            setHidden(byId("qeRuleTypeTabs"), true);
+            setHidden(byId("continuousPanel"), true);
+            setHidden(byId("qeContinuousDetail"), true);
+            setText(byId("categoryRuleTitle"), window.RuleResultCommon.t("Historical anomaly explanations"));
+            target?.scrollIntoView({ behavior: "smooth", block: "start" });
+            setText(byId("qeAuxiliaryStatus"), "");
+        } catch (error) {
+            if (editingResults === browser && selectionGeneration === violationRequestGeneration) setText(byId("qeAuxiliaryStatus"), error.message);
+        } finally {
+            browser.historicalLoading = false;
+        }
     }
 
     function getResultColumnComments(kind) {
+        const selected = editingResults?.payload?.rules?.find((entry) => entry.key === editingResults.selectedKey);
+        if (selected?.columnComments) return selected.columnComments;
         if (kind === "categorical") {
             return resultData.categorical?.columnComments
                 || resultData.categoricalViolation?.columnComments
@@ -1828,6 +2058,7 @@
         const rules = kind === "categorical"
             ? (resultData.categorical?.rules || [])
             : (resultData.continuous?.symbolicRuleSummary?.topRules || []);
+        if (editingResults) return editingResults.historical ? R.selectBalancedRules(rules, kind, activeFilter, 20) : rules;
         const summary = getViolationSummary(kind);
         const violationRules = [...(summary.balancedTopRules || []), ...(summary.topRules || [])];
         const rankedLimit = Math.max(12, rules.length + violationRules.length);
@@ -1868,7 +2099,7 @@
         const projectId = Number(state.projectId || 0);
         const scenarioId = Number(state.scenarioId || 0);
         const flowRunId = Number(state.flowRunId || 0);
-        const appWindow = window.opener;
+        const appWindow = getApplicationWindow();
         if (!projectId || !scenarioId || !flowRunId) {
             showToast("상세 분석으로 이동할 프로젝트·시나리오·실행 번호를 확인할 수 없습니다.", "error");
             return;
@@ -1883,14 +2114,14 @@
             appWindow.sessionStorage.setItem("M04002:selectedRunId", String(flowRunId));
             await appWindow.PageManager.load("M04002", "규칙 발굴 분석", true);
             appWindow.focus();
-            window.close();
+            if (!isEmbeddedWorkspace()) window.close();
         } catch (error) {
             showToast(error.message || "상세 분석 화면으로 이동하지 못했습니다.", "error");
         }
     }
 
     async function openColumnTypeModelTraining() {
-        const appWindow = window.opener;
+        const appWindow = getApplicationWindow();
         if (!appWindow || appWindow.closed || !appWindow.PageManager) {
             showToast("메인 화면을 찾을 수 없습니다. 메인 화면에서 퀵 에디팅을 다시 열어 주세요.", "error");
             return;
@@ -1912,6 +2143,10 @@
 
     function getRuleViolationCount(kind, rule) {
         if (!rule) return null;
+        if (rule._editingEntry) {
+            const count = rule._editingEntry.review ? rule._editingEntry.review.violationCount : rule.VIOLATION_COUNT;
+            return count === null || count === undefined || count === "" ? null : Number(count);
+        }
         const value = getViolationCountMap(kind).get(String(rule.RULE_ID || ""));
         return Number.isFinite(value) ? value : null;
     }
@@ -2211,6 +2446,10 @@
 
         const rows = getColumnTypeFinalRows();
         const payloadLoaded = Boolean(resultData.columnTypeFinal);
+        if (editingResults && !payloadLoaded) {
+            setHidden(section, true);
+            return;
+        }
         const keepEditorOpen = options.keepEditorOpen || !editorPanel.hidden;
         if (!payloadLoaded || !rows.length) {
             setHidden(section, false);
@@ -2686,15 +2925,21 @@
         if (!target) return;
         const common = window.RuleResultCommon;
         const active = ruleDistributionFilters[kind];
-        const summary = common.filterSummary(kind === "continuous" ? resultData.continuous?.symbolicRuleSummary : resultData.categorical, {
+        let summary = common.filterSummary(kind === "continuous" ? resultData.continuous?.symbolicRuleSummary : resultData.categorical, {
             conditionCount: active.type === "CONDITION_COUNT" ? active.value : "ALL",
             resultColumn: ["RESULT_COLUMN", "TARGET_COLUMN"].includes(active.type) ? active.value : "ALL", pageSize: 20
         }, page);
+        if (editingResults?.historical && kind === "categorical") summary = { ...resultData.categorical,
+            page: resultData.mixedXai?.page || resultData.categorical?.page || 1,
+            pageSize: resultData.mixedXai?.pageSize || resultData.categorical?.pageSize || 20,
+            total: resultData.mixedXai?.total ?? resultData.categorical?.total ?? 0 };
         const rows = summary.rules || [];
-        const pattern = common.isPattern(resultData.mixedXai);
-        const columns = pattern ? common.patternColumns : isMixedXai() ? common.columns : ["RULE_ID", "CONDITION_TEXT", "RESULT_TEXT", "CONDITION_COUNT", "RULE_SUPPORT", "RULE_CONFIDENCE", "RULE_LIFT"];
+        const pattern = usesMixedResults() && common.isPattern(resultData.mixedXai);
+        const formula = pattern && kind === "continuous";
+        const columns = pattern ? common.patternColumns.filter((column) => !formula || column !== "RULE_LIFT") : usesMixedResults() ? common.columns : ["RULE_ID", "CONDITION_TEXT", "RESULT_TEXT", "CONDITION_COUNT", "RULE_SUPPORT", "RULE_CONFIDENCE", "RULE_LIFT"];
         const labels = pattern ? common.patternColumnLabels() : common.columnLabels();
-        if (!isMixedXai()) labels.RULE_SUPPORT = common.t("Support");
+        if (formula) labels.RULE_CONFIDENCE = common.t("Within-tolerance rate");
+        if (!usesMixedResults()) labels.RULE_SUPPORT = common.t("Support");
         const cell = (row, col) => col === "RESULT_TEXT" && common.isXai(row) ? common.t("Anomaly candidate")
             : col === "VALIDATION_STATUS" ? common.validationStatus(row[col])
             : row[col] ?? "-";
@@ -2707,7 +2952,8 @@
             <button type="button" class="qe-secondary-button" data-summary-page="${summary.page - 1}" ${summary.page <= 1 ? "disabled" : ""}>${R.escapeHtml(common.t("Previous"))}</button>
             <button type="button" class="qe-secondary-button" data-summary-page="${summary.page + 1}" ${summary.page >= totalPages ? "disabled" : ""}>${R.escapeHtml(common.t("Next"))}</button></div>`;
         target.querySelectorAll("[data-summary-page]").forEach((button) => {
-            button.onclick = () => renderRuleSummaryTable(Number(button.dataset.summaryPage), kind);
+            button.onclick = () => editingResults?.historical && kind === "categorical"
+                ? openHistoricalExplanations(Number(button.dataset.summaryPage)) : renderRuleSummaryTable(Number(button.dataset.summaryPage), kind);
         });
         target.querySelector("[data-summary-export]").onclick = () => {
             const escapeCell = (value) => {
@@ -2724,10 +2970,16 @@
     }
 
     function renderResults() {
+        if (editingResults && !editingResults.historical) {
+            renderEditingResults();
+            if (resultData.descriptiveStatistics) renderDescriptiveStatistics();
+            if (resultData.columnTypeFinal) renderColumnTypeFinal();
+            return;
+        }
         const panel = byId("resultsSection", "qeResultsPanel");
         setHidden(panel, false);
         renderProcessSelection();
-        if (isMixedXai()) renderMixedXaiResults();
+        if (hasMixedAnalysis()) renderMixedXaiResults();
         const categorical = resultData.categorical;
         const categoricalOverview = categorical?.overview || {};
         const categoryKpis = byId("categoryKpis", "qeCategoricalKpis");
@@ -2739,7 +2991,7 @@
         reconcileRuleDistributionFilter("categorical", categoricalLegendRules);
         const categoricalRules = getDisplayedRules("categorical");
         const categoricalFilter = ruleDistributionFilters.categorical;
-        if (categoryKpis) categoryKpis.innerHTML = R.renderKpis(isMixedXai() && !window.RuleResultCommon.isPattern(resultData.mixedXai) ? [
+        if (categoryKpis) categoryKpis.innerHTML = R.renderKpis(usesMixedResults() && !window.RuleResultCommon.isPattern(resultData.mixedXai) ? [
             { label: window.RuleResultCommon.t("Total rules"), value: R.formatNumber(categoricalOverview.TOTAL_RULES, 0), tone: "primary" },
             { label: window.RuleResultCommon.t("Mapped rules"), value: R.formatNumber(categoricalOverview.MAPPED_RULES, 0) },
             { label: window.RuleResultCommon.t("Candidate rows"), value: R.formatNumber(categoricalViolationOverview.VIOLATION_COUNT, 0) },
@@ -2786,8 +3038,9 @@
         if (categoryRules) {
             categoryRules.innerHTML = R.renderCategoricalRules(categoricalRules, {
                 columnComments: categoricalComments,
-                mixedXai: isMixedXai(),
-                mixedPattern: window.RuleResultCommon.isPattern(resultData.mixedXai),
+                mixedXai: usesMixedResults(),
+                mixedPattern: usesMixedResults() && window.RuleResultCommon.isPattern(resultData.mixedXai),
+                emptyMessage: usesMixedResults() ? "" : getRuleResultDiagnostic("categorical").message,
                 violationCounts: getViolationCountMap("categorical")
             });
             setText(
@@ -2814,7 +3067,7 @@
         const continuousKpis = byId("continuousKpis", "qeContinuousKpis");
         const continuousCharts = byId("continuousCharts", "qeContinuousCharts");
         const continuousRules = byId("continuousRules", "qeContinuousRules");
-        if (continuousKpis) continuousKpis.innerHTML = R.renderKpis(isMixedXai() ? [
+        if (continuousKpis) continuousKpis.innerHTML = R.renderKpis(usesMixedResults() ? [
             { label: window.RuleResultCommon.t("Continuous formula rules"), value: R.formatNumber(continuousOverview.RULE_COUNT, 0), tone: "mint" },
             { label: window.RuleResultCommon.t("Target columns"), value: R.formatNumber(continuousOverview.TARGET_COLUMN_COUNT, 0) },
             { label: window.RuleResultCommon.t("Average within-tolerance rate"), value: R.formatRatio(continuousOverview.AVG_CONFIDENCE) },
@@ -2836,7 +3089,7 @@
             })), continuousLegendRules, "continuous", "TARGET_COLUMN");
             const methodItems = R.filterLegendItems((continuous.methodGroups || []).map((row) => ({
                 key: String(row.METHOD || "").trim().toUpperCase(),
-                label: isMixedXai() ? window.RuleResultCommon.formulaMethod(row) : row.METHOD || "방법 미지정", value: Number(row.RULE_COUNT || 0)
+                label: usesMixedResults() ? window.RuleResultCommon.formulaMethod(row) : row.METHOD || "방법 미지정", value: Number(row.RULE_COUNT || 0)
             })), continuousLegendRules, "continuous", "METHOD");
             const chartBody = continuousCharts.querySelector("[data-chart-body]") || continuousCharts;
             chartBody.innerHTML = `
@@ -2857,7 +3110,7 @@
             continuousRules.innerHTML = R.renderContinuousRules(displayedContinuousRules, {
                 columnComments: continuousComments,
                 violationCounts: getViolationCountMap("continuous"),
-                mixedPattern: isMixedXai(), emptyMessage: isMixedXai() ? window.RuleResultCommon.continuousDiagnostic(resultData.mixedXai).message : ""
+                mixedPattern: usesMixedResults(), emptyMessage: getRuleResultDiagnostic("continuous").message
             });
             setText(
                 continuousRules.closest(".qe-result-block")?.querySelector("[data-rule-count]"),
@@ -2881,13 +3134,15 @@
             continuousTable.className = "qe-result-block";
             byId("qeContinuousDetail")?.insertAdjacentElement("beforebegin", continuousTable);
         }
-        setHidden(continuousNotice, !isMixedXai());
-        setHidden(continuousTable, !isMixedXai());
-        if (isMixedXai() && continuousNotice) {
-            const diagnostic = window.RuleResultCommon.continuousDiagnostic(resultData.mixedXai);
+        const continuousDiagnostic = getRuleResultDiagnostic("continuous");
+        setHidden(continuousNotice, !usesMixedResults() && !continuousDiagnostic.message);
+        setHidden(continuousTable, !usesMixedResults());
+        if (continuousNotice) {
+            const diagnostic = continuousDiagnostic;
+            continuousNotice.dataset.resultStatus = diagnostic.status || "diagnostic";
             continuousNotice.innerHTML = `<p>${R.escapeHtml(diagnostic.message)}</p><div class="qe-kpi-grid">${R.renderKpis(diagnostic.metrics)}</div>
                 ${diagnostic.reasons.length ? `<details class="qe-details"><summary>${R.escapeHtml(window.RuleResultCommon.t("Continuous discovery reasons"))}</summary><p>${R.escapeHtml(window.RuleResultCommon.t("Reason counts refer to excluded columns or rejected candidates, not source rows."))}</p><ul>${diagnostic.reasons.map((r) => `<li>${R.escapeHtml(r.label)}: ${R.escapeHtml(r.count)}</li>`).join("")}</ul></details>` : ""}`;
-            renderRuleSummaryTable(1, "continuous");
+            if (usesMixedResults()) renderRuleSummaryTable(1, "continuous");
         }
 
         renderDescriptiveStatistics();
@@ -3158,7 +3413,8 @@
         const rules = getDisplayedRules("continuous");
         const index = Math.max(0, Math.min(rules.length - 1, Number(ruleIndex) || 0));
         const rule = rules[index];
-        const artifact = state.resultArtifacts?.continuous;
+        const entry = rule?._editingEntry;
+        const artifact = entry?.artifact || state.resultArtifacts?.continuous;
         if (!rule) return;
         const formula = window.RuleResultCommon.isFormula(rule);
         if (!formula && !artifact?.owner) return;
@@ -3166,9 +3422,10 @@
         if (!ruleId) return;
         const select = byId("qeContinuousRuleSelect");
         if (select) select.value = String(index);
-        const scope = { flowRunId: state.flowRunId, targetOwner: rule.TARGET_OWNER || state.tableOwner,
+        const scope = entry?.scope || { flowRunId: state.flowRunId, targetOwner: rule.TARGET_OWNER || state.tableOwner,
             targetTable: rule.TARGET_TABLE || state.tableName, modelName: rule.MODEL_NAME, ruleId };
-        const detailKey = JSON.stringify([scope.flowRunId, scope.targetOwner, scope.targetTable, scope.modelName, ruleId]);
+        const detailKey = entry?.key || JSON.stringify([scope.flowRunId, scope.targetOwner, scope.targetTable, scope.modelName, ruleId]);
+        if (entry && editingResults) editingResults.selectedKey = entry.key;
         if (!force && continuousDetail.detailKey === detailKey && (continuousDetail.chartPayload || continuousDetail.rows.length || continuousDetail.error)) {
             renderContinuousDetail();
             return;
@@ -3201,7 +3458,10 @@
                 : await client.getSymbolicRuleSample({
                 owner: artifact.owner,
                 ruleId,
-                flowRunId: state.flowRunId,
+                targetOwner: entry?.scope.targetOwner,
+                targetTable: entry?.scope.targetTable,
+                targetColumn: entry?.scope.targetColumn,
+                flowRunId: scope.flowRunId,
                 sampleLimit: 200
             }, { signal: controller.signal });
             if (requestId !== continuousDetailRequestId) return;
@@ -3580,8 +3840,34 @@
             const active = panel.dataset.resultPanel === tabName;
             panel.hidden = !active;
             panel.tabIndex = active ? 0 : -1;
+            panel.setAttribute("aria-labelledby", panel.dataset.resultPanel === "continuous" ? "continuousTab" : "categoryTab");
         });
         if (tabName === "continuous") window.requestAnimationFrame(drawContinuousDetailChart);
+    }
+
+    function getRuleResultDiagnostic(kind) {
+        const common = window.RuleResultCommon;
+        if (usesMixedResults() && kind === "continuous") return common.continuousDiagnostic(resultData.mixedXai || {});
+        const resultState = resultData.resultStates?.[kind];
+        const output = { message: "", reasons: [], metrics: [], status: "available" };
+        if (resultState?.status === "error") return { ...output, status: "error", message: `${common.t("The result could not be loaded. This is not a zero-rule result.")} ${resultState.message || ""}` };
+        if (resultState?.status === "missing") return { ...output, status: "missing", message: common.t("This run has no saved output for this analysis. Check the stage status and output contract.") };
+        const rules = kind === "continuous" ? resultData.continuous?.symbolicRuleSummary?.topRules : resultData.categorical?.rules;
+        if (rules?.length) return output;
+        if (kind === "categorical") return { ...output, status: "empty", message: common.t("No categorical rules were saved for this run. Review the discovery settings and stage messages.") };
+        const diagnostic = resultData.mixedXai?.summary?.integratedEditing?.stages?.DISCOVER?.legacyDiagnostics;
+        if (!diagnostic) return { ...output, status: "unrecorded", message: common.t("No saved continuous formulas were found. Detailed discovery diagnostics were not recorded or could not be loaded; the cause cannot be inferred from a zero count.") };
+        const parts = Array.isArray(diagnostic.parts) ? diagnostic.parts : [];
+        const tasks = (diagnostic.tasks || []).filter((task) => String(task.task || "").startsWith("CONTINUOUS"));
+        if (parts.length && !parts.includes("CONTINUOUS") && !parts.includes("ALL")) return { ...output, status: "disabled", message: common.t("Continuous analysis was not requested in the saved settings for this run.") };
+        const failed = tasks.some((task) => ["ERROR", "FAILED"].includes(String(task.status || "").toUpperCase()));
+        const reasons = tasks.flatMap((task) => {
+            const values = [task.skipReason, task.message, ...(task.skippedTargets || []).map((target) => `${target.targetColumn || ""}: ${target.message || target.reason || ""}`)].filter(Boolean);
+            return [...new Set(values)].map((value) => ({ label: `${task.task}: ${value}`, count: "" }));
+        });
+        return { ...output, reasons, status: failed ? "error" : "empty", message: common.t(failed
+            ? "Continuous discovery did not complete successfully. Review the recorded task errors."
+            : "No continuous formulas were saved. Review the recorded task diagnostics and target limits.") };
     }
 
     function handleResultTabKeydown(event) {
@@ -3612,6 +3898,8 @@
     }
 
     function renderInlineRuleContent(kind, index, rule) {
+        const entry = rule._editingEntry;
+        const metadata = entry ? `<p class="qe-statistics-notice">${R.escapeHtml(window.RuleResultCommon.t("Discovery method"))}: ${R.escapeHtml(window.EditingResultView.t(window.EditingResultView.sourceLabels[entry.source] || entry.source))} · ${R.escapeHtml(entry.scope?.modelName || "")} · #${R.escapeHtml(entry.scope?.ruleId || rule.RULE_ID || "")}</p>` : "";
         const comments = getResultColumnComments(kind);
         if (kind === "categorical" || window.RuleResultCommon.isFormula(rule)) {
             const common = window.RuleResultCommon;
@@ -3623,7 +3911,7 @@
                 { label: common.t("Confidence"), value: R.formatRatio(rule.RULE_CONFIDENCE) },
                 { label: common.t("Lift"), value: R.formatNumber(rule.RULE_LIFT, 3) }
             ];
-            return `<div class="qe-quick-insight"><strong>${R.escapeHtml(common.t("Details"))}</strong>
+            return `${metadata}<div class="qe-quick-insight"><strong>${R.escapeHtml(common.t("Details"))}</strong>
                 <span>${R.escapeHtml(mixed || pattern ? common.ruleNotes(rule, resultData.mixedXai?.summary) : common.t("IF is satisfied but THEN is not satisfied."))}</span></div>
                 <dl class="qe-rule-fields qe-rule-fields--inline">
                     <div class="is-wide"><dt>${R.escapeHtml(common.t("Condition"))} · IF</dt><dd>${R.escapeHtml(R.annotateColumnText(rule.CONDITION_TEXT || rule.CONDITION_COLUMN || "-", comments))}</dd></div>
@@ -3645,7 +3933,7 @@
         const insight = violationCount === null
             ? "실제값과 수식 예측값의 차이가 큰 데이터를 아래에서 확인할 수 있습니다."
             : `허용 범위를 벗어난 데이터 ${R.formatNumber(violationCount, 0)}건이 발견되었습니다.`;
-        return `<div class="qe-quick-insight">
+        return `${metadata}<div class="qe-quick-insight">
                 <strong>핵심 안내</strong>
                 <span>${R.escapeHtml(insight)}</span>
             </div>
@@ -3672,7 +3960,7 @@
         body.innerHTML = renderInlineRuleContent("categorical", normalizedIndex, rule);
         panel.hidden = false;
         if (options.scroll !== false) {
-            window.setTimeout(() => panel.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
+            window.setTimeout(() => (editingResults?.selectedKey ? byId("qeEditingDetail") : panel)?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
         }
     }
 
@@ -3682,14 +3970,14 @@
             return;
         }
         loadContinuousDetail(index).catch((error) => showToast(error.message, "error"));
-        window.setTimeout(() => byId("qeContinuousDetail")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+        window.setTimeout(() => (editingResults?.selectedKey ? byId("qeEditingDetail") : byId("qeContinuousDetail"))?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     }
 
     function renderRuleViolationAction(kind, index, rule) {
         const count = getRuleViolationCount(kind, rule);
         const mixed = window.RuleResultCommon.isXai(rule);
         const pattern = window.RuleResultCommon.isPattern(rule);
-        const countLabel = mixed || pattern ? `${window.RuleResultCommon.t(pattern ? "Violation rows" : "Candidate rows")} ${R.formatNumber(count, 0)}` : (count === null ? "저장된 위반 데이터를 조회합니다." : `저장된 위반 ${R.formatNumber(count, 0)}건`);
+        const countLabel = count === null ? window.RuleResultCommon.t("Not recorded") : mixed || pattern ? `${window.RuleResultCommon.t(pattern ? "Violation rows" : "Candidate rows")} ${R.formatNumber(count, 0)}` : (count === null ? "저장된 위반 데이터를 조회합니다." : `저장된 위반 ${R.formatNumber(count, 0)}건`);
         return `<div class="qe-rule-violation-actions">
             <span>${R.escapeHtml(countLabel)}</span>
             <button type="button" class="qe-secondary-button" data-load-violations="true"
@@ -3718,6 +4006,7 @@
 
     async function loadRuleViolations(kind, index, page = 1) {
         const rule = getRuleByKind(kind, index);
+        const entry = rule?._editingEntry;
         const artifact = kind === "categorical"
             ? state.resultArtifacts?.categoricalViolation
             : state.resultArtifacts?.continuousViolation;
@@ -3725,6 +4014,32 @@
         const resultTarget = detailPanel?.querySelector(`[data-violation-result][data-rule-kind="${kind}"]`);
         const button = detailPanel?.querySelector(`[data-load-violations][data-rule-kind="${kind}"]`);
         if (!resultTarget || !rule) return;
+        if (entry) {
+            const generation = ++violationRequestGeneration;
+            violationRequestAbort?.abort();
+            const controller = new AbortController();
+            violationRequestAbort = controller;
+            const scopeKey = editingScopeKey();
+            resultTarget.hidden = false;
+            resultTarget.innerHTML = `<p>${R.escapeHtml(window.RuleResultCommon.t("Loading…"))}</p>`;
+            if (button) button.disabled = true;
+            try {
+                const response = await client.getEditingResults({ ...entry.scope, family: entry.family, source: entry.source,
+                    view: "violations", ruleKey: entry.key, page }, { signal: controller.signal });
+                if (generation !== violationRequestGeneration || scopeKey !== editingScopeKey() || editingResults?.selectedKey !== entry.key || !resultTarget.isConnected) return;
+                const payload = response.data || {};
+                renderRuleViolationRows(resultTarget, { ...payload, data: payload.violations || [], mixedPattern: entry.source === "MIXED_PATTERN" }, kind, index, page);
+                resultTarget.querySelector("[data-editing-violation-notice]")?.remove();
+                resultTarget.insertAdjacentHTML("afterbegin", `<div data-editing-violation-notice>${window.EditingResultView.violationNotice(payload, {t: window.RuleResultCommon.t})}</div>`);
+                if (payload.previewOnly) resultTarget.insertAdjacentHTML("afterbegin", `<p class="qe-statistics-notice">${R.escapeHtml(window.RuleResultCommon.t("Saved preview rows"))} · ${R.escapeHtml(payload.total ?? 0)}</p>`);
+            } catch (error) {
+                if (generation === violationRequestGeneration && error?.name !== "AbortError" && resultTarget.isConnected) resultTarget.innerHTML = `<p>${R.escapeHtml(error.message)}</p>`;
+            } finally {
+                if (generation === violationRequestGeneration && button?.isConnected) button.disabled = false;
+                if (violationRequestAbort === controller) violationRequestAbort = null;
+            }
+            return;
+        }
         resultTarget.hidden = false;
         const hasRenderedGrid = Boolean(resultTarget.querySelector("[data-violation-grid]"));
         if (!hasRenderedGrid) {
@@ -3744,7 +4059,7 @@
                 objectName: artifact.objectName,
                 targetOwner: artifact.targetOwner || state.tableOwner,
                 targetTable: artifact.targetTable || state.tableName,
-                ruleModelName: state.resultArtifacts?.categorical?.objectName,
+                ruleModelName: rule.MODEL_NAME || state.resultArtifacts?.categorical?.objectName,
                 mixedPattern: state.resultArtifacts?.mixedPattern,
                 ruleId: rule.RULE_ID,
                 flowRunId: state.flowRunId,
@@ -3774,7 +4089,7 @@
             target.innerHTML = `<p>${R.escapeHtml(response?.mixedXai ? window.RuleResultCommon.t("No saved candidate rows for this rule.") : window.RuleResultCommon.t("No saved violation rows for this rule."))}</p>`;
             return;
         }
-        const formula = rows.every((row) => window.RuleResultCommon.isFormula(row));
+        const formula = window.RuleResultCommon.isFormula(getRuleByKind(kind, index)) || rows.every((row) => window.RuleResultCommon.isFormula(row));
         const preferred = kind === "categorical" || formula
             ? ["CASE_ID", "RESULT_COLUMN", "EXPECTED_VALUE", "ACTUAL_VALUE", "EXPECTED_LOWER", "EXPECTED_UPPER", "RESIDUAL", "ABS_ERROR", "VIOLATION_SCORE", "RULE_CONFIDENCE", "RULE_LIFT", "VIOLATION_REASON"]
             : ["CASE_ID", "TARGET_COLUMN", "PREDICTED_VALUE", "ACTUAL_VALUE", "ABS_ERROR", "ERROR_PCT", "TOLERANCE_PCT", "VIOLATION_SCORE", "VIOLATION_REASON"];
@@ -4128,6 +4443,14 @@
     }
 
     function renderResultsEmpty() {
+        editingRequestGeneration += 1;
+        editingRequestAbort?.abort();
+        auxiliaryGeneration += 1;
+        clearEditingDetail();
+        editingResults = null;
+        editingViewCleanup?.();
+        editingViewCleanup = null;
+        if (byId("qeEditingResults")) byId("qeEditingResults").innerHTML = "";
         cancelContinuousDetailRequest();
         destroyFormulaChart();
         ["qeMixedXaiKpis", "qeMixedXaiRules", "qeMixedXaiRows", "qeMixedEarlyStages"].forEach((id) => {
@@ -4324,19 +4647,23 @@
     }
 
     function bindEvents() {
+        byId("qeContextRecoveryButton")?.addEventListener("click", () => {
+            if (columnTypeDirtyChanges.size && !window.confirm(window.RuleResultCommon.t("Discard unsaved column type edits and reconnect to the current session?"))) return;
+            columnTypeDirtyChanges.clear();
+            refreshAfterContextLoss(true);
+        });
+        window.addEventListener("beforeunload", (event) => {
+            if (!getWorkspaceLifecycleState().canClose) {
+                event.preventDefault();
+                event.returnValue = "";
+            }
+        });
         byId("qePauseButton")?.addEventListener("click", () => requestPipelineControl("PAUSE"));
         byId("qeStopButton")?.addEventListener("click", () => requestPipelineControl("STOP"));
         byId("qeResumeButton")?.addEventListener("click", resumePipeline);
-        byId("qeProcessType")?.addEventListener("change", (event) => {
-            if (!event.target.matches('input[name="processType"]')) return;
-            if (pipelineBusy || state.historyView || state.scenarioTableId || state.flowId) {
-                renderProcessSelection();
-                return;
-            }
-            state.processType = normalizeProcessType(event.target.value);
-            persistState();
-            renderState();
-        });
+        byId("qeLoadStatistics")?.addEventListener("click", () => loadResultAuxiliary("statistics"));
+        byId("qeLoadColumnTypes")?.addEventListener("click", () => loadResultAuxiliary("columnTypes"));
+        byId("qeLoadDiagnostics")?.addEventListener("click", () => loadResultAuxiliary("diagnostics"));
         const fileInput = byId("sourceFile", "qeFileInput");
         fileInput?.addEventListener("change", () => selectFile(fileInput.files?.[0]));
         const dropZone = byId("fileDropZone", "qeDropZone");
@@ -4422,7 +4749,12 @@
             if (event.currentTarget.returnValue === "confirm") resetPipelineState();
         });
         byId("closeButton", "qeCloseButton")?.addEventListener("click", () => {
-            if (window.opener) window.close();
+            if (isEmbeddedWorkspace()) {
+                const host = getApplicationWindow();
+                host?.PageManager.load("home", host.getShellHomeTitle?.() || "Data Editing System", true);
+            }
+            else if (!getWorkspaceLifecycleState().canClose) showToast(getWorkspaceLifecycleState().message, "warning");
+            else if (window.opener) window.close();
             else window.location.assign("/");
         });
         byId("historyRefreshButton", "qeHistoryRefreshButton")?.addEventListener("click", async () => {
@@ -4533,7 +4865,7 @@
         });
         bindContinuousChartResize();
         window.addEventListener("pagehide", destroyContinuousChartResize);
-        window.addEventListener("pageshow", () => { bindContinuousChartResize(); scheduleContinuousChartDraw(); });
+        window.addEventListener("pageshow", () => { bindTargetContextChannel(); bindContinuousChartResize(); scheduleContinuousChartDraw(); });
         document.addEventListener("visibilitychange", () => {
             if (!document.hidden && !state.historyView && state.flowRunId && R.ACTIVE_STATUSES.has(R.normalizeStatus(state.lastRunStatus))) {
                 fetchSnapshot({ silent: true }).catch(() => {});
@@ -4551,10 +4883,9 @@
             if (message.type !== "TARGET_DB_CHANGED") return;
             const changedConnectionId = Number(message.targetConnectionId || 0);
             if (!changedConnectionId || changedConnectionId === Number(client.targetConnectionId || 0)) return;
-            sessionStorage.removeItem(STORAGE_KEY);
-            window.location.reload();
+            invalidateWorkspaceContext("TARGET", changedConnectionId);
         });
-        window.addEventListener("beforeunload", () => {
+        window.addEventListener("pagehide", () => {
             cancelContinuousDetailRequest();
             destroyFormulaChart();
             targetContextChannel?.close();
@@ -4563,6 +4894,14 @@
     }
 
     async function init() {
+        if (isEmbeddedWorkspace()) {
+            document.body.classList.add("qe-embedded");
+            const homeButton = byId("closeButton", "qeCloseButton");
+            const homeLabel = window.RuleResultCommon.t("Go to Main Home");
+            homeButton?.setAttribute("title", homeLabel);
+            homeButton?.setAttribute("aria-label", homeLabel);
+            setText(homeButton?.querySelector(".qe-glyph"), "⌂");
+        }
         bindTargetContextChannel();
         bindEvents();
         applyRestoredFormState();
@@ -4572,32 +4911,20 @@
         selectResultTab("category");
         try {
             const session = await client.bootstrapSession();
-            if (state.targetContextId && Number(state.targetContextId) !== Number(client.targetConnectionId)) {
-                state = initialState();
-                selectedFile = null;
-                currentSnapshot = null;
-                resultData = {
-                    categorical: null,
-                    continuous: null,
-                    categoricalViolation: null,
-                    continuousViolation: null,
-                    descriptiveStatistics: null,
-                    columnTypeFinal: null
-                };
-                columnTypeDirtyChanges.clear();
-                cancelContinuousDetailRequest();
-                destroyFormulaChart();
-                continuousDetail = {
-                    ruleId: "", ruleIndex: -1, rule: null, rows: [], evaluatedRows: [],
-                    metrics: null, sampleCount: 0, hasMore: false, error: "",
-                    selectedRowIndex: null, chartPoints: []
-                };
-                sessionStorage.removeItem(STORAGE_KEY);
-                resetWorkspaceForm();
-            }
+            const user = session.user || {};
+            const userId = Number(user.userId);
+            if (!Number.isInteger(userId) || userId <= 0) throw new Error(window.RuleResultCommon.t("The signed-in user could not be verified. Sign in again."));
+            verifiedSessionUserId = String(userId);
+            const restoredState = loadState();
+            const canRestore = restoredState.sessionUserId === verifiedSessionUserId
+                && Number(restoredState.targetContextId) === Number(client.targetConnectionId);
+            state = canRestore ? restoredState : initialState();
+            if (!canRestore) sessionStorage.removeItem(STORAGE_KEY);
+            applyRestoredFormState();
+            renderWorkspaceMode();
+            renderFile();
             state.targetContextId = client.targetConnectionId;
             persistState();
-            const user = session.user || {};
             const sessionTarget = byId("sessionStatus", "qeSessionStatus");
             if (sessionTarget) {
                 const sessionLabel = `${user.userName || user.loginId || "사용자"} · 대상 DB #${client.targetConnectionId}`;
@@ -4607,6 +4934,10 @@
             }
             await loadProjects();
             renderState();
+            if (sessionStorage.getItem(CONTEXT_NOTICE_KEY)) {
+                sessionStorage.removeItem(CONTEXT_NOTICE_KEY);
+                showToast(window.RuleResultCommon.t("The previous workspace stopped local requests after a session or Target DB change. Its server run was not cancelled."), "warning");
+            }
 
             if (state.historyView && state.flowRunId) {
                 try {

@@ -5,9 +5,9 @@
   "description": "Korean labels specific to Column Correlation Analysis.",
   "labels": {
     "menuName": "컬럼 상관 분석",
-    "workDescriptionEmpty": "시나리오 테이블과 등록된 상관분석 객체를 선택하세요.",
+    "workDescriptionEmpty": "저장된 관계 분석 작업을 선택하거나 시나리오 테이블과 모델을 선택하세요.",
     "executableObject": "상관분석 프로시저/모델",
-    "executableObjectHint": "상관분석 프로시저 기본값은 M90001 객체 상세에서 가져옵니다.",
+    "executableObjectHint": "DB 객체 기본값은 M90001, API 설정은 M90002 또는 저장된 내장 작업 계약을 사용합니다.",
     "noExecutableObject": "선택된 상관분석 객체가 없습니다.",
     "gridTotal": "전체 {count}건",
     "page": "Page",

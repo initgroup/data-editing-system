@@ -30,6 +30,7 @@ RESERVED_VARIABLES = [
 class ApiObjectSaveRequest(BaseModel):
     apiObject: Dict[str, Any] = Field(default_factory=dict)
     details: List[Dict[str, Any]] = Field(default_factory=list)
+    createOnly: bool = False
     model_config = ConfigDict(extra="allow")
 
 
@@ -135,8 +136,23 @@ def save_api_object(req: ApiObjectSaveRequest, request: Request):
 
         cursor = conn.cursor()
         try:
+            if req.createOnly:
+                save_step = "API_OBJECT_EXISTING_MATCH"
+                cursor.execute(SqlLoader.get_sql("M90002_RESOURCE_MATCH"), {"modelName": object_name})
+                existing = cursor.fetchone()
+                if existing:
+                    return {
+                        "status": "success",
+                        "message": "Existing API object settings were preserved.",
+                        "objectId": int(existing[0]),
+                        "created": False,
+                        "skipped": True,
+                    }
+                object_id = None
+                params["resourceId"] = None
+
             save_step = "API_OBJECT_ID_SELECT"
-            if not object_id:
+            if not object_id and not req.createOnly:
                 cursor.execute(SqlLoader.get_sql("M90002_RESOURCE_ID_SELECT"), {"resourceName": object_name})
                 row = cursor.fetchone()
                 object_id = int(row[0]) if row and row[0] else None
@@ -169,7 +185,9 @@ def save_api_object(req: ApiObjectSaveRequest, request: Request):
             return {
                 "status": "success",
                 "message": "API object saved.",
-                "objectId": saved_object_id
+                "objectId": saved_object_id,
+                "created": object_id is None,
+                "skipped": False,
             }
         finally:
             cursor.close()
@@ -364,7 +382,7 @@ def normalize_detail_payload(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]
             "key": key,
             "value": trim_text(row.get("value") or row.get("VALUE"), 4000),
             "comment": trim_text(row.get("comment") or row.get("desc") or row.get("COMMENT"), 4000),
-            "defaultValue": trim_text(row.get("defaultValue") or row.get("DEFAULT_VALUE"), 4000)
+            "defaultValue": trim_text(row.get("defaultValue", row.get("DEFAULT_VALUE")), 4000)
         })
     return sorted(normalized, key=lambda item: item["order"])
 
@@ -469,6 +487,8 @@ def normalize_param_name(value: Any, index: int) -> str:
 
 def extract_bind_name(value: str, param_name: str) -> str:
     token = str(value or "").strip().split()[0] if str(value or "").strip() else ""
+    if token.upper() in {"IN", "OUT", "INOUT", "VARCHAR2", "NUMBER", "DATE", "TIMESTAMP", "BOOLEAN", "JSON", "CLOB"}:
+        return to_camel_name(param_name)
     token = token.split(".")[-1]
     token = re.sub(r"[^A-Za-z0-9_$#]", "_", token).strip("_")
     return token[:128] or to_camel_name(param_name)

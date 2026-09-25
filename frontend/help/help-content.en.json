@@ -3,6 +3,23 @@
   "language": "en",
   "systemName": "INIT Data Editing System",
   "pages": {
+    "M00001": {
+      "pageCode": "M00001",
+      "title": "Quick Editing",
+      "label": "Quick Editing",
+      "group": "Main",
+      "status": "enabled",
+      "summary": "Select a file to run unified editing automatically and review progress and results in a main workspace tab.",
+      "purpose": ["Prepare the project, scenario, target, models and FLOW automatically.", "Distinguish result families and reasons why no rules were accepted."],
+      "layout": [
+        { "name": "Automatic execution", "description": "Review the selected file, work context and preparation or execution status." },
+        { "name": "Result family", "description": "Browse actual-value results as condition rules (IF–THEN) or formula rules. Preserve each discovery method and its metrics, and view historical anomaly explanations separately." },
+        { "name": "Detailed results", "description": "Open Rule Discovery Analysis within the same main workspace." }
+      ],
+      "workflow": ["Open Quick Editing below Home or use the top shortcut.", "Select the file and start automatic execution.", "Browse condition or formula rules in pages of 20 and open violations for a selected rule.", "Load statistics, column types or diagnostics when needed to review sampling limits and discovery reasons."],
+      "controls": ["Past executions: load the first page of saved rules.", "Condition / Formula rules: choose the expression family and filter by discovery method.", "Previous / Next: fetch only the selected page from the server.", "Violation details: load stored violation rows for the selected rule. Filter by condition count and exclude zero counts. Rules with violations come first by count, followed by unrecorded and zero counts; this is not an error-probability ranking. Back to rules restores filters, page and position. Detected totals can differ from saved previews, and 70% confidence alone does not establish whether preview rows exist.", "Statistics, column types and diagnostics: load each result on demand.", "Detailed results: open Rule Discovery Analysis in the main workspace.", "Reset: clear screen progress while retaining saved server results."],
+      "aiGuidance": ["Continuous columns do not guarantee a valid formula.", "Separate unevaluated columns due to limits from candidates rejected by validation."]
+    },
     "login": {
       "pageCode": "login",
       "title": "Data Editing System Login",
@@ -204,7 +221,7 @@
             "internal-model": {
               "kicker": "M90001 · DB_OBJECT", "title": "Internal model and Target DB object", "summary": "Run registered procedures, packages, and Oracle ML models through the server Target DB connection.", "shape": "rounded", "symbol": "IN", "tone": "blue", "artifact": "PL/SQL / ORACLE ML → TABLE or MODEL",
               "detail": {
-                "overview": "Internal models are Target DB objects registered in M90001. Stage 1 uses this route in the default design, and categorical Apriori processing also uses Oracle ML in the Target DB.",
+                "overview": "Internal models are Target DB objects registered in M90001. New unified stages call INTERNAL_API functions that reuse existing Oracle analysis, including categorical Apriori. Previously saved DB_OBJECT Jobs continue to use their registered execution route.",
                 "callFlow": ["Read registered object and parameter metadata.", "Prepare the session Target DB connection and runtime binds.", "Execute the saved PL/SQL block with binds.", "Associate table or model output with the same Run.", "Record DB output and execution state."],
                 "inputs": ["Validated Target DB connection", "Registered object and parameters", "Target and Run binds"], "outputs": ["Column, relation, rule, or violation tables", "Oracle ML model and execution message"],
                 "checks": ["Object names and parameters must match the Target DB definition.", "Review parallel resources, scope limits, and commit units for large analysis jobs."]
@@ -220,18 +237,18 @@
               }
             },
             "api-resource": {
-              "kicker": "M90002 · WEB_API", "title": "Internal Python API and external JSON API", "summary": "Default stages 2–4 call same-server functions directly; only user extensions call remote HTTP APIs.", "shape": "rounded", "symbol": "OUT", "tone": "rose", "artifact": "INTERNAL_API or EXTERNAL_API → OUTPUT CONTRACT",
+              "kicker": "M90002 · WEB_API", "title": "Internal Python API and external JSON API", "summary": "All four new unified stages call same-server functions directly; only external API extensions make remote HTTP calls.", "shape": "rounded", "symbol": "OUT", "tone": "rose", "artifact": "INTERNAL_API or EXTERNAL_API → OUTPUT CONTRACT",
               "detail": {
-                "overview": "M90002 is an API Object Registry. The default stage 2–4 Jobs are saved as WEB_API but use the INTERNAL_API adapter to call Python analysis functions directly with no internet request. A remote HTTP call happens only for a separately registered EXTERNAL_API.",
+                "overview": "M90002 is an API Object Registry. New default Jobs use UNIFIED_EDITING_PROFILE/RELATION/DISCOVER/DETECT through WEB_API and the direct INTERNAL_API adapter. Each function runs existing Oracle analysis followed by mixed Python analysis. Unregistered built-in Jobs use their saved contracts; only EXTERNAL_API makes remote HTTP calls.",
                 "callFlow": ["Read API type, method, endpoint, and I/O contract.", "Build the payload from Target, Run, and upstream artifacts.", "Call INTERNAL_API as a direct server function without HTTP loopback.", "For EXTERNAL_API, send a GET query or JSON body to an absolute http(s) endpoint.", "Validate timeout, response size, and JSON, then apply the output contract."],
                 "inputs": ["Registered API spec and actual Run parameters", "Latest finalized types for stage 2 (LATEST_MASTER) and SAME_RUN upstream artifacts for stages 3–4", "Credentials entered in the runtime-bind dialog for EXTERNAL_API"], "outputs": ["Relation network, LASSO, Symbolic rule, and violation results", "Mapped table, model, or JSON output from a user API"],
                 "checks": ["Do not describe the default INTERNAL_API as an internet model call.", "External responses must be valid JSON within configured limits.", "EXTERNAL_API credentials are included in browser memory and the execution request; this path does not resolve them automatically from a server-side secret store."]
               }
             },
             "stage-1": {
-              "kicker": "M03001 · STEP 1", "title": "Column type analysis", "summary": "Combine column profiles, deterministic rules, and the active OML classifier to assign categorical, continuous, or other types.", "shape": "square", "symbol": "1", "tone": "blue", "artifact": "PREDICTED_TYPE_RUN · PREDICTED_TYPE_FINAL",
+              "kicker": "M03001 · STEP 1", "title": "Column type analysis", "summary": "UNIFIED_EDITING_PROFILE supplements existing column-type classification with sampled statistics, numeric-text and data-quality diagnostics.", "shape": "square", "symbol": "1", "tone": "blue", "artifact": "PREDICTED_TYPE_RUN · PREDICTED_TYPE_FINAL · MIXED_XAI_PROFILE",
               "detail": {
-                "overview": "Stage 1 profiles every column, combines rule and active-model predictions, safely falls back to rules when the model is unavailable, and preserves explicitly confirmed labels.",
+                "overview": "Unified PROFILE retains INIT$_SP_PREDICTED_TYPE classification and confirmed labels, then adds bounded-sample statistics and numeric-text/invalid-value diagnostics. Supplementary diagnostics do not overwrite source types or finalized labels. The classification details below describe the existing Oracle sub-analysis.",
                 "callFlow": ["Resolve target table and execution parameters.", "Profile type, nullness, distinctness, length, numeric ratio, entropy, and distribution.", "Combine base rules with active OML predictions.", "Persist per-Run and final column types separately."],
                 "algorithm": ["Use deterministic sampling for stable large-table profiles.", "Combine rule results with model confidence.", "Keep rule output when the model returns no usable prediction."],
                 "inputs": ["Scenario target table", "Prediction, sample, and confidence parameters", "Active column-type model for the Target DB"], "outputs": ["Per-Run predicted types", "Final types preserving confirmed labels", "Type input for stage 2"],
@@ -239,9 +256,9 @@
               }
             },
             "stage-2": {
-              "kicker": "M03002 · STEP 2", "title": "Column relation analysis", "summary": "Compute type-aware relation metrics and build an integrated matrix, network, and column clusters.", "shape": "triangle", "symbol": "2", "tone": "teal", "artifact": "RELATION_PAIR · CAT/NUM_CORR_PAIR · RELATION_NETWORK",
+              "kicker": "M03002 · STEP 2", "title": "Column relation analysis", "summary": "UNIFIED_EDITING_RELATION adds mixed numeric/categorical, missing-value and duplicate diagnostics to the existing matrix and network.", "shape": "triangle", "symbol": "2", "tone": "teal", "artifact": "RELATION_PAIR · CAT/NUM_CORR_PAIR · RELATION_NETWORK · MIXED_XAI_RELATION",
               "detail": {
-                "overview": "Stage 2 applies the appropriate metric to categorical-categorical, numeric-numeric, and categorical-numeric pairs, then clusters the strongest network edges.",
+                "overview": "Unified RELATION keeps the type-aware matrix, network and clusters, then separately samples Pearson, bias-corrected Cramér's V, correlation ratio eta, missingness and duplicates. Existing pass thresholds and supplementary sample metrics remain distinct. The network details below describe the existing sub-analysis.",
                 "callFlow": ["Read final column types and target data.", "Compute the type-specific metric and, where supported, its significance probability.", "Apply actual thresholds and store PASS status.", "Select strong edges and create deterministic weighted communities."],
                 "algorithm": ["Categorical × categorical: Cramér's V and p-value", "Continuous × continuous: Pearson and optional Spearman", "Categorical × continuous: Eta Squared", "Weighted community, degree, and centrality from passing edges"],
                 "inputs": ["Stage 1 final types", "Target table", "Significance, strength, sample, and edge limits"], "outputs": ["Integrated relation matrix", "Categorical and numeric pairs", "Optional relation-network input for stage 3"],
@@ -249,9 +266,9 @@
               }
             },
             "stage-3": {
-              "kicker": "M03003 · STEP 3", "title": "Automatic rule discovery", "summary": "Create reviewable candidates with categorical Apriori and continuous LASSO plus symbolic regression.", "shape": "circle", "symbol": "3", "tone": "amber", "artifact": "ASSOCIATION_MODEL · ASSOC_RULE_SUMMARY · LASSO_FEATURE · SYMBOLIC_RULE",
+              "kicker": "M03003 · STEP 3", "title": "Automatic rule discovery", "summary": "UNIFIED_EDITING_DISCOVER saves existing Apriori/LASSO/Symbolic results and mixed value, range and formula candidates in the same run.", "shape": "circle", "symbol": "3", "tone": "amber", "artifact": "ASSOCIATION_MODEL · ASSOC_RULE_SUMMARY · LASSO_FEATURE · SYMBOLIC_RULE · MIXED_XAI_RULES",
               "detail": {
-                "overview": "Categorical processing builds IF/THEN association candidates; continuous processing selects features and derives f(x)=y formulas. If only some subtasks complete, successful output and failure details can be returned while the Flow Node is persisted as FAILED with a review message.",
+                "overview": "Unified DISCOVER runs existing Apriori and LASSO/Symbolic analysis, then discovers actual-value/range trees and mixed formulas. Model and source identities remain separate. A mixed success does not hide a failed existing analysis. The P_RULE_PARTS and cluster options below apply to the existing branch; inspect separate P_MIXED_* settings for supplementary analysis.",
                 "callFlow": ["Choose categorical and/or continuous parts.", "Build an Apriori model and readable categorical-rule summaries.", "Use LASSO to select continuous features.", "Search symbolic or polynomial formulas and evaluate stability.", "Persist candidates with quality metrics."],
                 "algorithm": ["Apriori applies support, confidence, length, and combination budgets.", "LASSO uses median imputation, scaling, and sparse coefficient selection.", "Symbolic search compares linear, robust, ratio, polynomial-LASSO, and optional PySR candidates.", "Non-NONE cluster mode consumes the same Run's RELATION_NETWORK."],
                 "inputs": ["Stage 1 types", "Stage 2 pairs and optional network", "Part, threshold, candidate, budget, and time limits"], "outputs": ["Association model and readable rules", "Continuous features and symbolic formulas", "Same-Run input for stage 4"],
@@ -259,9 +276,9 @@
               }
             },
             "stage-4": {
-              "kicker": "M03004 · STEP 4", "title": "Rule violation detection", "summary": "Apply same-Run categorical and continuous rules to produce violation candidates and row details.", "shape": "diamond", "symbol": "4", "tone": "rose", "artifact": "CAT_RULE_VIOLATION · SYMBOLIC_RULE_VIOLATION",
+              "kicker": "M03004 · STEP 4", "title": "Rule violation detection", "summary": "UNIFIED_EDITING_DETECT applies same-run existing and mixed rules and preserves each source's violation candidates.", "shape": "diamond", "symbol": "4", "tone": "rose", "artifact": "CAT_RULE_VIOLATION · SYMBOLIC_RULE_VIOLATION · MIXED_XAI_CANDIDATES",
               "detail": {
-                "overview": "Categorical detection finds rows whose condition holds but outcome differs; continuous detection finds rows whose actual value exceeds formula error tolerances. This stage detects and records—it does not edit source data.",
+                "overview": "Unified DETECT applies existing association/Symbolic rules and mixed value/range/formula ASTs within the same run. Mismatches, missing outcomes and tolerance violations are review candidates, not automatic source edits. Rule-row counts may overlap across analyses and must not be summed as unique erroneous rows or cells.",
                 "callFlow": ["Verify selected parts and same-Run rule artifacts.", "Validate categorical conditions or safe symbolic expressions.", "Compare actual rows with expected or predicted values.", "Persist violations within per-rule limits.", "Record subtask and overall node states."],
                 "algorithm": ["Categorical: condition match plus null or mismatched result.", "Continuous: allowed formula and feature evaluation with relative and absolute error thresholds.", "Per-part savepoints can preserve one successful part if the other fails."],
                 "inputs": ["Same-Run association model and rule summary", "Same-Run symbolic rules", "Tolerance, rule, scan, and storage limits"], "outputs": ["Categorical violation details", "Continuous actual, predicted, and error details", "Input for M04002 and M05001"],
@@ -445,7 +462,7 @@
       "label": "Column Type Analysis",
       "group": "Editing Model Setup",
       "status": "enabled",
-      "summary": "Classifies columns as categorical or continuous and compares the run-time classification with the finalized column type used by downstream analysis.",
+      "summary": "Review or tune the automatically created UNIFIED_EDITING_PROFILE Job, or configure individual models. It combines existing type classification with sampled statistics and numeric-text diagnostics while preserving finalized labels.",
       "purpose": [
         "Create the shared column-type contract for correlation, rule discovery, and violation detection.",
         "Review statistics, missing values, distinct counts, and the reason for each classification."
@@ -457,7 +474,8 @@
       ],
       "workflow": [
         "Select the scenario and target table.",
-        "Choose the integrated profiling procedure or an individual model.",
+        "Open the automatically created Job to restore its saved model and parameters, or choose a model for a new Job. An unregistered built-in Job restores its saved contract without requiring central registration.",
+        "Import creates a new draft with the source contract and parameters. Review the target, generate the execution-type-specific PL/SQL, OML SQL or API spec, then save.",
         "Save and run the job, then review the run-based type before the final type."
       ],
       "aiGuidance": [
@@ -477,7 +495,7 @@
       "label": "Column Correlation Analysis",
       "group": "Editing Model Setup",
       "status": "enabled",
-      "summary": "Builds one integrated relationship matrix for categorical-categorical, continuous-continuous, and categorical-continuous pairs, then derives a relationship network and clusters.",
+      "summary": "Review or tune the automatically created UNIFIED_EDITING_RELATION Job, or configure individual models. It combines the existing relationship matrix, network and clusters with sampled mixed relationships, missingness and duplicate diagnostics.",
       "purpose": [
         "Compare all pair types with the metric appropriate to each data-type combination.",
         "Separate passed and below-threshold pairs while retaining both in the integrated matrix.",
@@ -494,7 +512,8 @@
         "Clusters are optional guidance for rule discovery and are applied only when P_CLUSTER_USAGE_MODE enables them."
       ],
       "workflow": [
-        "Select the scenario, target table, and integrated or individual analysis resource.",
+        "Open the saved UNIFIED_EDITING_RELATION Job and its parameters, or choose a model for a new Job. Keep existing-analysis and mixed-analysis options distinct.",
+        "Import creates a new draft. Review its target and source contract, generate the API spec for a unified Web API, then save.",
         "Save and run the job, then review the integrated matrix, pair-type tabs, and relationship network."
       ],
       "controls": [
@@ -511,7 +530,7 @@
       "label": "Automatic Rule Discovery",
       "group": "Editing Model Setup",
       "status": "enabled",
-      "summary": "Runs categorical Apriori discovery and continuous LASSO plus symbolic formula discovery as one integrated job, while keeping individual models available when needed.",
+      "summary": "Review or tune the automatically created UNIFIED_EDITING_DISCOVER Job. It supplements existing Apriori/LASSO/Symbolic results with mixed actual-value, range and formula rules; individual models remain available.",
       "purpose": [
         "Discover categorical IF/THEN association rules.",
         "Select important continuous features and generate f(x)=y symbolic rules.",
@@ -522,7 +541,7 @@
         { "name": "Continuous Automatic Rules", "description": "Compares LASSO feature importance with generated symbolic formulas and target status." }
       ],
       "deepDive": [
-        "P_RULE_PARTS selects ALL, CATEGORICAL, or CONTINUOUS work.",
+        "P_RULE_PARTS selects ALL, CATEGORICAL, or CONTINUOUS work in the existing analysis branch. Supplementary mixed analysis has separate settings.",
         "P_CLUSTER_USAGE_MODE supports NONE, PREFER_SAME_CLUSTER, and WITHIN_CLUSTER_ONLY. PREFER_SAME_CLUSTER is the safer default because cross-cluster predictors can remain eligible.",
         "When cluster usage is enabled, a RELATION_NETWORK result from the same run is required.",
         "An important LASSO feature may be absent from symbolic formulas because of R-squared, auto-target range, or feature-selection limits."
@@ -531,8 +550,9 @@
         "If only categorical results appear, check P_RULE_PARTS, continuous target eligibility, minimum R-squared, auto-target limits, and partial-completion messages."
       ],
       "workflow": [
-        "Select the scenario, table, and integrated or individual discovery resource.",
-        "Save and run the job, then inspect categorical rules and continuous LASSO/symbolic results."
+        "Open the saved UNIFIED_EDITING_DISCOVER Job and its parameters, or choose an individual model. Built-in Jobs without a registry ID retain their saved contract.",
+        "Import creates a new draft with source parameters and contract. Review the target and upstream input, generate the execution-type-specific script or API spec, then save.",
+        "Save and run the Job, then inspect paged condition and formula rules in M04002. Each rule retains its discovery method. Distinguish confidence/lift from tolerance coverage and validation R-squared."
       ],
       "controls": [
         "Save Job / Run, Run History, rule-type tabs, detail and graph layers, grid tools, and export."
@@ -548,7 +568,7 @@
       "label": "Rule Violation Detection",
       "group": "Editing Model Setup",
       "status": "enabled",
-      "summary": "Runs categorical association-rule checks and continuous symbolic-formula checks as one integrated job and opens the violating source rows by rule.",
+      "summary": "Review or tune the automatically created UNIFIED_EDITING_DETECT Job. It applies same-run existing association/Symbolic rules and mixed value/range/formula rules, keeping violation rows scoped by source.",
       "purpose": [
         "Detect records that contradict categorical condition/result rules.",
         "Detect continuous values outside the configured absolute or percentage error tolerance."
@@ -558,7 +578,7 @@
         { "name": "Continuous Rule Violations", "description": "Shows predicted/actual values, error measures, and violating rows for symbolic rules." }
       ],
       "deepDive": [
-        "P_RULE_PARTS selects ALL, CATEGORICAL, or CONTINUOUS detection.",
+        "P_RULE_PARTS selects ALL, CATEGORICAL, or CONTINUOUS detection in the existing analysis branch. Supplementary mixed detection uses the same run's mixed rules.",
         "P_SYMBOLIC_RULE_TABLE_NAME refers to the symbolic rule storage table, not an association-model name or arbitrary previous result table.",
         "P_RULE_ID=(auto) evaluates all eligible symbolic rules; a specific ID evaluates only that rule.",
         "With P_CONTINUE_ON_ERROR=Y, one subtask may succeed while another fails, so review partial-completion details."
@@ -567,8 +587,9 @@
         "A successful result with zero rows can mean no violation exceeded the current thresholds; distinguish it from missing rule inputs or a failed subtask."
       ],
       "workflow": [
-        "Select the scenario, table, and integrated or individual detection resource.",
-        "Save and run the job, review rule summaries, then open live or stored violating rows by rule."
+        "Open the saved UNIFIED_EDITING_DETECT Job and its parameters, or select an individual detection model. A built-in Job does not require a central registry ID.",
+        "Import creates a new draft. Review the target, same-run rule input and source contract, generate the API spec for a unified Web API, then save.",
+        "Save and run the Job, then select a condition or formula rule to load its saved violation rows. Preserve each method's metric meanings; overlapping rule-row counts are not unique error counts."
       ],
       "controls": [
         "Save Job / Run, Run History, rule-part tabs, violation-row detail, grid tools, and export."
@@ -605,7 +626,7 @@
       ],
       "workflow": [
         "Select a project, scenario, and saved Flow or create a new one.",
-        "Add saved jobs, connect compatible ports, validate and save the DAG, then execute it.",
+        "Save imported drafts in M03001-M03004 before adding them. Verify each node's saved Job, target and stage contract, connect compatible ports, validate and save the DAG, then execute it.",
         "Use Run History for status, node results, retry, and automatic refresh."
       ],
       "controls": [
@@ -626,13 +647,14 @@
       "layout": [
         { "name": "Scenario Runs", "description": "Selecting a run resets prior node/tab state and builds results for that run." },
         { "name": "Integrated Results", "description": "Loads a tab on first use, reuses it within the same run, and preserves vertical scroll while switching tabs." },
-        { "name": "Stage Results", "description": "Shows integrated matrix/network, categorical/continuous automatic rules, and categorical/continuous violations." }
+        { "name": "Stage Results", "description": "Preserves early profiling and relationship diagnostics. Final condition and formula rules load 20 at a time; select a rule for saved violations or its original source analysis." }
       ],
       "deepDive": [
         "The integrated relationship matrix includes PASS_YN=Y and N and supports All, Passed, and Below threshold filters.",
         "The relationship network combines edge and node/cluster information in one screen.",
         "LASSO features are candidates; symbolic formulas are generated rules. The target status is derived from the selected run's actual parameters.",
-        "A successful violation task with zero rows is not automatically an error. Check rule counts, thresholds, and partial-completion messages."
+        "A successful violation task with zero rows is not automatically an error. Check rule counts, thresholds, and partial-completion messages.",
+        "Mixed summary metrics, detail grids, and CSV exports follow the selected rule type. Formula within-tolerance rates and validation R-squared are distinct from value-rule confidence and lift. Counts from overlapping analysis sources are not unique error-row counts."
       ],
       "troubleshooting": [
         "If one categorical or continuous section is missing, check P_RULE_PARTS, upstream same-run inputs, and failed-subtask details."
@@ -643,10 +665,11 @@
       ],
       "workflow": [
         "Select a project, scenario, and Run.",
-        "Open stage or node tabs; each tab loads once for the selected Run and preserves its view state.",
+        "Open stage or node tabs. For discovery and detection, select condition or formula rules and optionally filter by discovery method. Historical anomaly explanations remain separate from actual-value rules.",
         "Use Review Editing Rules to continue with rule decisions when appropriate."
       ],
       "controls": [
+        "Filter by condition count and exclude zero counts. Rules with violations come first by count, followed by unrecorded and zero counts; this is not an error-probability ranking. Back to rules restores filters, page and position. Detected totals can differ from saved previews, and 70% confidence alone does not establish whether preview rows exist.",
         "Run selection, stage/node tabs, result filters, detail/graph layers, grid tools, export, and Review Editing Rules."
       ],
       "aiGuidance": [
@@ -964,7 +987,7 @@
       "status": "enabled",
       "summary": "Registers built-in Python APIs, external APIs, OML4Py resources, script-repository resources, and their call contracts and default JSON.",
       "purpose": [
-        "Manage integrated relationship, rule-discovery, and violation-detection APIs together with individual LASSO and symbolic APIs.",
+        "Manage UNIFIED_EDITING_PROFILE/RELATION/DISCOVER/DETECT and existing integrated or individual APIs. Default creation adds only missing configured resources and preserves existing parameters and disabled states.",
         "Keep method, endpoint, parameter names, types, defaults, descriptions, and result contracts consistent."
       ],
       "layout": [
@@ -973,12 +996,12 @@
         { "name": "Parameters", "description": "Shows immutable parameter names with their types, actual defaults, and help comments." }
       ],
       "workflow": [
-        "Select a built-in Python API or an external/OML resource.",
+        "Use the wand button to create missing configured default APIs, including the four UNIFIED_EDITING stages. To register just one, clear Registered and select its preset in the tree.",
         "Review method, endpoint, output mode, parameters, and default JSON.",
-        "Register it, then select the resource in M03001-M03004 Data Work and use the saved job in a Flow."
+        "Open a saved Job in M03001-M03004, or use a registered resource for a new Job. Allowed unregistered built-ins execute from their saved contract. Changes to central registration do not rewrite existing Jobs."
       ],
       "controls": [
-        "Group and object search, refresh, load preset JSON, save/register, delete, and parameter input/output editors."
+        "Default Python API creation adds only missing configured resources. Apply preset JSON loads defaults into the editor and requires Save. Reset reapplies a linked preset, or reloads stored values when no preset exists. Search, refresh, save and parameter editors remain available."
       ],
       "aiGuidance": [
         "Preset JSON initializes a new job; explain an executed result from that job's saved parameters and selected run.",

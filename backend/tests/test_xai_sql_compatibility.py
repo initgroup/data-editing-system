@@ -45,6 +45,7 @@ def sqlite_statement(sql):
             sql = re.sub(rf"\bQS\.{column}\b", expression, sql)
     sql = sql.replace("DBMS_LOB.INSTR", "INSTR").replace("SYSTIMESTAMP", "CURRENT_TIMESTAMP")
     sql = re.sub(r"FETCH FIRST (\d+) ROWS ONLY", r"LIMIT \1", sql)
+    sql = re.sub(r"OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY", "LIMIT :pageSize OFFSET :offset", sql)
     return sql
 
 

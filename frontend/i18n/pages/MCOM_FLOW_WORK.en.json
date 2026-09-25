@@ -38,7 +38,13 @@
     "historyElapsed": "Elapsed",
     "exportExcelTitle": "Export Excel",
     "exportCsvTitle": "Export CSV",
-    "exportJsonTitle": "Export JSON"
+    "exportJsonTitle": "Export JSON",
+    "flowProcessTemplate": "Default FLOW scenario",
+    "flowProcessUnified": "Unified editing: types, relationships, OML and mixed analysis (4 stages)",
+    "flowProcessLegacy": "Existing type and relationship analysis (4 stages)",
+    "flowProcessMixed": "Mixed statistics, relationships and value/formula rules (4 stages)",
+    "prepareProcessTemplate": "Prepare selected scenario FLOW",
+    "prepareProcessTemplateTitle": "Create or load an independent default FLOW for the selected target table."
   },
   "messages": {
     "flowEdgeStageBlocked": "Stage {fromStage} cannot precede stage {toStage}.",
@@ -46,6 +52,10 @@
     "historyTotal": "Total {count}",
     "resultSqlTotal": "Total {count}",
     "resultSqlPageRowsSelected": "{count} rows loaded on page {page}. ({elapsed} ms)",
-    "nodeRunResultCount": "Node results: {count}"
+    "nodeRunResultCount": "Node results: {count}",
+    "selectProjectScenarioFirst": "Select a project and scenario first.",
+    "processTemplateSelectTarget": "Select a target table to prepare its default FLOW.",
+    "processTemplateMissingResult": "The saved default FLOW could not be found.",
+    "processTemplateFailed": "The selected scenario FLOW could not be prepared."
   }
 }

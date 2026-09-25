@@ -93,6 +93,10 @@ def _load_networkx_dependency():
 
 
 WEB_API_METHODS = {
+    "UNIFIED_EDITING_PROFILE",
+    "UNIFIED_EDITING_RELATION",
+    "UNIFIED_EDITING_DISCOVER",
+    "UNIFIED_EDITING_DETECT",
     "MIXED_XAI_PROFILE",
     "MIXED_XAI_RELATION",
     "MIXED_XAI_RULE_DISCOVER",
@@ -119,6 +123,11 @@ def execute_web_api_job(
         or job.get("EXEC_OBJECT_NAME")
     )
     payload = build_payload(job, runtime_values or {}, run_id)
+    if method.startswith("UNIFIED_EDITING_"):
+        from backend.services import integrated_editing_service
+        from backend.services.api_call_service import create_internal_success_message
+        result = integrated_editing_service.execute(conn, method, payload)
+        return create_internal_success_message(method, result)
     if method in {"MIXED_XAI_PROFILE", "MIXED_XAI_RELATION"}:
         from backend.services import mixed_analysis_profile_service as analysis
         result = (analysis.profile if method == "MIXED_XAI_PROFILE" else analysis.relationships)(conn, payload)
@@ -202,6 +211,14 @@ def get_method_from_spec(value: Any) -> str:
     if method:
         return str(method)
     endpoint = str(spec.get("serviceUrl") or spec.get("endpoint") or "").lower()
+    for suffix, method_name in (
+        ("unified-editing-profile", "UNIFIED_EDITING_PROFILE"),
+        ("unified-editing-relation", "UNIFIED_EDITING_RELATION"),
+        ("unified-editing-discover", "UNIFIED_EDITING_DISCOVER"),
+        ("unified-editing-detect", "UNIFIED_EDITING_DETECT"),
+    ):
+        if endpoint.endswith("/" + suffix):
+            return method_name
     if endpoint.endswith("/lasso-feature-select"):
         return "LASSO_FEATURE_SELECT"
     if endpoint.endswith("/symbolic-regression-rule"):
@@ -630,12 +647,23 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
             run_id,
             max(len(continuous_columns), max_auto_targets),
         )
-        target_columns = prioritize_auto_lasso_target_columns(
+        ordered_targets = prioritize_auto_lasso_target_columns(
             continuous_columns,
             correlated_columns,
-        )[:max_auto_targets]
+        )
+        target_columns = ordered_targets[:max_auto_targets]
+        target_selection = {
+            "source": "FINAL_CONTINUOUS_TYPES",
+            "order": "CORRELATION_PRIORITY_THEN_COLUMN_ORDER",
+            "eligibleCount": len(ordered_targets),
+            "selectedCount": len(target_columns),
+            "omittedCount": max(0, len(ordered_targets) - len(target_columns)),
+            "maxAutoTargets": max_auto_targets,
+            "selectedColumns": target_columns,
+            "omittedColumns": ordered_targets[max_auto_targets:],
+        }
         if not target_columns:
-            return build_lasso_skip_result(
+            skipped = build_lasso_skip_result(
                 "NO_ELIGIBLE_CONTINUOUS_TARGET",
                 (
                     "No eligible continuous target columns were found after excluding the case ID. "
@@ -643,7 +671,11 @@ def run_lasso_feature_select(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
                 ),
                 cluster_usage_mode=cluster_usage_mode,
             )
-        return run_lasso_auto_targets(conn, payload, target_columns, continue_on_error, continuous_columns)
+            skipped["targetSelection"] = target_selection
+            return skipped
+        result = run_lasso_auto_targets(conn, payload, target_columns, continue_on_error, continuous_columns)
+        result["targetSelection"] = target_selection
+        return result
 
     target_column = require_identifier(target_column_value, "targetColumn")
     if target_column in excluded_columns:
@@ -4627,6 +4659,8 @@ def fetch_numeric_matrix(
             "effectiveSampleRows": effective_sample_rows,
             "loadedRows": valid_row_count,
             "requestedFeatureCount": len(requested_features),
+            "truncatedFeatureCount": len(requested_features) - len(effective_features),
+            "truncatedFeatures": requested_features[feature_limit:],
             "effectiveFeatureCount": len(retained_features),
             "droppedFeatureCount": len(dropped_features),
             "droppedFeatures": dropped_features,
@@ -4634,6 +4668,8 @@ def fetch_numeric_matrix(
             "missingValueStrategy": "MEDIAN_BY_FEATURE",
             "maxInMemoryRows": row_limit,
             "maxInputFeatures": feature_limit,
+            "sampleSelection": "FIRST_ROWS_WITH_NON_NULL_TARGET",
+            "sourceRowCountKnown": False,
             "cacheHitYn": "Y" if cache_hit else "N",
         },
     )

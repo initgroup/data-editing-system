@@ -400,7 +400,41 @@ def _rule_summary(rules, runs, column_comments):
     }
 
 
-def read_results(conn, flow_run_id, user_id, *, include_all_users=False, target_owner="", target_table=""):
+def read_column_insights(conn, flow_run_id, user_id, *, include_all_users=False, target_owner="", target_table=""):
+    """Pattern statistics use aggregates; historical XAI reads its capped predicates, never previews."""
+    with conn.cursor() as cursor:
+        _execute(cursor, "XAI_FLOW_ACCESS", {"runId": flow_run_id, "userId": user_id,
+                                           "includeAllUsers": "Y" if include_all_users else "N"})
+        if not cursor.fetchone():
+            raise HTTPException(404, "Flow run was not found in your project.")
+        params = {"runId": flow_run_id, "owner": target_owner.strip().upper() or None,
+                  "tableName": target_table.strip().upper() or None}
+        _execute(cursor, "XAI_FLOW_SUMMARIES", params)
+        runs = _rows(cursor)
+        for run in runs:
+            run["summary"] = _json_object(run.pop("SUMMARY_JSON"), "SUMMARY_JSON")
+        real_patterns = any(run["summary"].get("algorithm") in {"MIXED_PATTERN_TREE", "MIXED_PROFILE"} for run in runs)
+        if real_patterns:
+            _execute(cursor, "EDITING_PATTERN_COLUMN_INSIGHTS", params)
+            return _rows(cursor), True
+        _execute(cursor, "XAI_FLOW_RULES", params)
+        summary = _rule_summary(_rows(cursor), runs, {})
+        buckets = {}
+        for rule in summary["rules"]:
+            for column in rule["CONDITION_COLUMNS"]:
+                bucket = buckets.setdefault(column, {"COLUMN_NAME": column, "VIOLATION_COUNT": 0, "RULE_COUNT": 0})
+                bucket["VIOLATION_COUNT"] += int(rule.get("MATCH_COUNT") or 0)
+                bucket["RULE_COUNT"] += int((rule.get("MATCH_COUNT") or 0) > 0)
+        return list(buckets.values()), False
+
+
+def read_results(conn, flow_run_id, user_id, *, include_all_users=False, target_owner="", target_table="",
+                 page=1, page_size=20, include_violations=True, view="rules", rule_id=""):
+    page, page_size = max(1, int(page)), max(1, min(100, int(page_size)))
+    if view not in {"rules", "violations"}:
+        raise HTTPException(400, "Unsupported historical result view.")
+    if view == "violations" and (not target_owner or not target_table or not str(rule_id).strip() or len(str(rule_id)) > 128):
+        raise HTTPException(400, "Select a target owner, table and original rule ID to view historical candidates.")
     with conn.cursor() as cursor:
         _execute(cursor, "XAI_FLOW_ACCESS", {"runId": flow_run_id, "userId": user_id, "includeAllUsers": "Y" if include_all_users else "N"})
         if not cursor.fetchone():
@@ -412,20 +446,49 @@ def read_results(conn, flow_run_id, user_id, *, include_all_users=False, target_
         runs = _rows(cursor)
         for run in runs:
             run["summary"] = _json_object(run.pop("SUMMARY_JSON"), "SUMMARY_JSON")
+        if view == "violations":
+            if any(run["summary"].get("algorithm") in {"MIXED_PATTERN_TREE", "MIXED_PROFILE"} for run in runs):
+                raise HTTPException(400, "Use the editing-results rule key for actual mixed pattern violations.")
+            selected_params = {**params, "ruleId": str(rule_id).strip()}
+            _execute(cursor, "XAI_FLOW_SELECTED_RULE", selected_params)
+            selected_rules = _rows(cursor)
+            if len(selected_rules) != 1:
+                raise HTTPException(404, "The historical explanation was not found in the selected run and target.")
+            _execute(cursor, "XAI_FLOW_SELECTED_VIOLATION_COUNT", selected_params)
+            total = int(_rows(cursor)[0]["TOTAL"])
+            _execute(cursor, "XAI_FLOW_SELECTED_VIOLATIONS", {**selected_params, "offset": (page - 1) * page_size, "pageSize": page_size})
+            violations = _rows(cursor)
+            for row in violations:
+                row["ROW_DATA_JSON"] = _json_object(row["ROW_DATA_JSON"], "ROW_DATA_JSON")
+            return {"status": "success", "data": {"rules": selected_rules, "ruleSummary": _rule_summary(selected_rules, runs, {}),
+                    "violations": violations, "summary": runs[0]["summary"] if len(runs) == 1 else {}, "runs": runs,
+                    "total": total, "page": page, "pageSize": page_size, "hasMore": page * page_size < total,
+                    "previewOnly": True, "countBasis": "STORED_EXPLANATION_MATCHES"}}
         if any(run["summary"].get("algorithm") in {"MIXED_PATTERN_TREE", "MIXED_PROFILE"} for run in runs):
             if any(run["summary"].get("algorithm") not in {"MIXED_PATTERN_TREE", "MIXED_PROFILE"} for run in runs):
                 raise HTTPException(409, "This run contains different result versions. Select a target table to view its original results.")
             from backend.services.mixed_pattern_service import read_pattern_results
-            return read_pattern_results(cursor, params, runs)
-        _execute(cursor, "XAI_FLOW_RULES", params)
+            return read_pattern_results(cursor, params, runs, page=page, page_size=page_size, include_violations=include_violations)
+        _execute(cursor, "EDITING_HISTORICAL_EXPLANATION_COUNT", params)
+        count_rows = _rows(cursor)
+        total = int(count_rows[0].get("TOTAL") or 0) if count_rows else 0
+        _execute(cursor, "XAI_FLOW_RULES_PAGE", {**params, "offset": (page - 1) * page_size, "pageSize": page_size})
         rules = _rows(cursor)
-        _execute(cursor, "XAI_FLOW_VIOLATIONS", params)
-        violations = _rows(cursor)
+        violations = []
+        if include_violations:
+            _execute(cursor, "XAI_FLOW_VIOLATIONS", params)
+            violations = _rows(cursor)
         for row in violations:
             row["ROW_DATA_JSON"] = _json_object(row["ROW_DATA_JSON"], "ROW_DATA_JSON")
         _execute(cursor, "XAI_FLOW_COLUMN_COMMENTS", params)
         comments = {row["COLUMN_NAME"]: row["COMMENTS"] for row in _rows(cursor) if row.get("COMMENTS")}
         rule_summary = _rule_summary(rules, runs, comments)
+        rule_summary["overview"].update(TOTAL_RULES=total, MAPPED_RULES=total,
+                                        NON_PERFECT_CONF_RULES=int(count_rows[0].get("MATCHED_RULES") or 0) if count_rows else 0)
+        rule_summary.update(total=total, page=page, pageSize=page_size, hasMore=page * page_size < total,
+                            distributionScope="PAGE")
         return {"status": "success", "data": {"rules": rules, "violations": violations,
                 "ruleSummary": rule_summary,
-                "summary": runs[0]["summary"] if len(runs) == 1 else {"targetCount": len(runs), "ruleCount": len(rules)}, "runs": runs}}
+                "summary": runs[0]["summary"] if len(runs) == 1 else {"targetCount": len(runs), "ruleCount": total}, "runs": runs,
+                "page": page, "pageSize": page_size, "total": total, "hasMore": page * page_size < total,
+                "violationsIncluded": include_violations}}

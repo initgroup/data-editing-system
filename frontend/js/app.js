@@ -117,6 +117,8 @@ const PageManager = {
 
     clearLoginSession() {
         sessionStorage.removeItem("initLoginUser");
+        sessionStorage.removeItem("init.quick-edit.pipeline.v1");
+        sessionStorage.removeItem("init.quick-edit.context-notice.v1");
         sessionStorage.removeItem("targetConnectionId");
         sessionStorage.removeItem("targetConnectionName");
         sessionStorage.removeItem("initRuntimeSettings");
@@ -229,25 +231,26 @@ const PageManager = {
                 return false;
             }
             const json = await response.json().catch(() => ({}));
-            if (json.user) {
-                sessionStorage.setItem("initLoginUser", JSON.stringify(json.user));
-                CommonUtils.setRuntimeSettings(json.runtimeSettings);
-                if (json.targetConnectionId != null) {
-                    sessionStorage.setItem("targetConnectionId", String(json.targetConnectionId));
-                    const serverConnectionName = String(json.connection?.connectionName || "").trim();
-                    if (serverConnectionName) {
-                        sessionStorage.setItem("targetConnectionName", serverConnectionName);
-                    }
-                    updateCurrentTargetDbSelect?.();
-                }
-                this.extendSession(json.sessionTtlSeconds || response.headers.get("X-INIT-Session-TTL-Seconds"));
-            }
+            this.applyVerifiedServerSession(json, response);
             return true;
         } catch (error) {
             console.warn("[System] Session validation failed.", error);
             this.resetWorkspaceForLogout();
             return false;
         }
+    },
+
+    applyVerifiedServerSession(json, response) {
+        if (!json?.user) return;
+        sessionStorage.setItem("initLoginUser", JSON.stringify(json.user));
+        CommonUtils.setRuntimeSettings(json.runtimeSettings);
+        if (json.targetConnectionId != null) {
+            sessionStorage.setItem("targetConnectionId", String(json.targetConnectionId));
+            const serverConnectionName = String(json.connection?.connectionName || "").trim();
+            sessionStorage.setItem("targetConnectionName", serverConnectionName || `Connection #${json.targetConnectionId}`);
+            updateCurrentTargetDbSelect?.();
+        }
+        this.extendSession(json.sessionTtlSeconds || response.headers.get("X-INIT-Session-TTL-Seconds"));
     },
 
     rememberCurrentPage(pageCode, title) {

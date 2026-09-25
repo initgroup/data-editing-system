@@ -160,6 +160,7 @@ def load_importable_flow(
     return {
         "FLOW_NAME": source.get("FLOW_NAME") or "",
         "FLOW_DESC": source.get("FLOW_DESC") or "",
+        "FLOW_TYPE": source.get("FLOW_TYPE") or "",
         "USE_YN": source.get("USE_YN") or "Y",
         "NODES": [sanitize_import_node(node) for node in source.get("NODES") or []],
         "EDGES": [
@@ -477,7 +478,11 @@ def build_quick_edit_history_detail(run_row: Dict[str, Any], node_rows: List[Dic
     plan_data = parse_json(run_row.get("PLAN_JSON"), {})
     plan_steps = plan_data.get("plan") if isinstance(plan_data, dict) else []
     quick_summary = plan_data.get("quickEditSummary", {}) if isinstance(plan_data, dict) else {}
-    process_type = "MIXED_XAI" if (
+    process_type = "UNIFIED" if (
+        str(run_row.get("FLOW_TYPE") or "").upper() == "UNIFIED_EDITING_SCENARIO"
+        or any(str(node.get("EXEC_METHOD") or node.get("EXEC_OBJECT_NAME") or "").upper().startswith("UNIFIED_EDITING_") for node in node_rows)
+        or (isinstance(quick_summary, dict) and quick_summary.get("processType") == "UNIFIED")
+    ) else "MIXED_XAI" if (
         str(run_row.get("FLOW_TYPE") or "").upper() == "MIXED_XAI_SCENARIO"
         or any(str(node.get("EXEC_METHOD") or node.get("EXEC_OBJECT_NAME") or "").upper().startswith("MIXED_XAI_") for node in node_rows)
         or (isinstance(quick_summary, dict) and quick_summary.get("processType") == "MIXED_XAI")
@@ -1228,7 +1233,8 @@ def execute_flow_node(conn, step: Dict[str, Any], runtime_values: Optional[Dict[
             "message": message,
             "output": build_contract_node_output(step, job, values)
         }
-    if node_type in {"JOB", "DATA_PROFILE", "COLUMN_CORR", "AUTO_RULE", "RULE_VIOLATION"}:
+    if node_type in {"JOB", "DATA_PROFILE", "COLUMN_CORR", "AUTO_RULE", "RULE_VIOLATION",
+                     "M03001", "M03002", "M03003", "M03004"}:
         raise HTTPException(status_code=400, detail="Job node does not reference a saved work job.")
     return {
         "message": f"{node_type or 'NODE'} node has no executable job. Marked as success.",
@@ -1553,6 +1559,9 @@ def build_contract_node_output(
                 or ""
             )
         object_name = object_name.strip().upper()
+        if (port.get("artifact") == "ASSOCIATION_MODEL" and len(reported_models) == 1
+                and str(node_payload.get("execMethod") or "").upper().startswith("UNIFIED_EDITING_")):
+            object_name = next(iter(reported_models))
         legacy_mixed_object = {
             "MIXED_XAI_RULES": "INIT$_TB_RULEDISC_XAI",
             "MIXED_XAI_CANDIDATES": "INIT$_TB_RULEVIOL_XAI",

@@ -157,6 +157,47 @@ def _get_table_result_layout(object_name: str) -> dict[str, str]:
     return dict(TABLE_RESULT_LAYOUTS.get(normalized_name) or GENERIC_TABLE_RESULT_LAYOUT)
 
 
+def _unified_association_scope(conn, request, run_source_type, run_id, target_owner, target_table) -> bool:
+    if run_source_type != "FLOW_WORK" or run_id is None:
+        return False
+    nodes = fetch_flow_run_nodes(
+        conn, flow_run_id=run_id, user_id=get_request_user_id(request),
+        include_all_users=get_request_role_code(request) == "ADMIN",
+    )["data"]
+    if not nodes:
+        raise HTTPException(status_code=404, detail="The authorized Flow Run was not found.")
+    unified_methods = {"UNIFIED_EDITING_PROFILE", "UNIFIED_EDITING_RELATION", "UNIFIED_EDITING_DISCOVER", "UNIFIED_EDITING_DETECT"}
+    for node in nodes:
+        payload = _json_object(node.get("PAYLOAD"))
+        methods = (node.get("EXEC_METHOD"), node.get("EXEC_OBJECT_NAME"), payload.get("execMethod"))
+        if not any(str(method or "").strip().upper() in unified_methods for method in methods):
+            continue
+        if target_owner and node.get("TARGET_OWNER") != target_owner:
+            continue
+        if target_table and node.get("TARGET_TABLE") != target_table:
+            continue
+        return True
+    return False
+
+
+def _unified_association_source(owner_name: str, object_name: str) -> str:
+    sql_id = {
+        "INIT$_TB_RULEDISC_ASSOC_SUM": "MCOMMON_ANLY_WORK_UNIFIED_ASSOC_RULE_SOURCE",
+        "INIT$_TB_RULEVIOL_ASSOC": "MCOMMON_ANLY_WORK_UNIFIED_ASSOC_VIOLATION_SOURCE",
+    }[object_name]
+    sql = SqlLoader.get_sql(sql_id).replace("/*OWNER*/", _quote_identifier(owner_name))
+    return "(" + sql.rstrip().rstrip(";") + ")"
+
+
+def _scope_unified_association_sql(sql: str, owner_name: str) -> str:
+    # The templates own the family predicate; only known table sources are replaced.
+    return re.sub(
+        r'\b(FROM|JOIN)\s+"(INIT\$_TB_RULEDISC_ASSOC_SUM|INIT\$_TB_RULEVIOL_ASSOC)"',
+        lambda match: match.group(1) + " " + _unified_association_source(owner_name, match.group(2)),
+        sql,
+    )
+
+
 def _get_model_result_layout(model_name: str, model_metadata: dict[str, Any] | None = None) -> dict[str, str]:
     metadata = model_metadata or {}
     normalized_name = str(model_name or "").strip().upper()
@@ -1781,10 +1822,13 @@ def _fetch_rule_violation_summary(
     run_source_type: str = "",
     run_id: int | None = None,
     include_balanced_rules: bool = False,
+    unified_legacy_scope: bool = False,
 ) -> dict[str, Any] | None:
     if object_name != "INIT$_TB_RULEVIOL_ASSOC":
         return None
     result_object = f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}"
+    if unified_legacy_scope:
+        result_object = _unified_association_source(owner_name, object_name)
     where_clauses = []
     bind_params: dict[str, Any] = {}
     if target_owner:
@@ -1844,6 +1888,8 @@ def _fetch_rule_violation_summary(
     def execute_summary_query(label: str, sql: str, params: dict[str, Any] | None = None) -> None:
         started_at = time.perf_counter()
         try:
+            if unified_legacy_scope:
+                sql = _scope_unified_association_sql(sql, owner_name)
             cursor.execute(sql, params or bind_params)
         except Exception:
             logger.warning(
@@ -2845,18 +2891,11 @@ def get_descriptive_statistics(
         mixed_xai = any("MIXED_XAI_" in " ".join(str(row.get(key) or "") for key in ("EXEC_METHOD", "EXEC_OBJECT_NAME"))
                         or str(row.get("RESULT_OBJECT_NAME") or "").endswith("_XAI") for row in nodes)
         if mixed_xai:
-            from backend.services.mixed_xai_service import read_results
-            payload = read_results(conn, normalized_flow_run_id, user_id, include_all_users=include_all_users,
-                                   target_owner=source_owner, target_table=source_table)["data"]
-            buckets = {}
-            real_patterns = payload.get("summary", {}).get("algorithm") == "MIXED_PATTERN_TREE"
-            for rule in payload["ruleSummary"]["rules"]:
-                affected_columns = [rule["RESULT_COLUMN"]] if real_patterns else rule["CONDITION_COLUMNS"]
-                for column in affected_columns:
-                    bucket = buckets.setdefault(column, {"COLUMN_NAME": column, "VIOLATION_COUNT": 0, "RULE_COUNT": 0})
-                    bucket["VIOLATION_COUNT"] += int(rule.get("MATCH_COUNT") or 0)
-                    bucket["RULE_COUNT"] += int((rule.get("MATCH_COUNT") or 0) > 0)
-            insight_rows = list(buckets.values())
+            from backend.services.mixed_xai_service import read_column_insights
+            insight_rows, real_patterns = read_column_insights(
+                conn, normalized_flow_run_id, user_id, include_all_users=include_all_users,
+                target_owner=source_owner, target_table=source_table,
+            )
             if real_patterns:
                 data["notice"] = (data.get("notice", "") + " 실제 THEN 결과 컬럼별 전체 규칙×행 위반 건수입니다. 저장 미리보기 수와 다르며, 통계적 패턴 위반이므로 업무상 오류 여부는 검토가 필요합니다.").strip()
             else:
@@ -3066,8 +3105,12 @@ def get_result_table(
     try:
         conn = get_target_db_connection(request)
         cursor = conn.cursor()
+        shared_association_table = object_name in {"INIT$_TB_RULEDISC_ASSOC_SUM", "INIT$_TB_RULEVIOL_ASSOC"}
+        unified_legacy_scope = shared_association_table and _unified_association_scope(
+            conn, request, run_source_type, normalized_run_id, target_owner, target_table,
+        )
         if (
-            object_name == "INIT$_TB_RULEVIOL_ASSOC"
+            (object_name == "INIT$_TB_RULEVIOL_ASSOC" or unified_legacy_scope)
             and target_owner
             and target_table
             and run_source_type
@@ -3157,7 +3200,10 @@ def get_result_table(
             order_sql = " ORDER BY VIOLATION_SCORE DESC NULLS LAST, RULE_CONFIDENCE DESC NULLS LAST, VIOLATION_ID"
         if object_name == "INIT$_TB_RULEVIOL_SYMBOLIC":
             order_sql = " ORDER BY VIOLATION_SCORE DESC NULLS LAST, ERROR_PCT DESC NULLS LAST, ABS_ERROR DESC NULLS LAST, VIOLATION_ID"
-        if target_owner and "OWNER" in columns:
+        if unified_legacy_scope and target_owner and "TARGET_OWNER" in columns:
+            where_clauses.append("TARGET_OWNER = :targetOwner")
+            bind_params["targetOwner"] = target_owner
+        elif target_owner and "OWNER" in columns:
             where_clauses.append("OWNER = :targetOwner")
             bind_params["targetOwner"] = target_owner
         elif target_owner and "TARGET_OWNER" in columns:
@@ -3169,7 +3215,7 @@ def get_result_table(
         elif target_table and "TARGET_TABLE" in columns:
             where_clauses.append("TARGET_TABLE = :targetTable")
             bind_params["targetTable"] = target_table
-        if object_name == "INIT$_TB_RULEVIOL_ASSOC" and rule_model_name and "MODEL_NAME" in columns:
+        if (object_name == "INIT$_TB_RULEVIOL_ASSOC" or unified_legacy_scope) and rule_model_name and "MODEL_NAME" in columns:
             where_clauses.append("MODEL_NAME = :ruleModelName")
             bind_params["ruleModelName"] = rule_model_name
         if object_name in {"INIT$_TB_COLREL_CAT_PAIR", "INIT$_TB_COLREL_NUM_PAIR"} and {"COL_A", "COL_B"}.issubset(columns):
@@ -3273,7 +3319,9 @@ def get_result_table(
             bind_params["runSourceType"] = run_source_type
             bind_params["runId"] = normalized_run_id
         where_sql = f" WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-        base_sql = f"SELECT * FROM {_quote_identifier(owner_name)}.{_quote_identifier(object_name)}{where_sql}{order_sql}"
+        result_source = (_unified_association_source(owner_name, object_name) if unified_legacy_scope
+                         else f"{_quote_identifier(owner_name)}.{_quote_identifier(object_name)}")
+        base_sql = f"SELECT * FROM {result_source}{where_sql}{order_sql}"
         result = _fetch_dynamic_page(cursor, base_sql, page, page_size, bind_params)
         cat_corr_summary = None
         relation_summary = None
@@ -3311,6 +3359,7 @@ def get_result_table(
                 run_source_type,
                 normalized_run_id,
                 include_balanced_rule_summary,
+                unified_legacy_scope=unified_legacy_scope,
             )
         elif result_layout.get("summary") == "lassoSummary":
             lasso_summary = _fetch_lasso_summary(
@@ -3415,8 +3464,14 @@ def get_symbolic_rule_sample(
     runId: int,
     sampleLimit: int = 300,
     flow_menu_code: str = "M04001",
+    targetOwner: str | None = None,
+    targetTable: str | None = None,
+    targetColumn: str | None = None,
 ):
     owner_name = _validate_identifier(owner, "owner")
+    selected_target_owner = _validate_identifier(targetOwner, "target owner") if targetOwner else None
+    selected_target_table = _validate_identifier(targetTable, "target table") if targetTable else None
+    selected_target_column = _validate_identifier(targetColumn, "target column") if targetColumn else None
     rule_id = str(ruleId or "").strip()
     if not rule_id or len(rule_id) > 128:
         raise HTTPException(status_code=400, detail="Invalid symbolic rule ID.")
@@ -3445,6 +3500,9 @@ def get_symbolic_rule_sample(
                 "runSourceType": run_source_type,
                 "runId": normalized_run_id,
                 "ruleId": rule_id,
+                "targetOwner": selected_target_owner,
+                "targetTable": selected_target_table,
+                "targetColumn": selected_target_column,
                 "flowMenuCode": normalized_flow_menu_code,
                 "includeAllUsers": "Y" if get_request_role_code(request) == "ADMIN" else "N",
                 "userId": get_request_user_id(request),

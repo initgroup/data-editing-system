@@ -275,8 +275,8 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertIn('["통계 수집", Number(timings.statisticsSeconds)]', quick_js)
         self.assertIn('completeStep(3, `대상 테이블 등록 완료', quick_js)
         self.assertIn('setStep(4, `${processLabel()} ${modelStageCount()}단계 모델과 FLOW 설계를 저장하고 있습니다.`', quick_js)
-        self.assertIn('value="LEGACY"', quick_html)
-        self.assertIn('value="MIXED_XAI"', quick_html)
+        self.assertNotIn('name="processType"', quick_html)
+        self.assertIn('id="qeProcessInfo"', quick_html)
         self.assertIn('provisionDefaultDesign(payload)', api_client_js)
         self.assertIn('autoDesignYn: "N"', api_client_js)
         self.assertIn('.qe-target-timing', quick_css)
@@ -642,13 +642,17 @@ class QuickEditHistoryTests(unittest.TestCase):
         self.assertIn("run_flow_background,", flow_router)
         self.assertIn("flow_work.execute_flow_plan(", flow_router)
 
-    def test_quick_edit_requests_per_legend_violation_candidates(self):
+    def test_quick_edit_pages_selected_rule_violations_and_keeps_advanced_legend_queries(self):
         quick_js = (ROOT_DIR / "quick-edit" / "js" / "quick-edit.js").read_text(encoding="utf-8")
         api_client_js = (ROOT_DIR / "quick-edit" / "js" / "api-client.js").read_text(encoding="utf-8")
         analysis_sql = (ROOT_DIR / "database" / "MCOM_ANLY_WORK.sql").read_text(encoding="utf-8")
         analysis_service = (ROOT_DIR / "backend" / "services" / "anly_work_service.py").read_text(encoding="utf-8")
 
-        self.assertIn("balancedRuleSummaryYn: true", quick_js)
+        # The first catalog page no longer preloads all per-legend violation candidates.
+        # Browser regressions verify lazy paging and duplicate rule IDs across sources.
+        self.assertIn('view: "violations"', quick_js)
+        self.assertIn("ruleKey: params.ruleKey", api_client_js)
+        self.assertIn('"/mlAnalysis/editing-results"', api_client_js)
         self.assertIn('balancedRuleSummaryYn: params.balancedRuleSummaryYn ? "Y" : undefined', api_client_js)
         self.assertIn("summary.balancedTopRules", quick_js)
         self.assertIn("PARTITION BY S.CONDITION_COUNT", analysis_sql)

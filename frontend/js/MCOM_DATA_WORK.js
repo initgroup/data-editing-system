@@ -509,6 +509,7 @@
         runtimeBindDialog: null,
         runtimeBindValues: {},
         savedJobSnapshot: null,
+        importedJobSnapshot: null,
         scriptWrapMode: false,
         executionConfigLoadCount: 0,
 
@@ -670,6 +671,7 @@
             this.runtimeBindDialog = null;
             this.runtimeBindValues = {};
             this.savedJobSnapshot = null;
+            this.importedJobSnapshot = null;
             this.scriptWrapMode = false;
             this.executionConfigLoadCount = 0;
             this.isInit = false;
@@ -1315,7 +1317,7 @@
                 const message = error.message || "OML4Py resource load failed.";
                 console.error("[${PAGE_CODE}] OML resource load failed", error);
                 if (select) select.innerHTML = `<option value="">OML resource load failed</option>`;
-                if (webSelect) webSelect.innerHTML = `<option value="">Python API resource load failed</option>`;
+                this.renderWebApiResources();
                 this.renderSqlMessage("sql", message, "error");
             }
         },
@@ -1486,7 +1488,8 @@
 
         async handleWebApiMethodChange(value) {
             const resource = this.findWebApiResource(value);
-            const api = this.getWebApiDefinition(value);
+            const api = this.getSavedBuiltinWebApiDefinition(value)
+                || (resource ? this.createWebApiDefinitionFromResource(resource) : this.getWebApiDefinition(value));
             if (api?.savedBuiltin) {
                 this.renderCurrentJob();
                 return;
@@ -1536,14 +1539,17 @@
         getSavedBuiltinWebApiDefinition(value) {
             // This restores a server-loaded job's UI metadata. Authorization
             // remains in the server; an arbitrary method name is not a catalog entry.
-            const saved = this.savedJobSnapshot;
+            const saved = this.getExecutionSettingsSnapshot();
             const current = this.currentJob;
             const emptyResource = (id) => id === null || id === undefined || id === "";
             if (!saved || !current || !Number.isInteger(Number(saved.profileJobId)) || Number(saved.profileJobId) <= 0
-                || String(saved.profileJobId) !== String(current.profileJobId)
                 || saved.execSourceType !== "WEB_API" || current.execSourceType !== "WEB_API"
                 || !emptyResource(saved.execResourceId) || !emptyResource(current.execResourceId)) return null;
             const methods = {
+                UNIFIED_EDITING_PROFILE: "/api/mlAnalysis/unified-editing-profile",
+                UNIFIED_EDITING_RELATION: "/api/mlAnalysis/unified-editing-relation",
+                UNIFIED_EDITING_DISCOVER: "/api/mlAnalysis/unified-editing-discover",
+                UNIFIED_EDITING_DETECT: "/api/mlAnalysis/unified-editing-detect",
                 MIXED_XAI_PROFILE: "/api/mlAnalysis/mixed-xai-profile",
                 MIXED_XAI_RELATION: "/api/mlAnalysis/mixed-xai-relation",
                 MIXED_XAI_RULE_DISCOVER: "/api/mlAnalysis/mixed-xai-rule-discover",
@@ -1577,9 +1583,45 @@
         getWebApiDefinition(method) {
             const savedBuiltin = this.getSavedBuiltinWebApiDefinition(method);
             if (savedBuiltin) return savedBuiltin;
+            const savedRegistered = this.getSavedRegisteredWebApiDefinition(method);
+            if (savedRegistered) return savedRegistered;
             const resource = this.findWebApiResource(method);
             if (resource) return this.createWebApiDefinitionFromResource(resource);
             return this.getBuiltinWebApiDefinition(method);
+        },
+
+        getSavedRegisteredWebApiDefinition(value) {
+            const saved = this.getExecutionSettingsSnapshot();
+            const current = this.currentJob;
+            if (!saved?.profileJobId || !saved.execResourceId || !saved.execSpecJson || !current
+                || saved.execSourceType !== "WEB_API" || current.execSourceType !== "WEB_API"
+                || String(saved.execResourceId) !== String(current.execResourceId)
+                || saved.execMethod !== current.execMethod || saved.execSpecJson !== current.execSpecJson) return null;
+            const key = String(value || "").trim().toUpperCase();
+            if (![String(current.execResourceId), String(current.execMethod).toUpperCase()].includes(key)) return null;
+            const spec = this.parseSpecJson(current.execSpecJson);
+            return {
+                savedRegistered: true,
+                resourceId: current.execResourceId,
+                method: current.execMethod,
+                label: current.execObjectLabel || current.execObjectName || current.execMethod,
+                endpoint: spec.endpoint || spec.serviceUrl || "",
+                resultCreateYn: current.resultCreateYn,
+                resultOwner: current.resultOwner,
+                resultTable: current.resultTableName,
+                specJson: current.execSpecJson,
+                params: this.cloneParameterRows(this.parameters)
+            };
+        },
+
+        getExecutionSettingsSnapshot() {
+            if (this.currentJob?.profileJobId) {
+                return String(this.savedJobSnapshot?.profileJobId) === String(this.currentJob.profileJobId)
+                    ? this.savedJobSnapshot : null;
+            }
+            // The authorized import source supplies the execution contract;
+            // the destination remains a new, unsaved JOB.
+            return this.importedJobSnapshot?.profileJobId ? this.importedJobSnapshot : null;
         },
 
         getBuiltinWebApiDefinition(method) {
@@ -1870,11 +1912,15 @@
 
         async loadWebApiParameters(resourceId) {
             const container = getContainerEl(`#parameterGrid-${PAGE_CODE}`);
+            const requestId = this.webApiParameterRequestId = (this.webApiParameterRequestId || 0) + 1;
+            const requestJob = this.currentJob;
+            const isCurrentRequest = () => requestId === this.webApiParameterRequestId && requestJob === this.currentJob;
             this.beginExecutionConfigLoad();
             if (container) container.innerHTML = `<div class="table-empty">${this.escapeHtml(this.getLabel("loadingPythonApiParameters") || "Loading Python API parameters...")}</div>`;
 
             try {
                 const json = await CommonUtils.request(`${API_BASE_URL}/${PAGE_CODE}/oml-resource/${resourceId}/parameters`, { method: "GET", showLoading: false });
+                if (!isCurrentRequest()) return;
                 const resource = json.resource || {};
                 const api = this.createWebApiDefinitionFromResource(resource);
                 if (api?.resourceId) {
@@ -1914,6 +1960,7 @@
                 this.renderParameters();
                 this.renderCurrentJob();
             } catch (error) {
+                if (!isCurrentRequest()) return;
                 this.parameters = [];
                 if (container) container.innerHTML = `<div class="table-error">${this.escapeHtml(error.message || "Python API parameter load failed.")}</div>`;
             } finally {
@@ -1945,7 +1992,7 @@
             icon?.classList.add("fa-spin");
             try {
                 if (sourceType === "WEB_API") {
-                    const resourceId = this.currentJob?.execResourceId || getContainerEl(`#webApiMethod-${PAGE_CODE}`)?.value || "";
+                    const resourceId = this.currentJob?.execResourceId || getContainerEl(`#webApiMethod-${PAGE_CODE}`)?.value || this.currentJob?.execMethod || "";
                     if (!resourceId) {
                         this.parameters = [];
                         this.renderParameters();
@@ -1953,7 +2000,10 @@
                         return;
                     }
                     const api = this.getWebApiDefinition(resourceId);
-                    if (api?.resourceId) {
+                    if (api?.savedBuiltin) {
+                        this.parameters = this.cloneParameterRows(this.getExecutionSettingsSnapshot().parameters);
+                        this.renderParameters();
+                    } else if (api?.resourceId) {
                         await this.loadWebApiParameters(api.resourceId);
                     } else if (api) {
                         this.parameters = api.params.map((row, index) => ({ ...row, itemOrder: index + 1 }));
@@ -2308,6 +2358,19 @@
             }
             if (sourceType === "WEB_API") {
                 const resource = this.findWebApiResource(source.EXEC_METHOD || source.EXEC_OBJECT_NAME) || {};
+                if (source.EXEC_SPEC_JSON && source.EXEC_METHOD) {
+                    return {
+                        execSourceType: "WEB_API",
+                        execResourceId: source.EXEC_RESOURCE_ID || "",
+                        execMethod: source.EXEC_METHOD,
+                        execSpecJson: source.EXEC_SPEC_JSON,
+                        execObjectId: "",
+                        execOwner: "",
+                        execObjectType: "WEB_API",
+                        execObjectName: source.EXEC_OBJECT_NAME || source.EXEC_METHOD,
+                        execObjectLabel: source.EXEC_OBJECT_LABEL || source.EXEC_OBJECT_NAME || source.EXEC_METHOD
+                    };
+                }
                 const api = this.getWebApiDefinition(resource.OML_RESOURCE_ID || source.EXEC_METHOD) || {};
                 return {
                     execSourceType: "WEB_API",
@@ -2368,6 +2431,13 @@
         async syncImportedExecutionConfiguration(importedParameters = []) {
             const sourceType = String(this.currentJob?.execSourceType || "DB_OBJECT").toUpperCase();
             const registeredParameters = this.cloneParameterRows(this.parameters);
+            const savedApi = sourceType === "WEB_API" && this.getWebApiDefinition(this.currentJob.execResourceId || this.currentJob.execMethod);
+            if (savedApi?.savedBuiltin || savedApi?.savedRegistered) {
+                this.parameters = this.cloneParameterRows(importedParameters);
+                this.renderParameters();
+                this.renderCurrentJob();
+                return;
+            }
             if (sourceType === "WEB_API" && this.currentJob?.execResourceId) {
                 await this.loadWebApiParameters(this.currentJob.execResourceId);
             } else if (sourceType === "OML_PYTHON" && this.currentJob?.execResourceId) {
@@ -2409,12 +2479,17 @@
                     itemName: row.itemName || row.ITEM_NAME || "",
                     itemValue: row.itemValue || row.ITEM_VALUE || "",
                     itemDesc: row.itemDesc || row.ITEM_DESC || "",
-                    itemDefault: row.itemDefault || row.ITEM_DEFAULT || "",
+                    itemDefault: row.itemDefault ?? row.ITEM_DEFAULT ?? "",
                     itemOrder: row.itemOrder ?? row.ITEM_ORDER ?? "",
                     bindName: row.bindName || row.BIND_NAME || ""
                 }));
                 this.parameters = importedParameters;
                 this.savedJobSnapshot = null;
+                this.importedJobSnapshot = {
+                    ...this.currentJob,
+                    profileJobId: source.PROFILE_JOB_ID || profileJobId,
+                    parameters: this.cloneParameterRows(importedParameters)
+                };
                 await this.syncImportedExecutionConfiguration(importedParameters);
                 this.generateExecutablePlsql(true);
                 this.setFieldValue(`#resultQueryTable-${PAGE_CODE}`, this.currentJob.resultTableName);
@@ -2498,6 +2573,7 @@
         },
 
         async applyJob(job) {
+            this.importedJobSnapshot = null;
             this.selectedJobId = String(job.PROFILE_JOB_ID || "");
             this.currentJob = {
                 profileJobId: job.PROFILE_JOB_ID || "",
@@ -2532,7 +2608,7 @@
                 itemDesc: row.itemDesc || row.ITEM_DESC || "",
                 itemDefault: this.normalizeDataWorkParameterDefault(
                     row.itemName || row.ITEM_NAME,
-                    row.itemDefault || row.ITEM_DEFAULT
+                    row.itemDefault ?? row.ITEM_DEFAULT
                 ),
                 itemOrder: row.itemOrder || row.ITEM_ORDER || "",
                 bindName: row.bindName || row.BIND_NAME || ""
@@ -2560,6 +2636,7 @@
         },
 
         newJob() {
+            this.importedJobSnapshot = null;
             this.selectedJobId = "";
             const selectedTable = this.scenarioTables.length === 1 ? this.scenarioTables[0] : null;
             this.selectedScenarioTableKey = selectedTable ? this.getScenarioTableKey(selectedTable) : "";
@@ -2724,12 +2801,7 @@
             this.setFieldValue(`#execSourceType-${PAGE_CODE}`, job.execSourceType || "DB_OBJECT");
             this.setFieldValue(`#execObject-${PAGE_CODE}`, job.execObjectId || "");
             this.setFieldValue(`#omlResource-${PAGE_CODE}`, job.execResourceId || "");
-            this.setFieldValue(
-                `#webApiMethod-${PAGE_CODE}`,
-                String(job.execSourceType || "").toUpperCase() === "WEB_API"
-                    ? (job.execResourceId || this.findWebApiResource(job.execMethod || job.execObjectName)?.OML_RESOURCE_ID || "")
-                    : ""
-            );
+            this.renderWebApiResources();
             this.setFieldValue(`#resultCreateYn-${PAGE_CODE}`, this.normalizeResultCreateMode(job.resultCreateYn || "N"));
             this.setFieldValue(`#resultOwner-${PAGE_CODE}`, job.resultOwner || "");
             this.setFieldValue(`#resultTable-${PAGE_CODE}`, job.resultTableName || "");
@@ -2817,6 +2889,17 @@
             if (omlResource) omlResource.disabled = !isOml;
             if (webApiWrap) webApiWrap.hidden = !isWebApi;
             if (webApiMethod) webApiMethod.disabled = !isWebApi;
+            const hint = getContainerEl(`[data-execution-hint="${PAGE_CODE}"]`);
+            if (hint) {
+                const savedBuiltin = isWebApi && this.getSavedBuiltinWebApiDefinition(this.currentJob?.execMethod);
+                const key = savedBuiltin ? "savedBuiltinExecutableHint" : (isWebApi ? "webApiExecutableHint" : (isOml ? "omlExecutableHint" : "executableObjectHint"));
+                hint.dataset.labelKey = key;
+                hint.textContent = this.getLabel(key) || ({
+                    savedBuiltinExecutableHint: "The built-in API and parameters saved with this job are selected. Register the API in M90002 to reuse it for new jobs; registration does not replace this job's settings.",
+                    webApiExecutableHint: "Python API defaults come from M90002. This screen shows the selected job's saved parameters.",
+                    omlExecutableHint: "OML4Py resource defaults come from M90002. This screen shows the selected job's saved parameters."
+                }[key] || "");
+            }
             this.syncExecutableScriptUi(isOml, isWebApi);
         },
 
@@ -2836,15 +2919,29 @@
             const helpTitleText = isWebApi
                 ? (this.getLabel("webApiRulesTitle") || "WAS Python API rules")
                 : (isOml ? (this.getLabel("omlSqlRulesTitle") || "OML4Py SQL API rules") : (this.getLabel("plsqlBindRulesTitle") || "PL/SQL bind variable rules"));
-            if (title) title.textContent = scriptTitle;
-            if (generateLabel) generateLabel.textContent = generateText;
-            if (helpButton) helpButton.setAttribute("title", helpTitleText);
-            if (helpTitle) helpTitle.textContent = helpTitleText;
+            if (title) {
+                title.dataset.labelKey = isWebApi ? "generatedWebApiSpec" : (isOml ? "generatedOmlSql" : "generatedScript");
+                title.textContent = scriptTitle;
+            }
+            if (generateLabel) {
+                generateLabel.dataset.labelKey = isWebApi ? "generateApiSpec" : (isOml ? "generateOmlSql" : "generateScript");
+                generateLabel.textContent = generateText;
+            }
+            if (helpButton) {
+                helpButton.dataset.titleKey = isWebApi ? "webApiRulesTitle" : (isOml ? "omlSqlRulesTitle" : "plsqlBindRulesTitle");
+                helpButton.setAttribute("title", helpTitleText);
+            }
+            if (helpTitle) {
+                helpTitle.dataset.labelKey = isWebApi ? "webApiRulesTitle" : (isOml ? "omlSqlRulesTitle" : "plsqlBindRulesTitle");
+                helpTitle.textContent = helpTitleText;
+            }
             if (!helpContent) return;
 
             const webApiHelpHtml = `
-                    <p>When Web API is selected, execution is delegated to the WAS Python analysis API instead of Oracle PL/SQL.</p>
+                    <p>Web API generates a saved API call specification. INTERNAL_API invokes a same-server Python function; EXTERNAL_API uses the registered HTTP contract.</p>
                     <ul>
+                        <li><strong>Unified Editing</strong>: <code>UNIFIED_EDITING_PROFILE/RELATION/DISCOVER/DETECT</code> run the four stages, each with existing Oracle analysis followed by mixed Python analysis. Mixed options are separate from existing-analysis options.</li>
+                        <li><strong>Saved and imported jobs</strong>: An allowed built-in job can restore its API contract without a central registry ID. Import creates a new draft with the source contract; review the target and parameters, generate the API spec, then save before execution.</li>
                         <li><strong>Integrated Relation Matrix &amp; Network Cluster</strong>: Produces categorical, continuous, and mixed relationship pairs, keeps passed/below-threshold status, and derives network edges, nodes, and clusters.</li>
                         <li><strong>Integrated Rule Discover</strong>: Runs categorical Apriori and continuous LASSO/Symbolic work according to <code>P_RULE_PARTS</code>. Cluster usage is controlled by <code>P_CLUSTER_USAGE_MODE</code>.</li>
                         <li><strong>Integrated Rule Violation Detect</strong>: Runs categorical and continuous violation tasks. With <code>P_CONTINUE_ON_ERROR=Y</code>, review the partial-completion message for failed subtasks.</li>
@@ -3740,9 +3837,9 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
             const omlResource = this.omlResources.find((row) => String(row.OML_RESOURCE_ID) === String(getContainerEl(`#omlResource-${PAGE_CODE}`)?.value || ""));
             const selectedWebApi = getContainerEl(`#webApiMethod-${PAGE_CODE}`)?.value
                 || this.currentJob?.execResourceId || this.currentJob?.execMethod || "";
-            const savedBuiltin = this.getSavedBuiltinWebApiDefinition(selectedWebApi);
-            const webApiResource = savedBuiltin ? null : this.findWebApiResource(selectedWebApi);
-            const webApi = savedBuiltin || this.getWebApiDefinition(
+            const savedApi = this.getSavedBuiltinWebApiDefinition(selectedWebApi) || this.getSavedRegisteredWebApiDefinition(selectedWebApi);
+            const webApiResource = savedApi ? null : this.findWebApiResource(selectedWebApi);
+            const webApi = savedApi || this.getWebApiDefinition(
                 webApiResource?.OML_RESOURCE_ID
                 || getContainerEl(`#webApiMethod-${PAGE_CODE}`)?.value
                 || this.currentJob?.execMethod
@@ -3765,8 +3862,8 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                 execObjectId: (isOml || isWebApi) ? null : (execObject?.OBJECT_ID || null),
                 execOwner: isOml ? (omlResource?.SCRIPT_OWNER || "") : "",
                 execObjectType: isWebApi ? "WEB_API" : (isOml ? "OML_PYTHON" : (execObject?.OBJECT_TYPE || "")),
-                execObjectName: isWebApi ? (webApi?.savedBuiltin ? this.currentJob.execObjectName : (webApiResource?.RESOURCE_NAME || webApi?.method || "")) : (isOml ? (omlResource?.RESOURCE_NAME || omlResource?.SCRIPT_NAME || "") : (execObject?.OBJECT_NAME || "")),
-                execObjectLabel: isWebApi ? (webApi?.savedBuiltin ? this.currentJob.execObjectLabel : (webApi?.label || "")) : (isOml ? (omlResource?.RESOURCE_LABEL || omlResource?.RESOURCE_NAME || omlResource?.SCRIPT_NAME || "") : (execObject?.OBJECT_LABEL || execObject?.OBJECT_NAME || "")),
+                execObjectName: isWebApi ? (savedApi ? this.currentJob.execObjectName : (webApiResource?.RESOURCE_NAME || webApi?.method || "")) : (isOml ? (omlResource?.RESOURCE_NAME || omlResource?.SCRIPT_NAME || "") : (execObject?.OBJECT_NAME || "")),
+                execObjectLabel: isWebApi ? (savedApi ? this.currentJob.execObjectLabel : (webApi?.label || "")) : (isOml ? (omlResource?.RESOURCE_LABEL || omlResource?.RESOURCE_NAME || omlResource?.SCRIPT_NAME || "") : (execObject?.OBJECT_LABEL || execObject?.OBJECT_NAME || "")),
                 useYn: getContainerEl(`#jobUseYn-${PAGE_CODE}`)?.value || "Y",
                 sortOrder: this.parseOptionalNumber(getContainerEl(`#jobSortOrder-${PAGE_CODE}`)?.value),
                 params: this.parameters,
@@ -3792,8 +3889,8 @@ P_PREDICTION_METHOD  =&gt; :pPredictionMethod</code></pre>
                     || this.currentJob?.execMethod
                     || ""
                 );
-                if (api?.savedBuiltin) {
-                    editor.value = editor.value || this.currentJob.execPlsql || this.savedJobSnapshot.execPlsql || this.createWebApiSpecTemplate(api);
+                if (api?.savedBuiltin || api?.savedRegistered) {
+                    editor.value = editor.value || this.currentJob.execPlsql || this.getExecutionSettingsSnapshot()?.execPlsql || this.createWebApiSpecTemplate(api);
                     this.currentJob.execPlsql = editor.value;
                     return;
                 }

@@ -48,6 +48,23 @@ class MixedNumericTests(unittest.TestCase):
         self.assertEqual("NON_NUMERIC_TEXT", numeric.inspect_numeric_text(values + ["invalid"])["reason"])
         self.assertEqual("INSUFFICIENT_NUMERIC_TEXT", numeric.inspect_numeric_text(["1", "2"])["reason"])
 
+    def test_strong_numeric_majority_keeps_typo_invalid_and_never_parses_codes_or_currency(self):
+        values = [str(value) for value in range(100)] + ["typo", None, " "]
+        result = numeric.inspect_numeric_text(values)
+        self.assertTrue(result["eligible"])
+        self.assertEqual(1, result["invalidCount"])
+        self.assertEqual(2, result["missingCount"])
+        self.assertAlmostEqual(100 / 101, result["numericRatio"])
+        self.assertEqual("STRICT_NUMERIC_MAJORITY", result["inferencePolicy"])
+        self.assertIsNone(numeric.parse_numeric_decimal(values[100]))
+        self.assertEqual("typo", values[100])
+        for value in ["01", "001.2"]:
+            self.assertEqual("LEADING_ZERO_CODE", numeric.inspect_numeric_text(values + [value])["reason"])
+        self.assertEqual("NON_NUMERIC_TEXT", numeric.inspect_numeric_text(values, min_numeric_fraction=1)["reason"])
+        for value in ["1,234", "$12", "1,2"]:
+            self.assertIsNone(numeric.parse_numeric_decimal(value))
+        self.assertFalse(numeric.inspect_numeric_text(["12"] * 29 + ["bad"])["eligible"])
+
     def test_invalid_predictor_excluded_but_invalid_result_is_a_violation(self):
         rows = [("1", "3"), ("1e1", "12"), (".5", "2.5"), ("+2", "4"),
                 ("1", "4"), ("1", None), ("1", "bad"), ("1", "03"),

@@ -5,6 +5,10 @@ const test = require("node:test");
 const vm = require("node:vm");
 const root = path.resolve(__dirname, "../..");
 const methods = {
+    UNIFIED_EDITING_PROFILE: "unified-editing-profile",
+    UNIFIED_EDITING_RELATION: "unified-editing-relation",
+    UNIFIED_EDITING_DISCOVER: "unified-editing-discover",
+    UNIFIED_EDITING_DETECT: "unified-editing-detect",
     MIXED_XAI_PROFILE: "mixed-xai-profile",
     MIXED_XAI_RELATION: "mixed-xai-relation",
     MIXED_XAI_RULE_DISCOVER: "mixed-xai-rule-discover",
@@ -38,7 +42,7 @@ async function setup(method = "MIXED_XAI_PROFILE") {
     return { page, job, element };
 }
 
-test("saved builtin selector identifies all four loaded mixed jobs without creating registry rows", async () => {
+test("saved builtin selector identifies unified and mixed jobs without creating registry rows", async () => {
     for (const method of Object.keys(methods)) {
         const { page, element } = await setup(method);
         page.renderWebApiResources();

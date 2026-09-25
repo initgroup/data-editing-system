@@ -4,6 +4,16 @@
   "pageCode": "MCOM_DATA_WORK",
   "description": "Common English labels for data work template pages.",
   "labels": {
+    "generatedWebApiSpec": "Web API spec",
+    "generateApiSpec": "Generate API spec",
+    "webApiRulesTitle": "WAS Python API rules",
+    "generatedOmlSql": "OML SQL",
+    "generateOmlSql": "Generate OML SQL",
+    "omlSqlRulesTitle": "OML4Py SQL API rules",
+    "plsqlBindRulesTitle": "PL/SQL bind variable rules",
+    "savedBuiltinExecutableHint": "The built-in API and parameters saved with this job are selected. Register the API in M90002 to reuse it for new jobs; registration does not replace this job's settings.",
+    "webApiExecutableHint": "Python API defaults come from M90002. This screen shows the selected job's saved parameters.",
+    "omlExecutableHint": "OML4Py resource defaults come from M90002. This screen shows the selected job's saved parameters.",
     "status": "Status",
     "jobName": "Job name",
     "jobGroup": "Job group",
@@ -44,6 +54,7 @@
     "paramDescBanffMode": "Single-ratio candidate: AUTO, RATIO, or OFF. This is a limited Banff-inspired feature, not full Banff."
   },
   "messages": {
+    "webApiHelpHtml": "<p>Web API generates a saved API call specification. INTERNAL_API invokes a same-server Python function; EXTERNAL_API uses the registered HTTP contract.</p><ul><li><strong>Unified Editing</strong>: <code>UNIFIED_EDITING_PROFILE/RELATION/DISCOVER/DETECT</code> run the four stages, each with existing Oracle analysis followed by mixed Python analysis. Mixed options are separate from existing-analysis options.</li><li><strong>Saved and imported jobs</strong>: An allowed built-in job can restore its API contract without a central registry ID. Import creates a new draft with the source contract; review the target and parameters, generate the API spec, then save before execution.</li><li><strong>Integrated Relation Matrix &amp; Network Cluster</strong>: Produces categorical, continuous, and mixed relationship pairs, keeps passed/below-threshold status, and derives network edges, nodes, and clusters.</li><li><strong>Integrated Rule Discover</strong>: Runs categorical Apriori and continuous LASSO/Symbolic work according to <code>P_RULE_PARTS</code>. Cluster usage is controlled by <code>P_CLUSTER_USAGE_MODE</code>.</li><li><strong>Integrated Rule Violation Detect</strong>: Runs categorical and continuous violation tasks. With <code>P_CONTINUE_ON_ERROR=Y</code>, review the partial-completion message for failed subtasks.</li><li><strong>Individual APIs</strong>: LASSO Feature Select, Relation Network Cluster, and Symbolic Regression Rule remain available for focused jobs.</li><li><strong>Runtime values</strong>: Preset JSON initializes a job; results are explained from saved job parameters and actual run values.</li></ul>",
     "historyTotal": "Total {count}",
     "noRunHistory": "No run history.",
     "historyDetailTitle": "Run #{runId} details"

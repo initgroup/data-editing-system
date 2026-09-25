@@ -8,6 +8,25 @@ from backend.services import ml_analysis_service
 
 
 class MlAnalysisLassoCaseIdTests(unittest.TestCase):
+    def test_auto_target_cap_reports_unexamined_columns_without_claiming_no_rule(self):
+        with patch.object(ml_analysis_service, "require_sklearn", lambda: None), patch.object(
+            ml_analysis_service, "load_predicted_continuous_columns", return_value=["FIRST", "SECOND", "LATE"]
+        ), patch.object(
+            ml_analysis_service, "load_auto_corr_target_columns", return_value=["LATE"]
+        ), patch.object(
+            ml_analysis_service, "run_lasso_auto_targets", return_value={"status": "success"}
+        ) as execute:
+            result = ml_analysis_service.run_lasso_feature_select(object(), {
+                "P_TARGET_OWNER": "OWNER1", "P_TARGET_TABLE": "TABLE1",
+                "P_TARGET_COLUMN": "(auto)", "P_MAX_AUTO_TARGETS": 2,
+            })
+        selection = result["targetSelection"]
+        self.assertEqual(selection["eligibleCount"], 3)
+        self.assertEqual(selection["selectedColumns"], ["LATE", "FIRST"])
+        self.assertEqual(selection["omittedColumns"], ["SECOND"])
+        self.assertEqual(selection["omittedCount"], 1)
+        self.assertEqual(execute.call_args.args[2], selection["selectedColumns"])
+
     def test_auto_lasso_excludes_default_and_configured_case_id_columns(self):
         seen_excludes = []
 
